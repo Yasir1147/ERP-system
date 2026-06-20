@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeePayrollSetting;
+use App\Models\PayrollAdjustment;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,7 +69,7 @@ class PayrollController extends Controller
                 'label' => $employee->name.' - '.$employee->profession,
             ]);
 
-        $payrollRows = $this->payrollRows($monthStart, $monthEnd, $selectedType, $selectedEmployeeId);
+        $payrollRows = $this->payrollRows($monthStart, $monthEnd, $month->toDateString(), $selectedType, $selectedEmployeeId);
 
         return Inertia::render('Payroll/Report', [
             'employees' => $employees,
@@ -80,6 +81,9 @@ class PayrollController extends Controller
                 'basicSalary' => round($payrollRows->sum('basicSalary'), 2),
                 'overtimeAmount' => round($payrollRows->sum('overtimeAmount'), 2),
                 'totalSalary' => round($payrollRows->sum('totalSalary'), 2),
+                'totalBalance' => round($payrollRows->sum('totalBalance'), 2),
+                'paidByCash' => round($payrollRows->sum('paidByCash'), 2),
+                'balance' => round($payrollRows->sum('balance'), 2),
             ],
             'filters' => [
                 'type' => $selectedType ?? 'all',
@@ -110,7 +114,35 @@ class PayrollController extends Controller
         return to_route('payroll.index', $request->only(['type']));
     }
 
-    private function payrollRows(string $monthStart, string $monthEnd, ?string $type, ?int $employeeId): Collection
+    public function updateAdjustment(Request $request, Employee $employee): RedirectResponse
+    {
+        $data = $request->validate([
+            'month' => ['required', 'date_format:Y-m'],
+            'bonus_extra' => ['required', 'numeric', 'min:-99999999.99', 'max:99999999.99'],
+            'previous_balance' => ['required', 'numeric', 'min:-99999999.99', 'max:99999999.99'],
+            'deduction' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
+            'paid_by_cash' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
+            'remarks' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        PayrollAdjustment::updateOrCreate(
+            [
+                'employee_id' => $employee->id,
+                'month' => Carbon::createFromFormat('Y-m', $data['month'])->startOfMonth()->toDateString(),
+            ],
+            [
+                'bonus_extra' => $data['bonus_extra'],
+                'previous_balance' => $data['previous_balance'],
+                'deduction' => $data['deduction'],
+                'paid_by_cash' => $data['paid_by_cash'],
+                'remarks' => $data['remarks'],
+            ],
+        );
+
+        return to_route('payroll.report', $request->only(['type', 'employee_id', 'month']));
+    }
+
+    private function payrollRows(string $monthStart, string $monthEnd, string $month, ?string $type, ?int $employeeId): Collection
     {
         $employees = Employee::query()
             ->with('payrollSetting')
@@ -133,8 +165,15 @@ class PayrollController extends Controller
             ])
             ->groupBy('employee_id');
 
-        return $employees->map(function (Employee $employee) use ($records) {
+        $adjustments = PayrollAdjustment::query()
+            ->whereDate('month', $month)
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->get()
+            ->keyBy('employee_id');
+
+        return $employees->map(function (Employee $employee) use ($records, $adjustments) {
             $setting = $employee->payrollSetting;
+            $adjustment = $adjustments->get($employee->id);
             $employeeRecords = $records->get($employee->id, collect());
             $presentDays = $employeeRecords->where('status', AttendanceRecord::STATUS_PRESENT)->count();
             $absentDays = $employeeRecords->where('status', AttendanceRecord::STATUS_ABSENT)->count();
@@ -147,6 +186,13 @@ class PayrollController extends Controller
             $payableDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS ? 30 : $presentDays;
             $basicSalary = $dailySalary * $payableDays;
             $overtimeAmount = $setting?->is_overtime_enabled === false ? 0 : $overtimeHours * $hourlyRate;
+            $totalSalary = $basicSalary + $overtimeAmount;
+            $bonusExtra = (float) ($adjustment?->bonus_extra ?? 0);
+            $previousBalance = (float) ($adjustment?->previous_balance ?? 0);
+            $deduction = (float) ($adjustment?->deduction ?? 0);
+            $paidByCash = (float) ($adjustment?->paid_by_cash ?? 0);
+            $totalBalance = $totalSalary + $bonusExtra + $previousBalance;
+            $balance = $totalBalance - $deduction - $paidByCash;
 
             return [
                 'employeeId' => $employee->id,
@@ -163,7 +209,14 @@ class PayrollController extends Controller
                 'hourlyRate' => round($hourlyRate, 2),
                 'basicSalary' => round($basicSalary, 2),
                 'overtimeAmount' => round($overtimeAmount, 2),
-                'totalSalary' => round($basicSalary + $overtimeAmount, 2),
+                'totalSalary' => round($totalSalary, 2),
+                'bonusExtra' => round($bonusExtra, 2),
+                'previousBalance' => round($previousBalance, 2),
+                'totalBalance' => round($totalBalance, 2),
+                'deduction' => round($deduction, 2),
+                'paidByCash' => round($paidByCash, 2),
+                'balance' => round($balance, 2),
+                'remarks' => $adjustment?->remarks,
                 'projectCount' => $employeeRecords->where('status', AttendanceRecord::STATUS_PRESENT)->pluck('project_name')->filter()->unique()->count(),
             ];
         })->values();

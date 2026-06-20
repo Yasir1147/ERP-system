@@ -58,6 +58,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::get('payroll/report', [PayrollController::class, 'report'])->name('payroll.report');
     Route::put('payroll/settings/{employee}', [PayrollController::class, 'updateSetting'])->name('payroll.settings.update');
+    Route::put('payroll/report/{employee}/adjustment', [PayrollController::class, 'updateAdjustment'])->name('payroll.adjustments.update');
     Route::resource('users', UserController::class)->only(['index', 'store', 'update', 'destroy']);
 });
 
