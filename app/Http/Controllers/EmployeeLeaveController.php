@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,6 +17,63 @@ class EmployeeLeaveController extends Controller
 {
     public function index(): Response
     {
+        $longLeaves = EmployeeLeave::query()
+            ->with([
+                'employee:id,name,profession,type,status',
+                'creator:id,name,role',
+            ])
+            ->latest('start_date')
+            ->get()
+            ->map(fn (EmployeeLeave $leave) => [
+                'id' => $leave->id,
+                'source' => 'long_leave',
+                'canEdit' => true,
+                'employeeId' => $leave->employee_id,
+                'employeeName' => $leave->employee?->name,
+                'employeeProfession' => $leave->employee?->profession,
+                'employeeType' => $leave->employee?->type,
+                'employeeStatus' => $leave->employee?->status,
+                'startDate' => $leave->start_date->toDateString(),
+                'endDate' => $leave->end_date->toDateString(),
+                'startDateLabel' => $leave->start_date->format('d/m/Y'),
+                'endDateLabel' => $leave->end_date->format('d/m/Y'),
+                'durationDays' => $leave->start_date->diffInDays($leave->end_date) + 1,
+                'reason' => $leave->reason,
+                'createdBy' => $leave->creator?->name,
+                'createdByRole' => $leave->creator?->role,
+            ]);
+
+        $dailyLeaves = AttendanceRecord::query()
+            ->with([
+                'employee:id,name,profession,type,status',
+                'submitter:id,name,role',
+            ])
+            ->where('status', AttendanceRecord::STATUS_LEAVE)
+            ->latest('attendance_date')
+            ->get()
+            ->map(function (AttendanceRecord $record) {
+                $date = Carbon::parse($record->attendance_date);
+
+                return [
+                    'id' => 'attendance-'.$record->id,
+                    'source' => 'daily_leave',
+                    'canEdit' => false,
+                    'employeeId' => $record->employee_id,
+                    'employeeName' => $record->employee?->name,
+                    'employeeProfession' => $record->employee?->profession,
+                    'employeeType' => $record->employee?->type,
+                    'employeeStatus' => $record->employee?->status,
+                    'startDate' => $date->toDateString(),
+                    'endDate' => $date->toDateString(),
+                    'startDateLabel' => $date->format('d/m/Y'),
+                    'endDateLabel' => $date->format('d/m/Y'),
+                    'durationDays' => 1,
+                    'reason' => $record->leave_reason,
+                    'createdBy' => $record->submitter?->name,
+                    'createdByRole' => $record->submitter?->role,
+                ];
+            });
+
         return Inertia::render('EmployeeLeaves/Index', [
             'employees' => Employee::query()
                 ->where('status', '!=', Employee::STATUS_LEFT)
@@ -22,28 +81,10 @@ class EmployeeLeaveController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name', 'profession', 'type', 'status']),
             'employeeTypes' => Employee::TYPES,
-            'leaves' => EmployeeLeave::query()
-                ->with([
-                    'employee:id,name,profession,type,status',
-                    'creator:id,name,role',
-                ])
-                ->latest('start_date')
-                ->get()
-                ->map(fn (EmployeeLeave $leave) => [
-                    'id' => $leave->id,
-                    'employeeId' => $leave->employee_id,
-                    'employeeName' => $leave->employee?->name,
-                    'employeeProfession' => $leave->employee?->profession,
-                    'employeeType' => $leave->employee?->type,
-                    'employeeStatus' => $leave->employee?->status,
-                    'startDate' => $leave->start_date->toDateString(),
-                    'endDate' => $leave->end_date->toDateString(),
-                    'startDateLabel' => $leave->start_date->format('d/m/Y'),
-                    'endDateLabel' => $leave->end_date->format('d/m/Y'),
-                    'reason' => $leave->reason,
-                    'createdBy' => $leave->creator?->name,
-                    'createdByRole' => $leave->creator?->role,
-                ]),
+            'leaves' => $longLeaves
+                ->merge($dailyLeaves)
+                ->sortByDesc('startDate')
+                ->values(),
         ]);
     }
 

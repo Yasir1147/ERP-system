@@ -57,6 +57,12 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
         ->only(['index', 'store', 'update', 'destroy']);
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::get('payroll/report', [PayrollController::class, 'report'])->name('payroll.report');
+    Route::get('payroll/report-print', [PayrollController::class, 'reportPrint'])->name('payroll.report-print');
+    Route::get('payroll/report/{employee}/ledger', [PayrollController::class, 'ledger'])->name('payroll.ledger');
+    Route::get('payroll/report/{employee}/ledger-print', [PayrollController::class, 'ledgerPrint'])->name('payroll.ledger-print');
+    Route::get('payroll/report/{employee}/ledger-export', [PayrollController::class, 'ledgerExport'])->name('payroll.ledger-export');
+    Route::get('payroll/report/{employee}/payslip', [PayrollController::class, 'payslip'])->name('payroll.payslip');
+    Route::get('payroll/report/{employee}/payslip-export', [PayrollController::class, 'payslipExport'])->name('payroll.payslip-export');
     Route::put('payroll/settings/{employee}', [PayrollController::class, 'updateSetting'])->name('payroll.settings.update');
     Route::put('payroll/report/{employee}/adjustment', [PayrollController::class, 'updateAdjustment'])->name('payroll.adjustments.update');
     Route::resource('users', UserController::class)->only(['index', 'store', 'update', 'destroy']);

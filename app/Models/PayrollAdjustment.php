@@ -15,6 +15,7 @@ class PayrollAdjustment extends Model
         'month',
         'bonus_extra',
         'previous_balance',
+        'previous_balance_overridden',
         'deduction',
         'paid_by_cash',
         'remarks',
@@ -24,6 +25,7 @@ class PayrollAdjustment extends Model
         'month' => 'date',
         'bonus_extra' => 'decimal:2',
         'previous_balance' => 'decimal:2',
+        'previous_balance_overridden' => 'boolean',
         'deduction' => 'decimal:2',
         'paid_by_cash' => 'decimal:2',
     ];

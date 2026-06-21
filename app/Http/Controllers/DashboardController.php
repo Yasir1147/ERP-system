@@ -174,6 +174,27 @@ class DashboardController extends Controller
             ])
             ->values();
 
+        $completedLongLeaves = EmployeeLeave::query()
+            ->with('employee:id,name,profession,type,status')
+            ->whereDate('end_date', '<=', $selectedDate)
+            ->when($selectedType, fn ($query) => $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('type', $selectedType)))
+            ->latest('end_date')
+            ->get()
+            ->filter(fn (EmployeeLeave $leave) => $leave->start_date->diffInDays($leave->end_date) + 1 > 3)
+            ->filter(fn (EmployeeLeave $leave) => $leave->employee?->status !== Employee::STATUS_LEFT)
+            ->map(fn (EmployeeLeave $leave) => [
+                'id' => $leave->id,
+                'employeeName' => $leave->employee?->name,
+                'employeeProfession' => $leave->employee?->profession,
+                'employeeType' => $leave->employee?->type,
+                'employeeStatus' => $leave->employee?->status,
+                'startDateLabel' => $leave->start_date->format('d/m/Y'),
+                'endDateLabel' => $leave->end_date->format('d/m/Y'),
+                'durationDays' => $leave->start_date->diffInDays($leave->end_date) + 1,
+                'reason' => $leave->reason,
+            ])
+            ->values();
+
         return Inertia::render('Dashboard', [
             'summary' => $summary,
             'projectAttendance' => $projectAttendance,
@@ -182,6 +203,7 @@ class DashboardController extends Controller
                 'contracting' => $attendanceRecords->get('contracting', collect())->values(),
             ],
             'monthlySummary' => $monthlySummary,
+            'completedLongLeaves' => $completedLongLeaves,
             'selectedDate' => $selectedDate,
             'selectedDateLabel' => $selectedDay->format('d/m/Y'),
             'selectedMonthLabel' => $selectedDay->format('F Y'),

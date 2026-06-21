@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { Banknote, CalendarCheck, Clock3, Save, Search, Users } from 'lucide-vue-next';
+import { Banknote, BookOpen, CalendarCheck, Clock3, FileDown, FileSpreadsheet, Save, Search, Users, X } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 interface Employee {
@@ -32,12 +32,26 @@ interface PayrollRow {
     totalSalary: number;
     bonusExtra: number;
     previousBalance: number;
+    autoPreviousBalance: number;
+    previousBalanceOverridden: boolean;
     totalBalance: number;
     deduction: number;
     paidByCash: number;
     balance: number;
     remarks: string | null;
     projectCount: number;
+}
+
+interface LedgerRow extends PayrollRow {
+    month: string;
+    monthLabel: string;
+}
+
+interface LedgerEmployee {
+    id: number;
+    name: string;
+    profession: string;
+    type: string;
 }
 
 interface TypeOption {
@@ -82,12 +96,24 @@ const filterEmployeeId = ref(props.filters.employeeId);
 const filterMonth = ref(props.filters.month);
 const search = ref('');
 const savingEmployeeId = ref<number | null>(null);
+const ledgerOpen = ref(false);
+const ledgerLoading = ref(false);
+const ledgerSavingKey = ref<string | null>(null);
+const ledgerEmployee = ref<LedgerEmployee | null>(null);
+const ledgerRows = ref<LedgerRow[]>([]);
+const ledgerFromMonth = ref(props.filters.month);
+const ledgerToMonth = ref(props.filters.month);
 
-const adjustments = reactive<Record<number, { bonusExtra: string; previousBalance: string; deduction: string; paidByCash: string; remarks: string }>>(
-    props.payrollRows.reduce<Record<number, { bonusExtra: string; previousBalance: string; deduction: string; paidByCash: string; remarks: string }>>((values, row) => {
+const adjustments = reactive<
+    Record<number, { bonusExtra: string; previousBalance: string; previousBalanceOverridden: boolean; deduction: string; paidByCash: string; remarks: string }>
+>(
+    props.payrollRows.reduce<
+        Record<number, { bonusExtra: string; previousBalance: string; previousBalanceOverridden: boolean; deduction: string; paidByCash: string; remarks: string }>
+    >((values, row) => {
         values[row.employeeId] = {
             bonusExtra: String(row.bonusExtra),
             previousBalance: String(row.previousBalance),
+            previousBalanceOverridden: row.previousBalanceOverridden,
             deduction: String(row.deduction),
             paidByCash: String(row.paidByCash),
             remarks: row.remarks || '',
@@ -96,6 +122,10 @@ const adjustments = reactive<Record<number, { bonusExtra: string; previousBalanc
         return values;
     }, {}),
 );
+
+const ledgerAdjustments = reactive<
+    Record<string, { bonusExtra: string; previousBalance: string; previousBalanceOverridden: boolean; deduction: string; paidByCash: string; remarks: string }>
+>({});
 
 const employeeOptions = computed(() => props.employees.filter((employee) => filterType.value === 'all' || employee.type === filterType.value));
 
@@ -133,9 +163,29 @@ const money = (value: number) =>
 
 const numeric = (value: string) => Number(value || 0);
 
-const liveTotalBalance = (row: PayrollRow) => row.totalSalary + numeric(adjustments[row.employeeId]?.bonusExtra || '0') + numeric(adjustments[row.employeeId]?.previousBalance || '0');
+const rowPreviousBalance = (row: PayrollRow) => {
+    const adjustment = adjustments[row.employeeId];
+
+    return adjustment?.previousBalanceOverridden ? numeric(adjustment.previousBalance) : row.autoPreviousBalance;
+};
+
+const liveTotalBalance = (row: PayrollRow) => row.totalSalary + numeric(adjustments[row.employeeId]?.bonusExtra || '0') + rowPreviousBalance(row);
 
 const liveBalance = (row: PayrollRow) => liveTotalBalance(row) - numeric(adjustments[row.employeeId]?.deduction || '0') - numeric(adjustments[row.employeeId]?.paidByCash || '0');
+
+const ledgerKey = (row: LedgerRow) => `${row.employeeId}-${row.month}`;
+
+const ledgerPreviousBalance = (row: LedgerRow) => {
+    const adjustment = ledgerAdjustments[ledgerKey(row)];
+
+    return adjustment?.previousBalanceOverridden ? numeric(adjustment.previousBalance) : row.autoPreviousBalance;
+};
+
+const liveLedgerTotalBalance = (row: LedgerRow) =>
+    row.totalSalary + numeric(ledgerAdjustments[ledgerKey(row)]?.bonusExtra || '0') + ledgerPreviousBalance(row);
+
+const liveLedgerBalance = (row: LedgerRow) =>
+    liveLedgerTotalBalance(row) - numeric(ledgerAdjustments[ledgerKey(row)]?.deduction || '0') - numeric(ledgerAdjustments[ledgerKey(row)]?.paidByCash || '0');
 
 const applyFilters = () => {
     router.get(
@@ -169,6 +219,7 @@ const saveAdjustment = (row: PayrollRow) => {
             month: filterMonth.value,
             bonus_extra: adjustment.bonusExtra,
             previous_balance: adjustment.previousBalance,
+            previous_balance_overridden: adjustment.previousBalanceOverridden,
             deduction: adjustment.deduction,
             paid_by_cash: adjustment.paidByCash,
             remarks: adjustment.remarks,
@@ -180,6 +231,163 @@ const saveAdjustment = (row: PayrollRow) => {
             },
         },
     );
+};
+
+const payslipUrl = (row: PayrollRow) => `/payroll/report/${row.employeeId}/payslip?month=${encodeURIComponent(filterMonth.value)}`;
+
+const payslipExportUrl = (row: PayrollRow) => `/payroll/report/${row.employeeId}/payslip-export?month=${encodeURIComponent(filterMonth.value)}`;
+
+const ledgerPrintUrl = computed(() => {
+    if (!ledgerEmployee.value) {
+        return '#';
+    }
+
+    const params = new URLSearchParams({
+        from_month: ledgerFromMonth.value,
+        to_month: ledgerToMonth.value,
+    });
+
+    return `/payroll/report/${ledgerEmployee.value.id}/ledger-print?${params.toString()}`;
+});
+
+const ledgerExportUrl = computed(() => {
+    if (!ledgerEmployee.value) {
+        return '#';
+    }
+
+    const params = new URLSearchParams({
+        from_month: ledgerFromMonth.value,
+        to_month: ledgerToMonth.value,
+    });
+
+    return `/payroll/report/${ledgerEmployee.value.id}/ledger-export?${params.toString()}`;
+});
+
+const reportPrintUrl = computed(() => {
+    const params = new URLSearchParams({
+        type: filterType.value,
+        employee_id: filterEmployeeId.value,
+        month: filterMonth.value,
+    });
+
+    return `/payroll/report-print?${params.toString()}`;
+});
+
+const csrfToken = () => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+
+const hydrateLedgerAdjustments = () => {
+    ledgerRows.value.forEach((row) => {
+        ledgerAdjustments[ledgerKey(row)] = {
+            bonusExtra: String(row.bonusExtra),
+            previousBalance: String(row.previousBalance),
+            previousBalanceOverridden: row.previousBalanceOverridden,
+            deduction: String(row.deduction),
+            paidByCash: String(row.paidByCash),
+            remarks: row.remarks || '',
+        };
+    });
+};
+
+const loadLedger = async (row?: PayrollRow) => {
+    const employeeId = row?.employeeId || ledgerEmployee.value?.id;
+
+    if (!employeeId) {
+        return;
+    }
+
+    if (row) {
+        ledgerFromMonth.value = filterMonth.value;
+        ledgerToMonth.value = filterMonth.value;
+        ledgerOpen.value = true;
+    }
+
+    ledgerLoading.value = true;
+
+    try {
+        const params = new URLSearchParams({
+            from_month: ledgerFromMonth.value,
+            to_month: ledgerToMonth.value,
+        });
+        const response = await fetch(`/payroll/report/${employeeId}/ledger?${params.toString()}`, {
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Unable to load ledger.');
+        }
+
+        const data = await response.json();
+        ledgerEmployee.value = data.employee;
+        ledgerRows.value = data.rows;
+        hydrateLedgerAdjustments();
+    } finally {
+        ledgerLoading.value = false;
+    }
+};
+
+const closeLedger = () => {
+    ledgerOpen.value = false;
+    ledgerEmployee.value = null;
+    ledgerRows.value = [];
+};
+
+const saveLedgerAdjustment = async (row: LedgerRow) => {
+    const key = ledgerKey(row);
+    const adjustment = ledgerAdjustments[key];
+
+    if (!adjustment) {
+        return;
+    }
+
+    ledgerSavingKey.value = key;
+
+    try {
+        const response = await fetch(`/payroll/report/${row.employeeId}/adjustment`, {
+            method: 'PUT',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: JSON.stringify({
+                type: filterType.value,
+                employee_id: filterEmployeeId.value,
+                month: row.month,
+                bonus_extra: adjustment.bonusExtra,
+                previous_balance: adjustment.previousBalance,
+                previous_balance_overridden: adjustment.previousBalanceOverridden,
+                deduction: adjustment.deduction,
+                paid_by_cash: adjustment.paidByCash,
+                remarks: adjustment.remarks,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Unable to save ledger row.');
+        }
+
+        await loadLedger();
+    } finally {
+        ledgerSavingKey.value = null;
+    }
+};
+
+const syncPreviousBalanceMode = (row: PayrollRow) => {
+    const adjustment = adjustments[row.employeeId];
+
+    if (adjustment && !adjustment.previousBalanceOverridden) {
+        adjustment.previousBalance = String(row.autoPreviousBalance);
+    }
+};
+
+const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
+    const adjustment = ledgerAdjustments[ledgerKey(row)];
+
+    if (adjustment && !adjustment.previousBalanceOverridden) {
+        adjustment.previousBalance = String(row.autoPreviousBalance);
+    }
 };
 </script>
 
@@ -269,15 +477,26 @@ const saveAdjustment = (row: PayrollRow) => {
                         <h2 class="text-base font-medium">Payroll Report</h2>
                         <p class="mt-1 text-sm text-muted-foreground">{{ selectedMonthLabel }} salary calculation from attendance.</p>
                     </div>
-                    <div class="relative w-full sm:w-72">
-                        <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <input v-model="search" type="search" class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm" placeholder="Search payroll" />
+                    <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                        <a
+                            :href="reportPrintUrl"
+                            target="_blank"
+                            rel="noopener"
+                            class="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm hover:bg-accent"
+                        >
+                            <FileDown class="size-4" />
+                            Report PDF
+                        </a>
+                        <div class="relative w-full sm:w-72">
+                            <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <input v-model="search" type="search" class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm" placeholder="Search payroll" />
+                        </div>
                     </div>
                 </div>
 
                 <div v-if="filteredRows.length" class="mt-4 overflow-hidden rounded-md border">
                     <div class="max-h-[560px] overflow-auto">
-                        <table class="w-full min-w-[1840px] table-fixed text-sm">
+                        <table class="w-full min-w-[1920px] table-fixed text-sm">
                             <thead class="sticky top-0 z-10 border-b bg-card text-left text-xs font-medium text-muted-foreground">
                                 <tr>
                                     <th class="w-[54px] px-3 py-2 font-medium">S.No</th>
@@ -295,7 +514,10 @@ const saveAdjustment = (row: PayrollRow) => {
                                     <th class="w-[130px] px-3 py-2 font-medium">Paid Cash</th>
                                     <th class="w-[110px] px-3 py-2 font-medium">Balance</th>
                                     <th class="w-[180px] px-3 py-2 font-medium">Remarks</th>
-                                    <th class="w-[76px] px-3 py-2 text-right font-medium">Save</th>
+                                    <th class="w-[44px] px-1 py-2 text-center font-medium">Ledger</th>
+                                    <th class="w-[44px] px-1 py-2 text-center font-medium">PDF</th>
+                                    <th class="w-[44px] px-1 py-2 text-center font-medium">Excel</th>
+                                    <th class="w-[44px] px-1 py-2 text-center font-medium">Save</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -317,7 +539,22 @@ const saveAdjustment = (row: PayrollRow) => {
                                         <input v-model="adjustments[row.employeeId].bonusExtra" type="number" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
                                     </td>
                                     <td class="px-3 py-3">
-                                        <input v-model="adjustments[row.employeeId].previousBalance" type="number" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                        <input
+                                            v-model="adjustments[row.employeeId].previousBalance"
+                                            type="number"
+                                            step="0.01"
+                                            class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:bg-muted/50"
+                                            :disabled="!adjustments[row.employeeId].previousBalanceOverridden"
+                                        />
+                                        <label class="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                                            <input
+                                                v-model="adjustments[row.employeeId].previousBalanceOverridden"
+                                                type="checkbox"
+                                                class="size-3"
+                                                @change="syncPreviousBalanceMode(row)"
+                                            />
+                                            Manual
+                                        </label>
                                     </td>
                                     <td class="px-3 py-3 font-medium">{{ money(liveTotalBalance(row)) }}</td>
                                     <td class="px-3 py-3">
@@ -330,10 +567,40 @@ const saveAdjustment = (row: PayrollRow) => {
                                     <td class="px-3 py-3">
                                         <input v-model="adjustments[row.employeeId].remarks" type="text" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" placeholder="Remarks" />
                                     </td>
-                                    <td class="px-3 py-3 text-right">
+                                    <td class="px-1 py-3 text-center">
                                         <button
                                             type="button"
-                                            class="inline-flex size-9 items-center justify-center rounded-md border text-sm hover:bg-accent disabled:opacity-60"
+                                            class="inline-flex size-8 items-center justify-center rounded-md border text-sm hover:bg-accent"
+                                            title="Open ledger"
+                                            @click="loadLedger(row)"
+                                        >
+                                            <BookOpen class="size-4" />
+                                        </button>
+                                    </td>
+                                    <td class="px-1 py-3 text-center">
+                                        <a
+                                            :href="payslipUrl(row)"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="inline-flex size-8 items-center justify-center rounded-md border text-sm hover:bg-accent"
+                                            title="Download payslip"
+                                        >
+                                            <FileDown class="size-4" />
+                                        </a>
+                                    </td>
+                                    <td class="px-1 py-3 text-center">
+                                        <a
+                                            :href="payslipExportUrl(row)"
+                                            class="inline-flex size-8 items-center justify-center rounded-md border text-sm hover:bg-accent"
+                                            title="Download Excel"
+                                        >
+                                            <FileSpreadsheet class="size-4" />
+                                        </a>
+                                    </td>
+                                    <td class="px-1 py-3 text-center">
+                                        <button
+                                            type="button"
+                                            class="inline-flex size-8 items-center justify-center rounded-md border text-sm hover:bg-accent disabled:opacity-60"
                                             :disabled="savingEmployeeId === row.employeeId"
                                             @click="saveAdjustment(row)"
                                         >
@@ -347,6 +614,144 @@ const saveAdjustment = (row: PayrollRow) => {
                 </div>
                 <div v-else class="mt-4 flex min-h-56 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                     No payroll records match the selected filters.
+                </div>
+            </div>
+
+            <div v-if="ledgerOpen" class="fixed inset-0 z-50 bg-black/50 p-2 sm:p-4">
+                <div class="mx-auto flex max-h-[94vh] w-[calc(100vw-1rem)] max-w-none flex-col overflow-hidden rounded-lg border bg-background shadow-xl sm:w-[calc(100vw-2rem)]">
+                    <div class="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Employee Ledger</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                {{ ledgerEmployee?.name }}<template v-if="ledgerEmployee"> - {{ ledgerEmployee.profession }} - {{ employeeTypes[ledgerEmployee.type] }}</template>
+                            </p>
+                        </div>
+                        <div class="grid gap-2 sm:grid-cols-[160px_160px_auto_auto_auto_auto]">
+                            <input
+                                v-model="ledgerFromMonth"
+                                type="month"
+                                class="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            />
+                            <input
+                                v-model="ledgerToMonth"
+                                type="month"
+                                class="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            />
+                            <button type="button" class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" :disabled="ledgerLoading" @click="loadLedger()">
+                                Filter
+                            </button>
+                            <a
+                                :href="ledgerPrintUrl"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm hover:bg-accent"
+                                title="Download ledger PDF"
+                            >
+                                <FileDown class="size-4" />
+                                Ledger PDF
+                            </a>
+                            <a
+                                :href="ledgerExportUrl"
+                                class="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm hover:bg-accent"
+                                title="Download ledger Excel"
+                            >
+                                <FileSpreadsheet class="size-4" />
+                                Excel
+                            </a>
+                            <button type="button" class="inline-flex h-10 items-center justify-center rounded-md border px-3" @click="closeLedger">
+                                <X class="size-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="min-h-0 flex-1 overflow-auto p-4">
+                        <div v-if="ledgerLoading" class="flex min-h-56 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+                            Loading ledger...
+                        </div>
+
+                        <div v-else-if="ledgerRows.length" class="overflow-hidden rounded-md border">
+                            <div class="max-h-[68vh] overflow-auto">
+                                <table class="w-full min-w-[1840px] table-fixed text-sm">
+                                    <thead class="sticky top-0 z-10 border-b bg-card text-left text-xs font-medium text-muted-foreground">
+                                        <tr>
+                                            <th class="w-[120px] px-3 py-2 font-medium">Month</th>
+                                            <th class="w-[70px] px-3 py-2 font-medium">Days</th>
+                                            <th class="w-[90px] px-3 py-2 font-medium">Per Day</th>
+                                            <th class="w-[100px] px-3 py-2 font-medium">Salary</th>
+                                            <th class="w-[80px] px-3 py-2 font-medium">OT Hrs</th>
+                                            <th class="w-[100px] px-3 py-2 font-medium">OT Salary</th>
+                                            <th class="w-[110px] px-3 py-2 font-medium">New Total</th>
+                                            <th class="w-[130px] px-3 py-2 font-medium">Bonus</th>
+                                            <th class="w-[130px] px-3 py-2 font-medium">Pr. Balance</th>
+                                            <th class="w-[120px] px-3 py-2 font-medium">Total Balance</th>
+                                            <th class="w-[130px] px-3 py-2 font-medium">Deduction</th>
+                                            <th class="w-[130px] px-3 py-2 font-medium">Paid Cash</th>
+                                            <th class="w-[110px] px-3 py-2 font-medium">Balance</th>
+                                            <th class="w-[220px] px-3 py-2 font-medium">Remarks</th>
+                                            <th class="w-[76px] px-3 py-2 text-right font-medium">Save</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="row in ledgerRows" :key="ledgerKey(row)" class="border-b last:border-b-0">
+                                            <td class="px-3 py-3 font-medium">{{ row.monthLabel }}</td>
+                                            <td class="px-3 py-3">{{ row.presentDays }}</td>
+                                            <td class="px-3 py-3">{{ money(row.dailySalary) }}</td>
+                                            <td class="px-3 py-3">{{ money(row.basicSalary) }}</td>
+                                            <td class="px-3 py-3">{{ row.overtimeHours }}</td>
+                                            <td class="px-3 py-3">{{ money(row.overtimeAmount) }}</td>
+                                            <td class="px-3 py-3 font-semibold">{{ money(row.totalSalary) }}</td>
+                                            <td class="px-3 py-3">
+                                                <input v-model="ledgerAdjustments[ledgerKey(row)].bonusExtra" type="number" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                            </td>
+                                            <td class="px-3 py-3">
+                                                <input
+                                                    v-model="ledgerAdjustments[ledgerKey(row)].previousBalance"
+                                                    type="number"
+                                                    step="0.01"
+                                                    class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:bg-muted/50"
+                                                    :disabled="!ledgerAdjustments[ledgerKey(row)].previousBalanceOverridden"
+                                                />
+                                                <label class="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                                                    <input
+                                                        v-model="ledgerAdjustments[ledgerKey(row)].previousBalanceOverridden"
+                                                        type="checkbox"
+                                                        class="size-3"
+                                                        @change="syncLedgerPreviousBalanceMode(row)"
+                                                    />
+                                                    Manual
+                                                </label>
+                                            </td>
+                                            <td class="px-3 py-3 font-medium">{{ money(liveLedgerTotalBalance(row)) }}</td>
+                                            <td class="px-3 py-3">
+                                                <input v-model="ledgerAdjustments[ledgerKey(row)].deduction" type="number" min="0" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                            </td>
+                                            <td class="px-3 py-3">
+                                                <input v-model="ledgerAdjustments[ledgerKey(row)].paidByCash" type="number" min="0" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                            </td>
+                                            <td class="px-3 py-3 font-semibold">{{ money(liveLedgerBalance(row)) }}</td>
+                                            <td class="px-3 py-3">
+                                                <input v-model="ledgerAdjustments[ledgerKey(row)].remarks" type="text" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" placeholder="Remarks" />
+                                            </td>
+                                            <td class="px-3 py-3 text-right">
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex size-9 items-center justify-center rounded-md border text-sm hover:bg-accent disabled:opacity-60"
+                                                    :disabled="ledgerSavingKey === ledgerKey(row)"
+                                                    @click="saveLedgerAdjustment(row)"
+                                                >
+                                                    <Save class="size-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div v-else class="flex min-h-56 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+                            No ledger records found for the selected range.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

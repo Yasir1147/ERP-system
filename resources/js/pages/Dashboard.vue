@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { CalendarCheck, ClipboardX, Plane, Search, Users } from 'lucide-vue-next';
+import { AlertTriangle, CalendarCheck, ClipboardX, Plane, Search, Users } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Summary {
@@ -42,6 +42,18 @@ interface MonthlySummary {
     leave: number;
 }
 
+interface CompletedLongLeave {
+    id: number;
+    employeeName: string;
+    employeeProfession: string;
+    employeeType: string;
+    employeeStatus: string;
+    startDateLabel: string;
+    endDateLabel: string;
+    durationDays: number;
+    reason: string | null;
+}
+
 interface TypeOption {
     value: string;
     label: string;
@@ -55,6 +67,7 @@ const props = defineProps<{
         contracting: AttendanceRecord[];
     };
     monthlySummary: MonthlySummary[];
+    completedLongLeaves: CompletedLongLeave[];
     selectedDate: string;
     selectedDateLabel: string;
     selectedMonthLabel: string;
@@ -118,6 +131,44 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 p-4">
+            <section class="border-b pb-5">
+                <div class="mb-4">
+                    <h2 class="text-xl font-semibold tracking-normal">Monthly Report</h2>
+                    <p class="mt-1 text-sm text-muted-foreground">{{ selectedMonthLabel }} attendance summary separated from daily dashboard records.</p>
+                </div>
+
+                <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <h3 class="text-base font-medium">Monthly Summary</h3>
+                            <p class="mt-1 text-sm text-muted-foreground">{{ selectedMonthLabel }} summary for the selected employee type.</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid gap-4 md:grid-cols-2">
+                        <div v-for="summaryItem in monthlySummary" :key="summaryItem.type" class="rounded-md border p-4">
+                            <div>
+                                <h4 class="font-medium">{{ summaryItem.label }}</h4>
+                                <p class="text-sm text-muted-foreground">Employees: {{ summaryItem.totalEmployees }}</p>
+                            </div>
+                            <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
+                                <div class="rounded-md border border-green-600/20 bg-green-600/10 p-3 text-green-700">
+                                    <p class="text-xs">Present</p>
+                                    <p class="mt-1 text-2xl font-semibold">{{ summaryItem.present }}</p>
+                                </div>
+                                <div class="rounded-md border border-red-600/20 bg-red-600/10 p-3 text-red-700">
+                                    <p class="text-xs">Absent</p>
+                                    <p class="mt-1 text-2xl font-semibold">{{ summaryItem.absent }}</p>
+                                </div>
+                                <div class="rounded-md border border-amber-600/20 bg-amber-600/10 p-3 text-amber-700">
+                                    <p class="text-xs">Leave</p>
+                                    <p class="mt-1 text-2xl font-semibold">{{ summaryItem.leave }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                     <h1 class="text-2xl font-semibold tracking-normal">Attendance Dashboard</h1>
@@ -138,6 +189,30 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                         <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                     </select>
                     <button type="button" class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" @click="applyFilters">Filter</button>
+                </div>
+            </div>
+
+            <div v-if="completedLongLeaves.length" class="rounded-lg border border-amber-600/30 bg-amber-600/10 p-4 text-amber-900">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="flex gap-3">
+                        <AlertTriangle class="mt-0.5 size-5 shrink-0 text-amber-700" />
+                        <div>
+                            <h2 class="text-base font-medium">Long leave completed</h2>
+                            <p class="mt-1 text-sm text-amber-800">These employees completed leave longer than 3 days. Please review and update their employee status if needed.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 grid gap-3 md:grid-cols-2">
+                    <div v-for="leave in completedLongLeaves" :key="leave.id" class="rounded-md border border-amber-600/20 bg-background/70 p-3 text-sm">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="truncate font-medium text-foreground">{{ leave.employeeName }}</p>
+                                <p class="truncate text-xs text-muted-foreground">{{ leave.employeeProfession }} - {{ leave.durationDays }} days</p>
+                            </div>
+                            <span class="shrink-0 rounded-full border border-amber-600/30 px-2 py-1 text-xs text-amber-700">Ended {{ leave.endDateLabel }}</span>
+                        </div>
+                        <p class="mt-2 text-xs text-muted-foreground">{{ leave.startDateLabel }} to {{ leave.endDateLabel }}<template v-if="leave.reason"> - {{ leave.reason }}</template></p>
+                    </div>
                 </div>
             </div>
 
@@ -176,37 +251,6 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                             <p class="mt-2 text-3xl font-semibold">{{ summary.totalEmployees }}</p>
                         </div>
                         <Users class="size-6 text-muted-foreground" />
-                    </div>
-                </div>
-            </div>
-
-            <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
-                <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <h2 class="text-base font-medium">Monthly Summary</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">{{ selectedMonthLabel }} summary for the selected employee type.</p>
-                    </div>
-                </div>
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div v-for="summaryItem in monthlySummary" :key="summaryItem.type" class="rounded-md border p-4">
-                        <div>
-                            <h3 class="font-medium">{{ summaryItem.label }}</h3>
-                            <p class="text-sm text-muted-foreground">Employees: {{ summaryItem.totalEmployees }}</p>
-                        </div>
-                        <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
-                            <div class="rounded-md border border-green-600/20 bg-green-600/10 p-3 text-green-700">
-                                <p class="text-xs">Present</p>
-                                <p class="mt-1 text-2xl font-semibold">{{ summaryItem.present }}</p>
-                            </div>
-                            <div class="rounded-md border border-red-600/20 bg-red-600/10 p-3 text-red-700">
-                                <p class="text-xs">Absent</p>
-                                <p class="mt-1 text-2xl font-semibold">{{ summaryItem.absent }}</p>
-                            </div>
-                            <div class="rounded-md border border-amber-600/20 bg-amber-600/10 p-3 text-amber-700">
-                                <p class="text-xs">Leave</p>
-                                <p class="mt-1 text-2xl font-semibold">{{ summaryItem.leave }}</p>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>

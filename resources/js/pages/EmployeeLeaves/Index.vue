@@ -18,7 +18,9 @@ interface Employee {
 }
 
 interface EmployeeLeave {
-    id: number;
+    id: number | string;
+    source: string;
+    canEdit: boolean;
     employeeId: number;
     employeeName: string;
     employeeProfession: string;
@@ -28,6 +30,7 @@ interface EmployeeLeave {
     endDate: string;
     startDateLabel: string;
     endDateLabel: string;
+    durationDays: number;
     reason: string | null;
     createdBy: string | null;
     createdByRole: string | null;
@@ -73,6 +76,15 @@ const submittedByLabel = (leave: EmployeeLeave) => {
     return leave.createdByRole === 'admin' ? `${leave.createdBy} (Admin)` : leave.createdBy;
 };
 
+const sourceLabel = (leave: EmployeeLeave) => (leave.source === 'daily_leave' ? 'Daily Leave' : leave.durationDays > 3 ? 'Long Leave' : 'Leave Range');
+
+const sourceClass = (leave: EmployeeLeave) =>
+    leave.source === 'daily_leave'
+        ? 'border-sky-600/30 bg-sky-600/10 text-sky-700'
+        : leave.durationDays > 3
+          ? 'border-amber-600/30 bg-amber-600/10 text-amber-700'
+          : 'border-muted-foreground/30 bg-muted text-muted-foreground';
+
 const filteredLeaves = computed(() => {
     const query = search.value.trim().toLowerCase();
 
@@ -86,6 +98,7 @@ const filteredLeaves = computed(() => {
             leave.employeeProfession,
             props.employeeTypes[leave.employeeType],
             leave.reason,
+            sourceLabel(leave),
             leave.startDateLabel,
             leave.endDateLabel,
             leave.createdBy,
@@ -103,6 +116,10 @@ const createLeave = () => {
 };
 
 const startEditing = (leave: EmployeeLeave) => {
+    if (!leave.canEdit || typeof leave.id !== 'number') {
+        return;
+    }
+
     editingLeaveId.value = leave.id;
     editForm.clearErrors();
     editForm.employee_id = String(leave.employeeId);
@@ -118,6 +135,10 @@ const cancelEditing = () => {
 };
 
 const updateLeave = (leave: EmployeeLeave) => {
+    if (!leave.canEdit || typeof leave.id !== 'number') {
+        return;
+    }
+
     editForm.put(`/employee-leaves/${leave.id}`, {
         preserveScroll: true,
         onSuccess: cancelEditing,
@@ -125,6 +146,10 @@ const updateLeave = (leave: EmployeeLeave) => {
 };
 
 const deleteLeave = (leave: EmployeeLeave) => {
+    if (!leave.canEdit || typeof leave.id !== 'number') {
+        return;
+    }
+
     if (!confirm(`Delete leave for ${leave.employeeName}?`)) {
         return;
     }
@@ -187,7 +212,7 @@ const deleteLeave = (leave: EmployeeLeave) => {
                 <div class="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h2 class="text-base font-medium">Leave List</h2>
-                        <p class="text-sm text-muted-foreground">{{ filteredLeaves.length }} of {{ leaves.length }} leave records</p>
+                        <p class="text-sm text-muted-foreground">{{ filteredLeaves.length }} of {{ leaves.length }} leave records, including daily and long leaves</p>
                     </div>
                     <div class="relative w-full md:max-w-sm">
                         <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -204,14 +229,15 @@ const deleteLeave = (leave: EmployeeLeave) => {
                 </div>
 
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full min-w-[980px] table-fixed text-sm">
+                    <table class="w-full min-w-[1120px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[24%] px-4 py-3 font-medium">Employee</th>
-                                <th class="w-[14%] px-4 py-3 font-medium">Start</th>
-                                <th class="w-[14%] px-4 py-3 font-medium">End</th>
-                                <th class="w-[24%] px-4 py-3 font-medium">Reason</th>
-                                <th class="w-[14%] px-4 py-3 font-medium">Created By</th>
+                                <th class="w-[22%] px-4 py-3 font-medium">Employee</th>
+                                <th class="w-[12%] px-4 py-3 font-medium">Type</th>
+                                <th class="w-[12%] px-4 py-3 font-medium">Start</th>
+                                <th class="w-[12%] px-4 py-3 font-medium">End</th>
+                                <th class="w-[20%] px-4 py-3 font-medium">Reason</th>
+                                <th class="w-[12%] px-4 py-3 font-medium">Created By</th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
@@ -232,6 +258,12 @@ const deleteLeave = (leave: EmployeeLeave) => {
                                         <p class="truncate text-xs text-muted-foreground">{{ leave.employeeProfession }} - {{ employeeTypes[leave.employeeType] }}</p>
                                     </div>
                                     <InputError v-if="editingLeaveId === leave.id" :message="editForm.errors.employee_id" class="mt-2" />
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="inline-flex rounded-full border px-2 py-1 text-xs font-medium" :class="sourceClass(leave)">
+                                        {{ sourceLabel(leave) }}
+                                    </span>
+                                    <p class="mt-1 text-xs text-muted-foreground">{{ leave.durationDays }} day{{ leave.durationDays === 1 ? '' : 's' }}</p>
                                 </td>
                                 <td class="px-4 py-3">
                                     <Input v-if="editingLeaveId === leave.id" v-model="editForm.start_date" type="date" />
@@ -260,12 +292,13 @@ const deleteLeave = (leave: EmployeeLeave) => {
                                             </Button>
                                         </template>
                                         <template v-else>
-                                            <Button size="icon" type="button" variant="outline" @click="startEditing(leave)">
+                                            <Button v-if="leave.canEdit" size="icon" type="button" variant="outline" @click="startEditing(leave)">
                                                 <Pencil class="size-4" />
                                             </Button>
-                                            <Button size="icon" type="button" variant="destructive" @click="deleteLeave(leave)">
+                                            <Button v-if="leave.canEdit" size="icon" type="button" variant="destructive" @click="deleteLeave(leave)">
                                                 <Trash2 class="size-4" />
                                             </Button>
+                                            <span v-if="!leave.canEdit" class="text-xs text-muted-foreground">Attendance record</span>
                                         </template>
                                     </div>
                                 </td>
