@@ -73,6 +73,10 @@ const mainNavItems: NavItem[] = [
         icon: BriefcaseBusiness,
         items: [
             {
+                title: 'Overview',
+                href: '/projects/overview',
+            },
+            {
                 title: 'Rope Access Projects',
                 href: '/projects/rope_access',
             },

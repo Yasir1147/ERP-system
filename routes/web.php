@@ -48,6 +48,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
         ->whereIn('type', ['rope_access', 'contracting'])
         ->name('employees.type.index');
     Route::resource('employees', EmployeeController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::get('projects/overview', [ProjectController::class, 'overview'])->name('projects.overview');
+    Route::get('projects/{project}/employee-history', [ProjectController::class, 'employeeHistory'])->name('projects.employee-history');
     Route::get('projects/{type}', [ProjectController::class, 'index'])
         ->whereIn('type', ['rope_access', 'contracting'])
         ->name('projects.type.index');
@@ -58,6 +60,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::get('payroll/report', [PayrollController::class, 'report'])->name('payroll.report');
     Route::get('payroll/report-print', [PayrollController::class, 'reportPrint'])->name('payroll.report-print');
+    Route::get('payroll/report/payslips', [PayrollController::class, 'bulkPayslips'])->name('payroll.payslips.bulk');
+    Route::post('payroll/report/adjustments-bulk', [PayrollController::class, 'updateAdjustmentsBulk'])->name('payroll.adjustments.bulk');
     Route::get('payroll/report/{employee}/ledger', [PayrollController::class, 'ledger'])->name('payroll.ledger');
     Route::get('payroll/report/{employee}/ledger-print', [PayrollController::class, 'ledgerPrint'])->name('payroll.ledger-print');
     Route::get('payroll/report/{employee}/ledger-export', [PayrollController::class, 'ledgerExport'])->name('payroll.ledger-export');
@@ -70,4 +74,3 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
-

@@ -1,0 +1,345 @@
+﻿# Al Mohafiz ERP / Attendance System - Project Notes
+
+This file is a handoff guide for future Codex sessions or any developer who needs to continue the project safely.
+
+## Project Location
+
+Local project folder:
+
+```powershell
+D:\projects\attendance-system
+```
+
+Important: do not work in `D:\xampp\htdocs\coplus` for this project. That is a different project.
+
+## Git Repository
+
+Remote repository:
+
+```text
+https://github.com/Yasir1147/ERP-system.git
+```
+
+Default branch:
+
+```text
+main
+```
+
+Before making new changes, always check:
+
+```powershell
+git status --short
+git log --oneline -5
+```
+
+Recommended workflow:
+
+```powershell
+git add .
+git commit -m "Clear description of the change"
+git push origin main
+```
+
+Do not commit `.env`, database dumps, or private passwords.
+
+## Tech Stack
+
+- Laravel 12
+- PHP 8.2
+- Inertia.js
+- Vue 3
+- Vite
+- MySQL / MariaDB through XAMPP
+- Tailwind-based UI components
+
+## Local Run Steps
+
+1. Start XAMPP.
+2. Start Apache.
+3. Start MySQL.
+4. Open terminal in the project folder:
+
+```powershell
+cd D:\projects\attendance-system
+```
+
+5. Clear cached Laravel files if needed:
+
+```powershell
+php artisan optimize:clear
+```
+
+6. Start Laravel:
+
+```powershell
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+7. In a second terminal, start Vite:
+
+```powershell
+npm run dev
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+For production/build verification:
+
+```powershell
+npm run build
+```
+
+## Database
+
+The app uses MySQL through XAMPP. Check `.env` locally for the database name and credentials. Do not push `.env` to GitHub.
+
+Common Laravel database commands:
+
+```powershell
+php artisan migrate
+php artisan db:seed
+php artisan migrate:fresh --seed
+```
+
+Only run `migrate:fresh --seed` when it is safe to delete all current local data.
+
+## Database Backup
+
+Create a backup folder outside the project, for example:
+
+```text
+D:\backups\attendance-system
+```
+
+Backup command example:
+
+```powershell
+D:\xampp\mysql\bin\mysqldump.exe -uroot attendance-system > D:\backups\attendance-system\attendance-system-YYYY-MM-DD.sql
+```
+
+Restore command example:
+
+```powershell
+D:\xampp\mysql\bin\mysql.exe -uroot attendance-system < D:\backups\attendance-system\attendance-system-YYYY-MM-DD.sql
+```
+
+Replace `attendance-system` with the actual database name from `.env` if different.
+
+## Important URLs
+
+Authentication:
+
+```text
+/login
+/dashboard
+```
+
+Attendance marking pages:
+
+```text
+/mark-attendance
+/mark-attendance/contracting
+/mark-attendance/rope-access
+```
+
+Dashboard and admin modules:
+
+```text
+/dashboard
+/attendance
+/employees/rope_access
+/employees/contracting
+/projects/overview
+/projects/rope_access
+/projects/contracting
+/employee-leaves
+/payroll
+/payroll/report
+/users
+```
+
+## User Roles
+
+Current role concept:
+
+- `admin`: full backend/admin access.
+- `attendance_user`: can access attendance marking pages only.
+
+Normal attendance users can log in with username-only according to the current business requirement. Admin users still use password login.
+
+## Core Business Rules
+
+### Employees
+
+Employees are split into two categories:
+
+- Rope Access Employee
+- Contracting Employee
+
+Employee records should stay in admin even if the employee leaves the job. Employees marked as left should not appear in the attendance marking selector.
+
+### Projects
+
+Projects are split into two categories:
+
+- Rope Access Projects
+- Contracting Projects
+
+The Projects Overview page calculates project labor cost from attendance records and salary settings.
+
+### Attendance
+
+Attendance supports these statuses:
+
+- Present
+- Absent
+- Leave
+
+Present requires employee, project, date, and optional overtime hours.
+
+Absent requires employee and date.
+
+Leave requires employee, date, and leave reason.
+
+Normal attendance users can only select today or the previous two dates. Future dates are disabled.
+
+Duplicate attendance should not be allowed for the same employee and same date.
+
+Attendance records track who submitted the record.
+
+### Leaves
+
+There are two leave types in the UI:
+
+- Daily leave submitted through the attendance page.
+- Long leave created from the Leaves admin page.
+
+Long leave is considered more than 3 days.
+
+Employees on active leave should not be selectable for attendance marking.
+
+Dashboard should show a notification when a long leave has completed and needs admin review/status update.
+
+### Payroll
+
+Payroll calculates monthly salary from attendance and salary settings.
+
+Supported payroll concepts:
+
+- Per-day salary
+- Fixed 30 days rule
+- Present-days rule
+- Overtime hours
+- Overtime salary
+- Bonus / extra
+- Previous balance
+- Manual previous balance override
+- Total balance
+- Deduction
+- Paid cash
+- Final balance
+- Remarks
+
+Previous balance carries forward month-to-month. Admin can manually override previous balance when needed.
+
+Payroll report supports:
+
+- Filtering by employee type, employee, and month
+- Editing payroll adjustments
+- Saving one row
+- Saving selected rows in bulk
+- Applying one remark to selected employees
+- Employee ledger modal
+- Payslip PDF/print
+- Payslip CSV/Excel export
+- Merged selected payslips PDF/print
+- Payroll report PDF/print
+
+## Project Overview
+
+The Projects Overview page should help answer:
+
+- How many days since the project started?
+- How many attendance entries exist for the project?
+- How many unique employees worked on the project?
+- How many overtime hours were used?
+- What is the basic labor cost?
+- What is the overtime cost?
+- What is the total labor cost?
+
+Project employee history is available from the project row action. The current desired modal is focused on Employee Summary only, not detailed attendance records.
+
+Employee Summary should show:
+
+- Employee
+- Profession
+- Entries
+- Worked days
+- Overtime hours
+- Basic cost
+- Overtime cost
+- Total cost
+- Submitted by
+
+## UI Language Rule
+
+All application UI text, validation messages, alerts, and exports should be in English only.
+
+Do not add Urdu or Roman Urdu text in code, Vue pages, Blade views, controllers, validation messages, or exported PDF/CSV labels.
+
+## Safety Checklist Before Major Changes
+
+1. Run `git status --short`.
+2. Commit or push a checkpoint if the current work is stable.
+3. Backup the database before schema changes.
+4. Run migrations carefully.
+5. Run `php artisan optimize:clear` after route/controller/view changes.
+6. Run `npm run build` after frontend changes.
+7. Check important pages in the browser.
+8. Do not delete XAMPP MySQL data folders without a backup.
+
+## XAMPP MySQL Recovery Note
+
+MySQL previously crashed in XAMPP. A non-destructive recovery was done by restoring XAMPP MySQL `data` from backup and copying user databases plus original InnoDB files from old data.
+
+Do not delete these folders unless a full backup exists:
+
+```text
+D:\xampp\mysql\data-old
+D:\xampp\mysql\data-broken-*
+```
+
+## Recommended Future Improvements
+
+- Add admin activity log for payroll, attendance, leave, and project changes.
+- Add database backup button or scheduled backup script.
+- Add export PDF/Excel for Project Employee History.
+- Add stricter role middleware and route permission checks.
+- Add tests for payroll carry-forward balance logic.
+- Add tests for duplicate attendance prevention.
+- Add tests for date restrictions on attendance forms.
+- Add audit columns like `created_by`, `updated_by`, and `deleted_by` where needed.
+
+## Handoff Notes For Future Codex
+
+When continuing this project:
+
+1. Work only in `D:\projects\attendance-system`.
+2. Read `routes/web.php` first to understand available pages.
+3. Read these controllers next:
+   - `app/Http/Controllers/DashboardController.php`
+   - `app/Http/Controllers/PublicAttendanceController.php`
+   - `app/Http/Controllers/PayrollController.php`
+   - `app/Http/Controllers/ProjectController.php`
+4. Read these frontend pages next:
+   - `resources/js/pages/Payroll/Report.vue`
+   - `resources/js/pages/Projects/Overview.vue`
+   - `resources/js/components/AppSidebar.vue`
+5. Keep UI text English only.
+6. Do not assume the database is disposable.
+7. Ask before destructive commands.

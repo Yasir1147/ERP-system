@@ -95,7 +95,12 @@ const filterType = ref(props.filters.type);
 const filterEmployeeId = ref(props.filters.employeeId);
 const filterMonth = ref(props.filters.month);
 const search = ref('');
+const selectedEmployeeIds = ref<number[]>([]);
+const bulkRemarks = ref('');
 const savingEmployeeId = ref<number | null>(null);
+const savingSelected = ref(false);
+const saveMessage = ref('');
+const saveError = ref('');
 const ledgerOpen = ref(false);
 const ledgerLoading = ref(false);
 const ledgerSavingKey = ref<string | null>(null);
@@ -149,11 +154,169 @@ const filteredRows = computed(() => {
     );
 });
 
+const visibleRowIds = computed(() => filteredRows.value.map((row) => row.employeeId));
+
+const selectedVisibleCount = computed(() => visibleRowIds.value.filter((id) => selectedEmployeeIds.value.includes(id)).length);
+
+const allVisibleSelected = computed(() => visibleRowIds.value.length > 0 && selectedVisibleCount.value === visibleRowIds.value.length);
+
+const someVisibleSelected = computed(() => selectedVisibleCount.value > 0 && !allVisibleSelected.value);
+
+const selectedRows = computed(() => props.payrollRows.filter((row) => selectedEmployeeIds.value.includes(row.employeeId)));
+
+const bulkPayslipsUrl = computed(() => {
+    const params = new URLSearchParams({
+        month: filterMonth.value,
+        employee_ids: selectedEmployeeIds.value.join(','),
+    });
+
+    return `/payroll/report/payslips?${params.toString()}`;
+});
+
+const checkboxChecked = (event: Event) => (event.target as HTMLInputElement).checked;
+
+const toggleRowSelection = (employeeId: number, event: Event) => {
+    const checked = checkboxChecked(event);
+    const selected = new Set(selectedEmployeeIds.value);
+
+    if (checked) {
+        selected.add(employeeId);
+    } else {
+        selected.delete(employeeId);
+    }
+
+    selectedEmployeeIds.value = Array.from(selected);
+};
+
+const toggleVisibleSelection = (event: Event) => {
+    const checked = checkboxChecked(event);
+    const selected = new Set(selectedEmployeeIds.value);
+
+    visibleRowIds.value.forEach((id) => {
+        if (checked) {
+            selected.add(id);
+        } else {
+            selected.delete(id);
+        }
+    });
+
+    selectedEmployeeIds.value = Array.from(selected);
+};
+
+const openSelectedPayslips = () => {
+    if (!selectedEmployeeIds.value.length) {
+        return;
+    }
+
+    window.open(bulkPayslipsUrl.value, '_blank', 'noopener');
+};
+
+const applyBulkRemarks = () => {
+    const remark = bulkRemarks.value.trim();
+
+    if (!selectedEmployeeIds.value.length) {
+        saveMessage.value = '';
+        saveError.value = 'Please select at least one employee.';
+        return;
+    }
+
+    if (!remark) {
+        saveMessage.value = '';
+        saveError.value = 'Bulk remarks cannot be empty.';
+        return;
+    }
+
+    selectedEmployeeIds.value.forEach((employeeId) => {
+        if (adjustments[employeeId]) {
+            adjustments[employeeId].remarks = remark;
+        }
+    });
+
+    saveError.value = '';
+    saveMessage.value = `Remarks applied to ${selectedEmployeeIds.value.length} selected employee(s). Click Save Selected to store the changes.`;
+};
+
+const saveSelectedAdjustments = async () => {
+    if (!selectedRows.value.length) {
+        saveMessage.value = '';
+        saveError.value = 'Please select at least one employee.';
+        return;
+    }
+
+    saveMessage.value = '';
+    saveError.value = '';
+    savingSelected.value = true;
+
+    try {
+        const token = csrfToken();
+        const form = new FormData();
+        form.append('_token', token);
+        form.append('type', filterType.value);
+        form.append('employee_id', filterEmployeeId.value);
+        form.append('month', filterMonth.value);
+
+        selectedRows.value.forEach((row, index) => {
+            const adjustment = adjustments[row.employeeId];
+
+            form.append(`adjustments[${index}][employee_id]`, String(row.employeeId));
+            form.append(`adjustments[${index}][bonus_extra]`, adjustment?.bonusExtra || '0');
+            form.append(`adjustments[${index}][previous_balance]`, adjustment?.previousBalance || '0');
+            form.append(`adjustments[${index}][previous_balance_overridden]`, adjustment?.previousBalanceOverridden ? '1' : '0');
+            form.append(`adjustments[${index}][deduction]`, adjustment?.deduction || '0');
+            form.append(`adjustments[${index}][paid_by_cash]`, adjustment?.paidByCash || '0');
+            form.append(`adjustments[${index}][remarks]`, adjustment?.remarks || '');
+        });
+
+        const response = await fetch('/payroll/report/adjustments-bulk', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': token,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: form,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => null);
+            const message = error?.message || 'Selected payroll records were not saved. Check the values and try again.';
+            throw new Error(message);
+        }
+
+        saveMessage.value = `${selectedRows.value.length} selected payroll record(s) saved.`;
+        router.get(
+            '/payroll/report',
+            {
+                type: filterType.value,
+                employee_id: filterEmployeeId.value,
+                month: filterMonth.value,
+            },
+            {
+                preserveScroll: true,
+                preserveState: false,
+            },
+        );
+    } catch (error) {
+        saveError.value = error instanceof Error ? error.message : 'Selected payroll records were not saved. Check the values and try again.';
+    } finally {
+        savingSelected.value = false;
+    }
+};
+
 watch(filterType, () => {
     if (!employeeOptions.value.some((employee) => String(employee.id) === filterEmployeeId.value)) {
         filterEmployeeId.value = 'all';
     }
 });
+
+watch(
+    () => props.payrollRows.map((row) => row.employeeId),
+    (ids) => {
+        const validIds = new Set(ids);
+        selectedEmployeeIds.value = selectedEmployeeIds.value.filter((id) => validIds.has(id));
+    },
+);
 
 const money = (value: number) =>
     new Intl.NumberFormat('en-US', {
@@ -202,35 +365,67 @@ const applyFilters = () => {
     );
 };
 
-const saveAdjustment = (row: PayrollRow) => {
+const saveAdjustment = async (row: PayrollRow) => {
     const adjustment = adjustments[row.employeeId];
 
     if (!adjustment) {
         return;
     }
 
+    saveMessage.value = '';
+    saveError.value = '';
     savingEmployeeId.value = row.employeeId;
 
-    router.put(
-        `/payroll/report/${row.employeeId}/adjustment`,
-        {
-            type: filterType.value,
-            employee_id: filterEmployeeId.value,
-            month: filterMonth.value,
-            bonus_extra: adjustment.bonusExtra,
-            previous_balance: adjustment.previousBalance,
-            previous_balance_overridden: adjustment.previousBalanceOverridden,
-            deduction: adjustment.deduction,
-            paid_by_cash: adjustment.paidByCash,
-            remarks: adjustment.remarks,
-        },
-        {
-            preserveScroll: true,
-            onFinish: () => {
-                savingEmployeeId.value = null;
+    try {
+        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+        const form = new FormData();
+        form.append('_token', csrfToken);
+        form.append('_method', 'PUT');
+        form.append('type', filterType.value);
+        form.append('employee_id', filterEmployeeId.value);
+        form.append('month', filterMonth.value);
+        form.append('bonus_extra', adjustment.bonusExtra);
+        form.append('previous_balance', adjustment.previousBalance);
+        form.append('previous_balance_overridden', adjustment.previousBalanceOverridden ? '1' : '0');
+        form.append('deduction', adjustment.deduction);
+        form.append('paid_by_cash', adjustment.paidByCash);
+        form.append('remarks', adjustment.remarks);
+
+        const response = await fetch(`/payroll/report/${row.employeeId}/adjustment`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
             },
-        },
-    );
+            body: form,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => null);
+            const message = error?.message || 'Payroll was not saved. Check the values and try again.';
+            throw new Error(message);
+        }
+
+        saveMessage.value = `${row.employeeName} payroll saved.`;
+        router.get(
+            '/payroll/report',
+            {
+                type: filterType.value,
+                employee_id: filterEmployeeId.value,
+                month: filterMonth.value,
+            },
+            {
+                preserveScroll: true,
+                preserveState: false,
+            },
+        );
+    } catch (error) {
+        saveError.value = error instanceof Error ? error.message : 'Payroll was not saved. Check the values and try again.';
+    } finally {
+        savingEmployeeId.value = null;
+    }
 };
 
 const payslipUrl = (row: PayrollRow) => `/payroll/report/${row.employeeId}/payslip?month=${encodeURIComponent(filterMonth.value)}`;
@@ -478,6 +673,16 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                         <p class="mt-1 text-sm text-muted-foreground">{{ selectedMonthLabel }} salary calculation from attendance.</p>
                     </div>
                     <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                        <button
+                            type="button"
+                            class="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="!selectedEmployeeIds.length"
+                            @click="openSelectedPayslips"
+                        >
+                            <FileDown class="size-4" />
+                            Selected Payslips
+                            <span v-if="selectedEmployeeIds.length" class="rounded bg-muted px-1.5 py-0.5 text-xs">{{ selectedEmployeeIds.length }}</span>
+                        </button>
                         <a
                             :href="reportPrintUrl"
                             target="_blank"
@@ -494,11 +699,52 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                     </div>
                 </div>
 
+                <div class="mt-3 grid gap-2 rounded-md border bg-muted/20 p-3 lg:grid-cols-[minmax(260px,1fr)_auto_auto]">
+                    <input
+                        v-model="bulkRemarks"
+                        type="text"
+                        class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        placeholder="Bulk remarks for selected employees"
+                    />
+                    <button
+                        type="button"
+                        class="inline-flex h-10 items-center justify-center rounded-md border px-3 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="!selectedEmployeeIds.length"
+                        @click="applyBulkRemarks"
+                    >
+                        Apply to Selected
+                    </button>
+                    <button
+                        type="button"
+                        class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="!selectedEmployeeIds.length || savingSelected"
+                        @click="saveSelectedAdjustments"
+                    >
+                        <Save class="size-4" />
+                        Save Selected
+                        <span v-if="selectedEmployeeIds.length" class="rounded bg-primary-foreground/15 px-1.5 py-0.5 text-xs">{{ selectedEmployeeIds.length }}</span>
+                    </button>
+                </div>
+
+                <div v-if="saveMessage || saveError" class="mt-3 rounded-md border px-3 py-2 text-sm" :class="saveError ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'">
+                    {{ saveError || saveMessage }}
+                </div>
+
                 <div v-if="filteredRows.length" class="mt-4 overflow-hidden rounded-md border">
                     <div class="max-h-[560px] overflow-auto">
-                        <table class="w-full min-w-[1920px] table-fixed text-sm">
+                        <table class="w-full min-w-[1970px] table-fixed text-sm">
                             <thead class="sticky top-0 z-10 border-b bg-card text-left text-xs font-medium text-muted-foreground">
                                 <tr>
+                                    <th class="w-[48px] px-3 py-2 text-center font-medium">
+                                        <input
+                                            type="checkbox"
+                                            class="size-4 rounded border-input"
+                                            :checked="allVisibleSelected"
+                                            :aria-checked="someVisibleSelected ? 'mixed' : allVisibleSelected"
+                                            title="Select visible rows"
+                                            @change="toggleVisibleSelection"
+                                        />
+                                    </th>
                                     <th class="w-[54px] px-3 py-2 font-medium">S.No</th>
                                     <th class="w-[230px] px-3 py-2 font-medium">Employee</th>
                                     <th class="w-[70px] px-3 py-2 font-medium">Days</th>
@@ -514,14 +760,23 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                     <th class="w-[130px] px-3 py-2 font-medium">Paid Cash</th>
                                     <th class="w-[110px] px-3 py-2 font-medium">Balance</th>
                                     <th class="w-[180px] px-3 py-2 font-medium">Remarks</th>
-                                    <th class="w-[44px] px-1 py-2 text-center font-medium">Ledger</th>
-                                    <th class="w-[44px] px-1 py-2 text-center font-medium">PDF</th>
-                                    <th class="w-[44px] px-1 py-2 text-center font-medium">Excel</th>
-                                    <th class="w-[44px] px-1 py-2 text-center font-medium">Save</th>
+                                    <th class="w-[42px] px-1 py-2 text-center font-medium">Ledger</th>
+                                    <th class="w-[42px] px-1 py-2 text-center font-medium">PDF</th>
+                                    <th class="w-[42px] px-1 py-2 text-center font-medium">Excel</th>
+                                    <th class="sticky right-0 z-20 w-[52px] bg-card px-1 py-2 text-center font-medium shadow-[-8px_0_14px_-14px_rgba(0,0,0,0.75)]">Save</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="(row, index) in filteredRows" :key="row.employeeId" class="border-b last:border-b-0">
+                                    <td class="px-3 py-3 text-center">
+                                        <input
+                                            type="checkbox"
+                                            class="size-4 rounded border-input"
+                                            :checked="selectedEmployeeIds.includes(row.employeeId)"
+                                            :title="`Select ${row.employeeName}`"
+                                            @change="toggleRowSelection(row.employeeId, $event)"
+                                        />
+                                    </td>
                                     <td class="px-3 py-3 text-muted-foreground">{{ index + 1 }}</td>
                                     <td class="px-3 py-3">
                                         <div class="min-w-0">
@@ -597,10 +852,11 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                             <FileSpreadsheet class="size-4" />
                                         </a>
                                     </td>
-                                    <td class="px-1 py-3 text-center">
+                                    <td class="sticky right-0 z-10 bg-card px-1 py-3 text-center shadow-[-8px_0_14px_-14px_rgba(0,0,0,0.75)]">
                                         <button
                                             type="button"
-                                            class="inline-flex size-8 items-center justify-center rounded-md border text-sm hover:bg-accent disabled:opacity-60"
+                                            class="inline-flex size-8 items-center justify-center rounded-md border bg-background text-sm hover:bg-accent disabled:opacity-60"
+                                            title="Save payroll"
                                             :disabled="savingEmployeeId === row.employeeId"
                                             @click="saveAdjustment(row)"
                                         >

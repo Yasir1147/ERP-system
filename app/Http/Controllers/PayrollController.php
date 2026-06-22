@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Inertia\Inertia;
@@ -188,6 +189,48 @@ class PayrollController extends Controller
         return to_route('payroll.report', $request->only(['type', 'employee_id', 'month']));
     }
 
+    public function updateAdjustmentsBulk(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'month' => ['required', 'date_format:Y-m'],
+            'adjustments' => ['required', 'array', 'min:1'],
+            'adjustments.*.employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'adjustments.*.bonus_extra' => ['required', 'numeric', 'min:-99999999.99', 'max:99999999.99'],
+            'adjustments.*.previous_balance' => ['required', 'numeric', 'min:-99999999.99', 'max:99999999.99'],
+            'adjustments.*.previous_balance_overridden' => ['sometimes', 'boolean'],
+            'adjustments.*.deduction' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
+            'adjustments.*.paid_by_cash' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
+            'adjustments.*.remarks' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $month = Carbon::createFromFormat('Y-m', $data['month'])->startOfMonth()->toDateString();
+
+        DB::transaction(function () use ($data, $month) {
+            collect($data['adjustments'])
+                ->unique('employee_id')
+                ->each(function (array $adjustment) use ($month) {
+                    PayrollAdjustment::updateOrCreate(
+                        [
+                            'employee_id' => $adjustment['employee_id'],
+                            'month' => $month,
+                        ],
+                        [
+                            'bonus_extra' => $adjustment['bonus_extra'],
+                            'previous_balance' => $adjustment['previous_balance'],
+                            'previous_balance_overridden' => (bool) ($adjustment['previous_balance_overridden'] ?? false),
+                            'deduction' => $adjustment['deduction'],
+                            'paid_by_cash' => $adjustment['paid_by_cash'],
+                            'remarks' => $adjustment['remarks'] ?? null,
+                        ],
+                    );
+                });
+        });
+
+        return response()->json([
+            'message' => count($data['adjustments']).' payroll adjustment(s) saved.',
+        ]);
+    }
+
     public function ledger(Request $request, Employee $employee): JsonResponse
     {
         $data = $request->validate([
@@ -253,6 +296,67 @@ class PayrollController extends Controller
             'monthLabel' => $month->format('F Y'),
             'periodLabel' => $month->format('d/m/Y').' - '.$month->copy()->endOfMonth()->format('d/m/Y'),
             'row' => $row,
+            'generatedAt' => now()->format('d/m/Y h:i A'),
+        ]);
+    }
+
+    public function bulkPayslips(Request $request): View
+    {
+        $data = $request->validate([
+            'month' => ['required', 'date_format:Y-m'],
+            'employee_ids' => ['required', 'string'],
+        ]);
+
+        $employeeIds = collect(explode(',', $data['employee_ids']))
+            ->map(fn (string $id) => (int) trim($id))
+            ->filter()
+            ->unique()
+            ->values();
+
+        abort_if($employeeIds->isEmpty(), 404);
+
+        $month = Carbon::createFromFormat('Y-m', $data['month'])->startOfMonth();
+        $employees = Employee::query()
+            ->whereIn('id', $employeeIds)
+            ->get()
+            ->keyBy('id');
+
+        $slips = $employeeIds
+            ->map(function (int $employeeId) use ($employees, $month) {
+                /** @var Employee|null $employee */
+                $employee = $employees->get($employeeId);
+
+                if (! $employee) {
+                    return null;
+                }
+
+                $row = $this->payrollRows(
+                    $month->toDateString(),
+                    $month->copy()->endOfMonth()->toDateString(),
+                    $month->toDateString(),
+                    null,
+                    $employee->id,
+                )->first();
+
+                if (! $row) {
+                    return null;
+                }
+
+                return [
+                    'employee' => $employee,
+                    'employeeTypeLabel' => Employee::TYPES[$employee->type] ?? $employee->type,
+                    'row' => $row,
+                ];
+            })
+            ->filter()
+            ->values();
+
+        abort_if($slips->isEmpty(), 404);
+
+        return view('payroll.payslips', [
+            'slips' => $slips,
+            'monthLabel' => $month->format('F Y'),
+            'periodLabel' => $month->format('d/m/Y').' - '.$month->copy()->endOfMonth()->format('d/m/Y'),
             'generatedAt' => now()->format('d/m/Y h:i A'),
         ]);
     }
