@@ -27,6 +27,9 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'attendance_backdate_enabled',
+        'attendance_backdate_from',
+        'attendance_backdate_to',
     ];
 
     /**
@@ -49,6 +52,9 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'attendance_backdate_enabled' => 'boolean',
+            'attendance_backdate_from' => 'date',
+            'attendance_backdate_to' => 'date',
         ];
     }
 
@@ -60,5 +66,40 @@ class User extends Authenticatable
     public function isAttendanceUser(): bool
     {
         return $this->role === self::ROLE_ATTENDANCE;
+    }
+
+    public function attendanceDateRange(): array
+    {
+        $defaultMin = now()->subDays(2)->toDateString();
+        $defaultMax = now()->toDateString();
+
+        if ($this->isAdmin()) {
+            return [
+                'min' => null,
+                'max' => $defaultMax,
+                'message' => 'Future dates are not allowed.',
+                'backdateEnabled' => true,
+            ];
+        }
+
+        if (
+            $this->attendance_backdate_enabled
+            && $this->attendance_backdate_from
+            && $this->attendance_backdate_to
+        ) {
+            return [
+                'min' => $this->attendance_backdate_from->toDateString(),
+                'max' => min($this->attendance_backdate_to->toDateString(), $defaultMax),
+                'message' => 'Only the allowed backdate range is available.',
+                'backdateEnabled' => true,
+            ];
+        }
+
+        return [
+            'min' => $defaultMin,
+            'max' => $defaultMax,
+            'message' => 'Only today and the previous 2 days are allowed.',
+            'backdateEnabled' => false,
+        ];
     }
 }

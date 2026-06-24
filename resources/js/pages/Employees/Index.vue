@@ -11,6 +11,7 @@ import { computed, ref } from 'vue';
 
 interface Employee {
     id: number;
+    code: string;
     name: string;
     profession: string;
     type: string;
@@ -22,6 +23,7 @@ const props = defineProps<{
     employeeType: string;
     employeeTypeLabel: string;
     employeeStatuses: Record<string, string>;
+    nextEmployeeCode: string;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -39,6 +41,7 @@ const editingEmployeeId = ref<number | null>(null);
 const search = ref('');
 
 const createForm = useForm({
+    code: props.nextEmployeeCode,
     name: '',
     profession: '',
     type: props.employeeType,
@@ -46,6 +49,7 @@ const createForm = useForm({
 });
 
 const editForm = useForm({
+    code: '',
     name: '',
     profession: '',
     type: props.employeeType,
@@ -60,7 +64,7 @@ const filteredEmployees = computed(() => {
     }
 
     return props.employees.filter((employee) =>
-        [employee.name, employee.profession, props.employeeStatuses[employee.status]].some((value) => value.toLowerCase().includes(query)),
+        [employee.code, employee.name, employee.profession, props.employeeStatuses[employee.status]].some((value) => value.toLowerCase().includes(query)),
     );
 });
 
@@ -69,13 +73,17 @@ const createEmployee = () => {
 
     createForm.post('/employees', {
         preserveScroll: true,
-        onSuccess: () => createForm.reset('name', 'profession'),
+        onSuccess: (page) => {
+            createForm.reset('name', 'profession');
+            createForm.code = String(page.props.nextEmployeeCode ?? props.nextEmployeeCode);
+        },
     });
 };
 
 const startEditing = (employee: Employee) => {
     editingEmployeeId.value = employee.id;
     editForm.clearErrors();
+    editForm.code = employee.code;
     editForm.name = employee.name;
     editForm.profession = employee.profession;
     editForm.type = employee.type;
@@ -119,7 +127,12 @@ const deleteEmployee = (employee: Employee) => {
             </div>
 
             <form class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border" @submit.prevent="createEmployee">
-                <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] lg:items-start">
+                <div class="grid gap-4 lg:grid-cols-[160px_minmax(0,1fr)_minmax(0,1fr)_180px_auto] lg:items-start">
+                    <div class="grid min-w-0 gap-2">
+                        <Label for="employee-code">Code</Label>
+                        <Input id="employee-code" v-model="createForm.code" type="text" inputmode="numeric" placeholder="310" />
+                        <InputError :message="createForm.errors.code" />
+                    </div>
                     <div class="grid min-w-0 gap-2">
                         <Label for="employee-name">Name</Label>
                         <Input id="employee-name" v-model="createForm.name" type="text" placeholder="Employee name" />
@@ -156,7 +169,7 @@ const deleteEmployee = (employee: Employee) => {
                     </div>
                     <div class="relative w-full md:max-w-sm">
                         <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input v-model="search" type="search" class="pl-9" placeholder="Search by name, profession, or status" />
+                        <Input v-model="search" type="search" class="pl-9" placeholder="Search by code, name, profession, or status" />
                     </div>
                 </div>
 
@@ -169,11 +182,12 @@ const deleteEmployee = (employee: Employee) => {
                 </div>
 
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full min-w-[760px] table-fixed text-sm">
+                    <table class="w-full min-w-[900px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[35%] px-4 py-3 font-medium">Name</th>
-                                <th class="w-[32%] px-4 py-3 font-medium">Profession</th>
+                                <th class="w-[14%] px-4 py-3 font-medium">Code</th>
+                                <th class="w-[31%] px-4 py-3 font-medium">Name</th>
+                                <th class="w-[28%] px-4 py-3 font-medium">Profession</th>
                                 <th class="w-[18%] px-4 py-3 font-medium">Status</th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
@@ -181,8 +195,13 @@ const deleteEmployee = (employee: Employee) => {
                         <tbody>
                             <tr v-for="employee in filteredEmployees" :key="employee.id" class="border-b last:border-b-0">
                                 <td class="px-4 py-3">
+                                    <Input v-if="editingEmployeeId === employee.id" v-model="editForm.code" type="text" inputmode="numeric" />
+                                    <span v-else class="block truncate font-medium">{{ employee.code }}</span>
+                                    <InputError v-if="editingEmployeeId === employee.id" :message="editForm.errors.code" class="mt-2" />
+                                </td>
+                                <td class="px-4 py-3">
                                     <Input v-if="editingEmployeeId === employee.id" v-model="editForm.name" type="text" />
-                                    <span v-else class="block truncate font-medium">{{ employee.name }}</span>
+                                    <span v-else class="block truncate font-medium">{{ employee.code }} - {{ employee.name }}</span>
                                     <InputError v-if="editingEmployeeId === employee.id" :message="editForm.errors.name" class="mt-2" />
                                 </td>
                                 <td class="px-4 py-3">

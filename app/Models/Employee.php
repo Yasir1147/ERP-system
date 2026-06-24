@@ -27,6 +27,7 @@ class Employee extends Model
     ];
 
     protected $fillable = [
+        'code',
         'name',
         'profession',
         'type',

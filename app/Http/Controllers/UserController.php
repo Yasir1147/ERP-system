@@ -17,7 +17,28 @@ class UserController extends Controller
         return Inertia::render('Users/Index', [
             'users' => User::query()
                 ->latest()
-                ->get(['id', 'name', 'username', 'email', 'role', 'created_at']),
+                ->get([
+                    'id',
+                    'name',
+                    'username',
+                    'email',
+                    'role',
+                    'attendance_backdate_enabled',
+                    'attendance_backdate_from',
+                    'attendance_backdate_to',
+                    'created_at',
+                ])
+                ->map(fn (User $user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'username' => $user->username,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'attendance_backdate_enabled' => $user->attendance_backdate_enabled,
+                    'attendance_backdate_from' => $user->attendance_backdate_from?->toDateString(),
+                    'attendance_backdate_to' => $user->attendance_backdate_to?->toDateString(),
+                    'created_at' => $user->created_at,
+                ]),
             'roles' => [
                 User::ROLE_ADMIN => 'Admin',
                 User::ROLE_ATTENDANCE => 'Attendance User',
@@ -34,7 +55,12 @@ class UserController extends Controller
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
             'role' => ['required', Rule::in([User::ROLE_ADMIN, User::ROLE_ATTENDANCE])],
             'password' => ['required', 'confirmed', Password::defaults()],
+            'attendance_backdate_enabled' => ['boolean'],
+            'attendance_backdate_from' => ['nullable', 'date', 'required_if:attendance_backdate_enabled,true'],
+            'attendance_backdate_to' => ['nullable', 'date', 'required_if:attendance_backdate_enabled,true', 'after_or_equal:attendance_backdate_from', 'before_or_equal:today'],
         ]);
+
+        $data = $this->normalizeBackdateAccess($data);
 
         User::create($data);
 
@@ -49,11 +75,16 @@ class UserController extends Controller
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['required', Rule::in([User::ROLE_ADMIN, User::ROLE_ATTENDANCE])],
             'password' => ['nullable', 'confirmed', Password::defaults()],
+            'attendance_backdate_enabled' => ['boolean'],
+            'attendance_backdate_from' => ['nullable', 'date', 'required_if:attendance_backdate_enabled,true'],
+            'attendance_backdate_to' => ['nullable', 'date', 'required_if:attendance_backdate_enabled,true', 'after_or_equal:attendance_backdate_from', 'before_or_equal:today'],
         ]);
 
         if (empty($data['password'])) {
             unset($data['password']);
         }
+
+        $data = $this->normalizeBackdateAccess($data);
 
         $user->update($data);
 
@@ -67,5 +98,18 @@ class UserController extends Controller
         $user->delete();
 
         return to_route('users.index');
+    }
+
+    private function normalizeBackdateAccess(array $data): array
+    {
+        $data['attendance_backdate_enabled'] = (bool) ($data['attendance_backdate_enabled'] ?? false);
+
+        if ($data['role'] !== User::ROLE_ATTENDANCE || ! $data['attendance_backdate_enabled']) {
+            $data['attendance_backdate_enabled'] = false;
+            $data['attendance_backdate_from'] = null;
+            $data['attendance_backdate_to'] = null;
+        }
+
+        return $data;
     }
 }

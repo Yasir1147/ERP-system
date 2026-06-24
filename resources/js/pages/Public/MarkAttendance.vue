@@ -16,6 +16,7 @@ interface Project {
 
 interface Employee {
     id: number;
+    code: string;
     name: string;
     profession: string;
     type: string;
@@ -36,8 +37,9 @@ const props = defineProps<{
     employeeType: string;
     employeeTypeLabel: string;
     submitUrl: string;
-    attendanceDateMin: string;
+    attendanceDateMin: string | null;
     attendanceDateMax: string;
+    attendanceDateHelp: string;
 }>();
 
 const today = props.attendanceDateMax;
@@ -48,12 +50,15 @@ const statusOptions = [
     { value: 'leave', label: 'Leave' },
 ];
 const projectSearch = ref('');
+const overtimeProjectSearch = ref('');
 const employeeSearch = ref('');
 const projectOpen = ref(false);
+const overtimeProjectOpen = ref(false);
 const employeeOpen = ref(false);
 
 const form = useForm({
     project_id: '',
+    overtime_project_id: '',
     employee_id: '',
     status: '',
     leave_reason: '',
@@ -76,6 +81,7 @@ const filteredProjects = computed(() => {
 });
 
 const selectedProject = computed(() => props.projects.find((project) => String(project.id) === form.project_id));
+const selectedOvertimeProject = computed(() => props.projects.find((project) => String(project.id) === form.overtime_project_id));
 
 const filteredEmployees = computed(() => {
     const query = employeeSearch.value.trim().toLowerCase();
@@ -85,7 +91,7 @@ const filteredEmployees = computed(() => {
     }
 
     return props.employees.filter((employee) =>
-        [employee.name, employee.profession, employee.type.replace('_', ' ')].some((value) => value.toLowerCase().includes(query)),
+        [employee.code, employee.name, employee.profession, employee.type.replace('_', ' ')].some((value) => value.toLowerCase().includes(query)),
     );
 });
 
@@ -123,6 +129,12 @@ const selectProject = (project: Project) => {
     projectOpen.value = false;
 };
 
+const selectOvertimeProject = (project: Project) => {
+    form.overtime_project_id = String(project.id);
+    overtimeProjectSearch.value = '';
+    overtimeProjectOpen.value = false;
+};
+
 const selectEmployee = (employee: Employee) => {
     if (isEmployeeDisabled(employee)) {
         return;
@@ -143,10 +155,13 @@ watch(
     (status) => {
         if (status !== 'present') {
             form.project_id = '';
+            form.overtime_project_id = '';
             form.has_overtime = false;
             form.overtime_hours = '';
             projectSearch.value = '';
+            overtimeProjectSearch.value = '';
             projectOpen.value = false;
+            overtimeProjectOpen.value = false;
         }
 
         if (status !== 'leave') {
@@ -171,6 +186,9 @@ watch(
     (hasOvertime) => {
         if (!hasOvertime) {
             form.overtime_hours = '';
+            form.overtime_project_id = '';
+            overtimeProjectSearch.value = '';
+            overtimeProjectOpen.value = false;
         }
     },
 );
@@ -181,10 +199,12 @@ const submit = () => {
     form.post(props.submitUrl, {
         preserveScroll: true,
         onSuccess: () => {
-            form.reset('project_id', 'employee_id', 'status', 'leave_reason', 'has_overtime', 'overtime_hours');
+            form.reset('project_id', 'overtime_project_id', 'employee_id', 'status', 'leave_reason', 'has_overtime', 'overtime_hours');
             projectSearch.value = '';
+            overtimeProjectSearch.value = '';
             employeeSearch.value = '';
             projectOpen.value = false;
+            overtimeProjectOpen.value = false;
             employeeOpen.value = false;
             form.attendance_date = today;
         },
@@ -216,7 +236,7 @@ const submit = () => {
                                 @click="employeeOpen = !employeeOpen"
                             >
                                 <span class="min-w-0 truncate">
-                                    {{ selectedEmployee ? `${selectedEmployee.name} - ${selectedEmployee.profession}` : 'Select employee' }}
+                                    {{ selectedEmployee ? `${selectedEmployee.code} - ${selectedEmployee.name} - ${selectedEmployee.profession}` : 'Select employee' }}
                                 </span>
                                 <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
                             </button>
@@ -235,7 +255,7 @@ const submit = () => {
                                 :disabled="isEmployeeDisabled(employee)"
                                 @click="selectEmployee(employee)"
                             >
-                                        <span class="font-medium">{{ employee.name }}</span>
+                                        <span class="font-medium">{{ employee.code }} - {{ employee.name }}</span>
                                         <span class="text-xs text-muted-foreground">
                                             {{ employee.profession }}<template v-if="employeeLeaveLabel(employee)"> - {{ employeeLeaveLabel(employee) }}</template>
                                         </span>
@@ -278,7 +298,7 @@ const submit = () => {
                                 @focus="openNativePicker"
                             />
                         </div>
-                        <p class="text-xs text-muted-foreground">Only today and previous 2 days are allowed.</p>
+                        <p class="text-xs text-muted-foreground">{{ attendanceDateHelp }}</p>
                         <InputError :message="form.errors.attendance_date" />
                     </div>
 
@@ -324,6 +344,61 @@ const submit = () => {
                             <input v-model="form.has_overtime" type="checkbox" class="size-4 rounded border-input" />
                             <span>Overtime applied</span>
                         </label>
+
+                        <div v-if="form.has_overtime" class="grid gap-2">
+                            <Label for="overtime-project-search">Overtime Project</Label>
+                            <div class="relative">
+                                <button
+                                    type="button"
+                                    class="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    @click="overtimeProjectOpen = !overtimeProjectOpen"
+                                >
+                                    <span class="min-w-0 truncate">
+                                        {{
+                                            selectedOvertimeProject
+                                                ? `${selectedOvertimeProject.name} - ${selectedOvertimeProject.status}`
+                                                : selectedProject
+                                                  ? `Same as main project - ${selectedProject.name}`
+                                                  : 'Same as main project'
+                                        }}
+                                    </span>
+                                    <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
+                                </button>
+
+                                <div v-if="overtimeProjectOpen" class="absolute z-20 mt-2 w-full rounded-md border bg-popover p-2 shadow-lg">
+                                    <div class="relative">
+                                        <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input id="overtime-project-search" v-model="overtimeProjectSearch" type="search" class="pl-9" placeholder="Search overtime project" />
+                                    </div>
+                                    <div class="mt-2 max-h-56 overflow-y-auto">
+                                        <button
+                                            type="button"
+                                            class="flex w-full flex-col rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
+                                            @click="
+                                                form.overtime_project_id = '';
+                                                overtimeProjectSearch = '';
+                                                overtimeProjectOpen = false;
+                                            "
+                                        >
+                                            <span class="font-medium">Same as main project</span>
+                                            <span class="text-xs text-muted-foreground">{{ selectedProject ? selectedProject.name : 'Select main project first' }}</span>
+                                        </button>
+                                        <button
+                                            v-for="project in filteredProjects"
+                                            :key="project.id"
+                                            type="button"
+                                            class="flex w-full flex-col rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
+                                            @click="selectOvertimeProject(project)"
+                                        >
+                                            <span class="font-medium">{{ project.name }}</span>
+                                            <span class="text-xs capitalize text-muted-foreground">{{ project.status }}</span>
+                                        </button>
+                                        <div v-if="filteredProjects.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">No projects found.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <InputError :message="form.errors.overtime_project_id" />
+                        </div>
 
                         <div v-if="form.has_overtime" class="grid gap-2">
                             <Label for="overtime-hours">Overtime Hours</Label>

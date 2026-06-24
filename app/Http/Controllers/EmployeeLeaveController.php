@@ -55,9 +55,9 @@ class EmployeeLeaveController extends Controller
                 $date = Carbon::parse($record->attendance_date);
 
                 return [
-                    'id' => 'attendance-'.$record->id,
+                    'id' => $record->id,
                     'source' => 'daily_leave',
-                    'canEdit' => false,
+                    'canEdit' => true,
                     'employeeId' => $record->employee_id,
                     'employeeName' => $record->employee?->name,
                     'employeeProfession' => $record->employee?->profession,
@@ -117,6 +117,35 @@ class EmployeeLeaveController extends Controller
         return to_route('employee-leaves.index');
     }
 
+    public function updateDailyLeave(Request $request, AttendanceRecord $attendanceRecord): RedirectResponse
+    {
+        abort_unless($attendanceRecord->status === AttendanceRecord::STATUS_LEAVE, 404);
+
+        $data = $this->validatedDailyLeaveData($request);
+        $this->ensureNoAttendanceOverlap($data['employee_id'], $data['start_date'], $attendanceRecord->id);
+
+        $attendanceRecord->update([
+            'employee_id' => $data['employee_id'],
+            'attendance_date' => $data['start_date'],
+            'leave_reason' => $data['reason'],
+            'project_id' => null,
+            'overtime_project_id' => null,
+            'has_overtime' => false,
+            'overtime_hours' => null,
+        ]);
+
+        return to_route('employee-leaves.index');
+    }
+
+    public function destroyDailyLeave(AttendanceRecord $attendanceRecord): RedirectResponse
+    {
+        abort_unless($attendanceRecord->status === AttendanceRecord::STATUS_LEAVE, 404);
+
+        $attendanceRecord->delete();
+
+        return to_route('employee-leaves.index');
+    }
+
     private function validatedData(Request $request): array
     {
         return $request->validate([
@@ -131,6 +160,23 @@ class EmployeeLeaveController extends Controller
         ]);
     }
 
+    private function validatedDailyLeaveData(Request $request): array
+    {
+        $data = $request->validate([
+            'employee_id' => [
+                'required',
+                'integer',
+                Rule::exists('employees', 'id')->where(fn ($query) => $query->where('status', '!=', Employee::STATUS_LEFT)),
+            ],
+            'start_date' => ['required', 'date'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $data['end_date'] = $data['start_date'];
+
+        return $data;
+    }
+
     private function ensureNoOverlap(int $employeeId, string $startDate, string $endDate, ?int $ignoreId = null): void
     {
         $hasOverlap = EmployeeLeave::query()
@@ -143,6 +189,21 @@ class EmployeeLeaveController extends Controller
         if ($hasOverlap) {
             throw ValidationException::withMessages([
                 'start_date' => 'This employee already has leave in the selected date range.',
+            ]);
+        }
+    }
+
+    private function ensureNoAttendanceOverlap(int $employeeId, string $date, ?int $ignoreId = null): void
+    {
+        $alreadyMarked = AttendanceRecord::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('attendance_date', $date)
+            ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->exists();
+
+        if ($alreadyMarked) {
+            throw ValidationException::withMessages([
+                'start_date' => 'Attendance for this employee is already marked on the selected date.',
             ]);
         }
     }

@@ -22,6 +22,7 @@ class AttendanceRecord extends Model
 
     protected $fillable = [
         'project_id',
+        'overtime_project_id',
         'employee_id',
         'submitted_by',
         'status',
@@ -41,6 +42,11 @@ class AttendanceRecord extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function overtimeProject(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'overtime_project_id');
     }
 
     public function submitter(): BelongsTo

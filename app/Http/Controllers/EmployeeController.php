@@ -20,10 +20,11 @@ class EmployeeController extends Controller
             'employees' => Employee::query()
                 ->where('type', $type)
                 ->latest()
-                ->get(['id', 'name', 'profession', 'type', 'status', 'created_at']),
+                ->get(['id', 'code', 'name', 'profession', 'type', 'status', 'created_at']),
             'employeeType' => $type,
             'employeeTypeLabel' => Employee::TYPES[$type],
             'employeeStatuses' => Employee::STATUSES,
+            'nextEmployeeCode' => $this->nextEmployeeCode($type),
         ]);
     }
 
@@ -57,10 +58,31 @@ class EmployeeController extends Controller
     private function validatedData(Request $request): array
     {
         return $request->validate([
+            'code' => [
+                'required',
+                'string',
+                'max:50',
+                'regex:/^\d+$/',
+                Rule::unique('employees', 'code')
+                    ->where(fn ($query) => $query->where('type', $request->input('type')))
+                    ->ignore($request->route('employee')),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'profession' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in(array_keys(Employee::TYPES))],
             'status' => ['required', Rule::in(array_keys(Employee::STATUSES))],
         ]);
+    }
+
+    private function nextEmployeeCode(string $type): string
+    {
+        $maxCode = Employee::query()
+            ->where('type', $type)
+            ->pluck('code')
+            ->filter(fn (?string $code) => $code !== null && ctype_digit($code))
+            ->map(fn (string $code) => (int) $code)
+            ->max();
+
+        return (string) (($maxCode ?? 309) + 1);
     }
 }

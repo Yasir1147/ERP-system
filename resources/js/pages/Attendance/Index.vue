@@ -21,6 +21,7 @@ interface AttendanceRecord {
     employeeProfession: string;
     employeeType: string;
     projectName: string | null;
+    overtimeProjectName: string | null;
     status: string;
     dateRaw: string;
     date: string;
@@ -329,7 +330,13 @@ const submittedByLabel = (record: AttendanceRecord) => {
                             <span class="truncate text-muted-foreground">{{ employeeTypes[record.employeeType] }}</span>
                             <span class="truncate text-muted-foreground">{{ record.reason || record.projectName || '-' }}</span>
                             <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
-                            <span class="text-muted-foreground">{{ record.overtimeHours ? `${record.overtimeHours} hrs` : '-' }}</span>
+                            <span class="truncate text-muted-foreground">
+                                {{
+                                    record.overtimeHours
+                                        ? `${record.overtimeHours} hrs${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
+                                        : '-'
+                                }}
+                            </span>
                             <span class="truncate text-muted-foreground">{{ submittedByLabel(record) }}</span>
                         </div>
                     </div>

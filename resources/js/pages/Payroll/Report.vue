@@ -278,6 +278,10 @@ const saveSelectedAdjustments = async () => {
             body: form,
         });
 
+        if (handleSessionExpired(response)) {
+            return;
+        }
+
         if (!response.ok) {
             const error = await response.json().catch(() => null);
             const message = error?.message || 'Selected payroll records were not saved. Check the values and try again.';
@@ -402,6 +406,10 @@ const saveAdjustment = async (row: PayrollRow) => {
             body: form,
         });
 
+        if (handleSessionExpired(response)) {
+            return;
+        }
+
         if (!response.ok) {
             const error = await response.json().catch(() => null);
             const message = error?.message || 'Payroll was not saved. Check the values and try again.';
@@ -469,6 +477,18 @@ const reportPrintUrl = computed(() => {
 });
 
 const csrfToken = () => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+
+const handleSessionExpired = (response: Response) => {
+    if (response.status !== 419) {
+        return false;
+    }
+
+    saveMessage.value = '';
+    saveError.value = 'Your session token expired. The page will refresh, then please try saving again.';
+    window.setTimeout(() => window.location.reload(), 1000);
+
+    return true;
+};
 
 const hydrateLedgerAdjustments = () => {
     ledgerRows.value.forEach((row) => {
@@ -541,10 +561,12 @@ const saveLedgerAdjustment = async (row: LedgerRow) => {
     try {
         const response = await fetch(`/payroll/report/${row.employeeId}/adjustment`, {
             method: 'PUT',
+            credentials: 'same-origin',
             headers: {
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
             },
             body: JSON.stringify({
                 type: filterType.value,
@@ -558,6 +580,10 @@ const saveLedgerAdjustment = async (row: LedgerRow) => {
                 remarks: adjustment.remarks,
             }),
         });
+
+        if (handleSessionExpired(response)) {
+            return;
+        }
 
         if (!response.ok) {
             throw new Error('Unable to save ledger row.');

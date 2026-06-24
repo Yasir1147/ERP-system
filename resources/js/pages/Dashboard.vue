@@ -25,6 +25,7 @@ interface AttendanceRecord {
     employeeProfession: string;
     employeeType: string;
     projectName: string | null;
+    overtimeProjectName: string | null;
     status: string;
     date: string;
     leaveReason: string | null;
@@ -160,7 +161,7 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                                     <p class="mt-1 text-2xl font-semibold">{{ summaryItem.absent }}</p>
                                 </div>
                                 <div class="rounded-md border border-amber-600/20 bg-amber-600/10 p-3 text-amber-700">
-                                    <p class="text-xs">Leave</p>
+                                    <p class="text-xs">Leave Records</p>
                                     <p class="mt-1 text-2xl font-semibold">{{ summaryItem.leave }}</p>
                                 </div>
                             </div>
@@ -330,7 +331,13 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                                 </div>
                                 <span class="truncate text-muted-foreground">{{ record.leaveReason || record.projectName || '-' }}</span>
                                 <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
-                                <span class="text-muted-foreground">{{ record.overtimeHours ? `${record.overtimeHours} hrs` : '-' }}</span>
+                                <span class="truncate text-muted-foreground">
+                                    {{
+                                        record.overtimeHours
+                                            ? `${record.overtimeHours} hrs${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
+                                            : '-'
+                                    }}
+                                </span>
                                 <span class="truncate text-muted-foreground">{{ submittedByLabel(record) }}</span>
                             </div>
                         </div>
@@ -365,7 +372,13 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                                 </div>
                                 <span class="truncate text-muted-foreground">{{ record.leaveReason || record.projectName || '-' }}</span>
                                 <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
-                                <span class="text-muted-foreground">{{ record.overtimeHours ? `${record.overtimeHours} hrs` : '-' }}</span>
+                                <span class="truncate text-muted-foreground">
+                                    {{
+                                        record.overtimeHours
+                                            ? `${record.overtimeHours} hrs${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
+                                            : '-'
+                                    }}
+                                </span>
                                 <span class="truncate text-muted-foreground">{{ submittedByLabel(record) }}</span>
                             </div>
                         </div>

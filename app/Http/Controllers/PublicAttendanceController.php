@@ -18,8 +18,8 @@ class PublicAttendanceController extends Controller
     public function create(string $type = 'contracting'): Response
     {
         $type = $this->normalizeType($type);
-        $attendanceDateMin = now()->subDays(2)->toDateString();
-        $attendanceDateMax = now()->toDateString();
+        $dateRange = request()->user()->attendanceDateRange();
+        $leaveLookupMin = $dateRange['min'] ?? $dateRange['max'];
 
         return Inertia::render('Public/MarkAttendance', [
             'projects' => Project::query()
@@ -30,11 +30,11 @@ class PublicAttendanceController extends Controller
                 ->where('type', $type)
                 ->where('status', '!=', Employee::STATUS_LEFT)
                 ->orderBy('name')
-                ->get(['id', 'name', 'profession', 'type', 'status']),
+                ->get(['id', 'code', 'name', 'profession', 'type', 'status']),
             'employeeLeaves' => EmployeeLeave::query()
                 ->whereHas('employee', fn ($query) => $query->where('type', $type))
-                ->whereDate('start_date', '<=', $attendanceDateMax)
-                ->whereDate('end_date', '>=', $attendanceDateMin)
+                ->whereDate('start_date', '<=', $dateRange['max'])
+                ->whereDate('end_date', '>=', $leaveLookupMin)
                 ->get(['employee_id', 'start_date', 'end_date', 'reason'])
                 ->map(fn (EmployeeLeave $leave) => [
                     'employeeId' => $leave->employee_id,
@@ -45,8 +45,9 @@ class PublicAttendanceController extends Controller
             'employeeType' => $type,
             'employeeTypeLabel' => Employee::TYPES[$type],
             'submitUrl' => $this->submitUrl($type),
-            'attendanceDateMin' => $attendanceDateMin,
-            'attendanceDateMax' => $attendanceDateMax,
+            'attendanceDateMin' => $dateRange['min'],
+            'attendanceDateMax' => $dateRange['max'],
+            'attendanceDateHelp' => $dateRange['message'],
         ]);
     }
 
@@ -55,8 +56,7 @@ class PublicAttendanceController extends Controller
         $type = $this->normalizeType($type);
         $isPresent = $request->input('status') === AttendanceRecord::STATUS_PRESENT;
         $isLeave = $request->input('status') === AttendanceRecord::STATUS_LEAVE;
-        $attendanceDateMin = now()->subDays(2)->toDateString();
-        $attendanceDateMax = now()->toDateString();
+        $dateRange = $request->user()->attendanceDateRange();
 
         $data = $request->validate([
             'employee_id' => [
@@ -76,8 +76,7 @@ class PublicAttendanceController extends Controller
             'attendance_date' => [
                 'required',
                 'date',
-                'after_or_equal:'.$attendanceDateMin,
-                'before_or_equal:'.$attendanceDateMax,
+                ...$this->attendanceDateRules($dateRange),
             ],
             'has_overtime' => ['required', 'boolean'],
             'overtime_hours' => [
@@ -85,6 +84,11 @@ class PublicAttendanceController extends Controller
                 Rule::requiredIf($isPresent && $request->boolean('has_overtime')),
                 'integer',
                 'between:1,10',
+            ],
+            'overtime_project_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('projects', 'id')->where('type', $type),
             ],
             'leave_reason' => ['nullable', Rule::requiredIf($isLeave), 'string', 'max:1000'],
         ]);
@@ -119,6 +123,7 @@ class PublicAttendanceController extends Controller
 
         if (! $isPresent) {
             $data['project_id'] = null;
+            $data['overtime_project_id'] = null;
             $data['has_overtime'] = false;
             $data['overtime_hours'] = null;
         }
@@ -129,6 +134,9 @@ class PublicAttendanceController extends Controller
 
         if (! $data['has_overtime']) {
             $data['overtime_hours'] = null;
+            $data['overtime_project_id'] = null;
+        } elseif (blank($data['overtime_project_id'] ?? null)) {
+            $data['overtime_project_id'] = $data['project_id'];
         }
 
         $data['submitted_by'] = $request->user()->id;
@@ -163,5 +171,16 @@ class PublicAttendanceController extends Controller
         return $type === 'rope_access'
             ? '/mark-attendance/rope-access'
             : '/mark-attendance/contracting';
+    }
+
+    private function attendanceDateRules(array $dateRange): array
+    {
+        $rules = ['before_or_equal:'.$dateRange['max']];
+
+        if ($dateRange['min']) {
+            $rules[] = 'after_or_equal:'.$dateRange['min'];
+        }
+
+        return $rules;
     }
 }

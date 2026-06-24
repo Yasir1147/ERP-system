@@ -152,6 +152,7 @@ Dashboard and admin modules:
 ```text
 /dashboard
 /attendance
+/attendance/timesheet
 /employees/rope_access
 /employees/contracting
 /projects/overview
@@ -171,6 +172,14 @@ Current role concept:
 - `attendance_user`: can access attendance marking pages only.
 
 Normal attendance users can log in with username-only according to the current business requirement. Admin users still use password login.
+
+Admin can temporarily allow an attendance user to enter older missing attendance from the Users page. The access is controlled per user with:
+
+- `attendance_backdate_enabled`
+- `attendance_backdate_from`
+- `attendance_backdate_to`
+
+When enabled, the attendance user can only submit dates inside that range, and future dates are still blocked. When disabled, the user goes back to the default attendance date rule.
 
 ## Core Business Rules
 
@@ -192,6 +201,8 @@ Projects are split into two categories:
 
 The Projects Overview page calculates project labor cost from attendance records and salary settings.
 
+If an attendance record has a separate overtime project, project reports split the cost: basic salary/day count belongs to the main attendance project, while overtime hours and overtime cost belong to the overtime project.
+
 ### Attendance
 
 Attendance supports these statuses:
@@ -202,15 +213,31 @@ Attendance supports these statuses:
 
 Present requires employee, project, date, and optional overtime hours.
 
+When overtime is applied, the attendance form also supports an optional overtime project. If the overtime project is left blank, the system uses the main selected project for overtime. If a different overtime project is selected, normal attendance/day cost remains on the main project and overtime hours/cost are assigned to the selected overtime project.
+
 Absent requires employee and date.
 
 Leave requires employee, date, and leave reason.
 
-Normal attendance users can only select today or the previous two dates. Future dates are disabled.
+Normal attendance users can only select today or the previous two dates by default. Future dates are disabled.
+
+Admins can grant a temporary backdate date range from the Users section for attendance users who forgot to mark attendance. This must be validated in both the frontend date picker and the backend controller.
 
 Duplicate attendance should not be allowed for the same employee and same date.
 
 Attendance records track who submitted the record.
+
+Monthly attendance timesheet is available at:
+
+```text
+/attendance/timesheet
+```
+
+Timesheet supports employee type and month filters, sticky employee rows, row highlighting on click, and CSV download through:
+
+```text
+/attendance/timesheet-export
+```
 
 ### Leaves
 
@@ -221,9 +248,13 @@ There are two leave types in the UI:
 
 Long leave is considered more than 3 days.
 
+Admins can edit and delete both daily leave attendance records and long leave range records from the Leaves page. Daily leave remains a single-day attendance record, so its end date is not separately editable.
+
 Employees on active leave should not be selectable for attendance marking.
 
 Dashboard should show a notification when a long leave has completed and needs admin review/status update.
+
+Dashboard monthly leave summary counts leave records/events, not leave days. One 20-day long leave counts as 1 leave record. If the same employee has a separate daily leave and a long leave in the same month, those count as separate leave records.
 
 ### Payroll
 
@@ -259,6 +290,8 @@ Payroll report supports:
 - Payslip CSV/Excel export
 - Merged selected payslips PDF/print
 - Payroll report PDF/print
+
+Payroll save actions handle expired CSRF/session tokens by showing a clear message and refreshing the page so a new token is loaded. To avoid repeated CSRF issues during local development, keep using `http://127.0.0.1:8000` instead of switching between `localhost` and `127.0.0.1`.
 
 ## Project Overview
 
@@ -339,6 +372,7 @@ When continuing this project:
 4. Read these frontend pages next:
    - `resources/js/pages/Payroll/Report.vue`
    - `resources/js/pages/Projects/Overview.vue`
+   - `resources/js/pages/Attendance/Timesheet.vue`
    - `resources/js/components/AppSidebar.vue`
 5. Keep UI text English only.
 6. Do not assume the database is disposable.

@@ -84,22 +84,27 @@ class ProjectController extends Controller
 
         $records = AttendanceRecord::query()
             ->with(['employee.payrollSetting', 'submitter'])
-            ->where('project_id', $project->id)
             ->where('status', AttendanceRecord::STATUS_PRESENT)
+            ->where(function ($query) use ($project) {
+                $query->where('project_id', $project->id)
+                    ->orWhere('overtime_project_id', $project->id);
+            })
             ->when($data['from'] ?? null, fn ($query, $date) => $query->whereDate('attendance_date', '>=', $date))
             ->when($data['to'] ?? null, fn ($query, $date) => $query->whereDate('attendance_date', '<=', $date))
             ->orderBy('attendance_date')
             ->orderBy('employee_id')
             ->get();
 
-        $rows = $records->map(function (AttendanceRecord $record) {
+        $rows = $records->map(function (AttendanceRecord $record) use ($project) {
             $employee = $record->employee;
             $setting = $employee?->payrollSetting;
             $dailySalary = (float) ($setting?->daily_salary ?? 0);
             $standardHours = max(1, (int) ($setting?->standard_hours_per_day ?? 8));
-            $overtimeHours = (int) ($record->overtime_hours ?? 0);
+            $basicCost = (int) $record->project_id === (int) $project->id ? $dailySalary : 0;
+            $effectiveOvertimeProjectId = $record->overtime_project_id ?: $record->project_id;
+            $overtimeHours = (int) $effectiveOvertimeProjectId === (int) $project->id ? (int) ($record->overtime_hours ?? 0) : 0;
             $overtimeCost = $setting?->is_overtime_enabled === false ? 0 : $overtimeHours * ($dailySalary / $standardHours);
-            $totalCost = $dailySalary + $overtimeCost;
+            $totalCost = $basicCost + $overtimeCost;
 
             return [
                 'id' => $record->id,
@@ -111,7 +116,7 @@ class ProjectController extends Controller
                 'status' => $record->status,
                 'dailySalary' => round($dailySalary, 2),
                 'overtimeHours' => $overtimeHours,
-                'basicCost' => round($dailySalary, 2),
+                'basicCost' => round($basicCost, 2),
                 'overtimeCost' => round($overtimeCost, 2),
                 'totalCost' => round($totalCost, 2),
                 'submittedBy' => $record->submitter?->name ?? '-',
@@ -211,8 +216,11 @@ class ProjectController extends Controller
     {
         $records = AttendanceRecord::query()
             ->with('employee.payrollSetting')
-            ->where('project_id', $project->id)
             ->where('status', AttendanceRecord::STATUS_PRESENT)
+            ->where(function ($query) use ($project) {
+                $query->where('project_id', $project->id)
+                    ->orWhere('overtime_project_id', $project->id);
+            })
             ->orderBy('attendance_date')
             ->get();
 
@@ -230,13 +238,17 @@ class ProjectController extends Controller
             $setting = $employee?->payrollSetting;
             $dailySalary = (float) ($setting?->daily_salary ?? 0);
             $standardHours = max(1, (int) ($setting?->standard_hours_per_day ?? 8));
-            $overtimeHours = (int) ($record->overtime_hours ?? 0);
+            $effectiveOvertimeProjectId = $record->overtime_project_id ?: $record->project_id;
+            $overtimeHours = (int) $effectiveOvertimeProjectId === (int) $project->id ? (int) ($record->overtime_hours ?? 0) : 0;
 
             if (! $setting) {
                 $missingPayrollSettings->push($employee?->name);
             }
 
-            $basicCost += $dailySalary;
+            if ((int) $record->project_id === (int) $project->id) {
+                $basicCost += $dailySalary;
+            }
+
             $overtimeCost += $setting?->is_overtime_enabled === false ? 0 : $overtimeHours * ($dailySalary / $standardHours);
         }
 
@@ -255,7 +267,7 @@ class ProjectController extends Controller
             'workedDays' => $workedDates->count(),
             'labourCount' => $labourIds->count(),
             'labourEntries' => $records->count(),
-            'overtimeHours' => (int) $records->sum(fn (AttendanceRecord $record) => (int) ($record->overtime_hours ?? 0)),
+            'overtimeHours' => (int) $records->sum(fn (AttendanceRecord $record) => (int) ((int) ($record->overtime_project_id ?: $record->project_id) === (int) $project->id ? ($record->overtime_hours ?? 0) : 0)),
             'basicCost' => round($basicCost, 2),
             'overtimeCost' => round($overtimeCost, 2),
             'totalCost' => round($basicCost + $overtimeCost, 2),

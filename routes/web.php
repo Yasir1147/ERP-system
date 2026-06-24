@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AttendanceReportController;
+use App\Http\Controllers\AttendanceTimesheetController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeLeaveController;
@@ -25,6 +26,8 @@ Route::get('/', function (Request $request) {
 Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verified', 'role:admin'])->name('dashboard');
 
 Route::get('attendance', AttendanceReportController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.index');
+Route::get('attendance/timesheet', AttendanceTimesheetController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet');
+Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.export');
 
 Route::middleware(['attendance.access'])->group(function () {
     Route::get('mark-attendance', [PublicAttendanceController::class, 'create'])->name('public-attendance.create');
@@ -57,6 +60,10 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::resource('employee-leaves', EmployeeLeaveController::class)
         ->parameters(['employee-leaves' => 'employeeLeave'])
         ->only(['index', 'store', 'update', 'destroy']);
+    Route::put('employee-leaves/attendance/{attendanceRecord}', [EmployeeLeaveController::class, 'updateDailyLeave'])
+        ->name('employee-leaves.daily.update');
+    Route::delete('employee-leaves/attendance/{attendanceRecord}', [EmployeeLeaveController::class, 'destroyDailyLeave'])
+        ->name('employee-leaves.daily.destroy');
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::get('payroll/report', [PayrollController::class, 'report'])->name('payroll.report');
     Route::get('payroll/report-print', [PayrollController::class, 'reportPrint'])->name('payroll.report-print');

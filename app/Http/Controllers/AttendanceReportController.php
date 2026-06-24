@@ -64,12 +64,33 @@ class AttendanceReportController extends Controller
 
         $projectSummary = $records
             ->where('status', AttendanceRecord::STATUS_PRESENT)
+            ->flatMap(function ($record) {
+                $items = [];
+
+                if (filled($record['projectName'])) {
+                    $items[] = [
+                        'projectName' => $record['projectName'],
+                        'days' => 1,
+                        'overtimeHours' => 0,
+                    ];
+                }
+
+                if ((int) ($record['overtimeHours'] ?? 0) > 0) {
+                    $items[] = [
+                        'projectName' => $record['overtimeProjectName'] ?: $record['projectName'],
+                        'days' => 0,
+                        'overtimeHours' => (int) $record['overtimeHours'],
+                    ];
+                }
+
+                return $items;
+            })
             ->filter(fn ($record) => filled($record['projectName']))
             ->groupBy('projectName')
             ->map(fn (Collection $projectRecords, string $projectName) => [
                 'projectName' => $projectName,
-                'days' => $projectRecords->count(),
-                'overtimeHours' => $projectRecords->sum(fn ($record) => (int) ($record['overtimeHours'] ?? 0)),
+                'days' => $projectRecords->sum('days'),
+                'overtimeHours' => $projectRecords->sum('overtimeHours'),
             ])
             ->sortByDesc('days')
             ->values();
@@ -98,6 +119,7 @@ class AttendanceReportController extends Controller
         return AttendanceRecord::query()
             ->leftJoin('employees', 'attendance_records.employee_id', '=', 'employees.id')
             ->leftJoin('projects', 'attendance_records.project_id', '=', 'projects.id')
+            ->leftJoin('projects as overtime_projects', 'attendance_records.overtime_project_id', '=', 'overtime_projects.id')
             ->leftJoin('users', 'attendance_records.submitted_by', '=', 'users.id')
             ->whereBetween('attendance_records.attendance_date', [$startDate, $endDate])
             ->when($type, fn ($query) => $query->where('employees.type', $type))
@@ -115,6 +137,7 @@ class AttendanceReportController extends Controller
                 'employees.profession as employee_profession',
                 'employees.type as employee_type',
                 'projects.name as project_name',
+                'overtime_projects.name as overtime_project_name',
                 'users.name as submitted_by_name',
                 'users.role as submitted_by_role',
             ])
@@ -125,6 +148,7 @@ class AttendanceReportController extends Controller
                 'employeeProfession' => $record->employee_profession,
                 'employeeType' => $record->employee_type,
                 'projectName' => $record->project_name,
+                'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
                 'status' => $record->status,
                 'dateRaw' => Carbon::parse($record->attendance_date)->toDateString(),
                 'date' => Carbon::parse($record->attendance_date)->format('d/m/Y'),

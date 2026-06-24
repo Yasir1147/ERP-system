@@ -87,6 +87,7 @@ class DashboardController extends Controller
         $attendanceRecords = AttendanceRecord::query()
             ->leftJoin('employees', 'attendance_records.employee_id', '=', 'employees.id')
             ->leftJoin('projects', 'attendance_records.project_id', '=', 'projects.id')
+            ->leftJoin('projects as overtime_projects', 'attendance_records.overtime_project_id', '=', 'overtime_projects.id')
             ->leftJoin('users', 'attendance_records.submitted_by', '=', 'users.id')
             ->where('employees.status', '!=', Employee::STATUS_LEFT)
             ->whereDate('attendance_records.attendance_date', $selectedDate)
@@ -103,6 +104,7 @@ class DashboardController extends Controller
                 'employees.profession as employee_profession',
                 'employees.type as employee_type',
                 'projects.name as project_name',
+                'overtime_projects.name as overtime_project_name',
                 'users.name as submitted_by_name',
                 'users.role as submitted_by_role',
             ])
@@ -112,6 +114,7 @@ class DashboardController extends Controller
                 'employeeProfession' => $record->employee_profession,
                 'employeeType' => $record->employee_type,
                 'projectName' => $record->project_name,
+                'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
                 'status' => $record->status,
                 'date' => Carbon::parse($record->attendance_date)->format('d/m/Y'),
                 'leaveReason' => $record->leave_reason,
@@ -169,8 +172,7 @@ class DashboardController extends Controller
                 'totalEmployees' => Employee::where('type', $type)->where('status', '!=', Employee::STATUS_LEFT)->count(),
                 'present' => $this->monthlyStatusCount($type, AttendanceRecord::STATUS_PRESENT, $monthStart, $monthEnd),
                 'absent' => $this->monthlyStatusCount($type, AttendanceRecord::STATUS_ABSENT, $monthStart, $monthEnd),
-                'leave' => $this->monthlyStatusCount($type, AttendanceRecord::STATUS_LEAVE, $monthStart, $monthEnd)
-                    + $this->monthlyLeaveRangeDays($type, $monthStart, $monthEnd),
+                'leave' => $this->monthlyLeaveRecordCount($type, $monthStart, $monthEnd),
             ])
             ->values();
 
@@ -226,21 +228,25 @@ class DashboardController extends Controller
             ->count();
     }
 
-    private function monthlyLeaveRangeDays(string $employeeType, string $monthStart, string $monthEnd): int
+    private function monthlyLeaveRecordCount(string $employeeType, string $monthStart, string $monthEnd): int
     {
-        return EmployeeLeave::query()
+        $dailyLeaveCount = AttendanceRecord::query()
+            ->join('employees', 'attendance_records.employee_id', '=', 'employees.id')
+            ->where('employees.type', $employeeType)
+            ->where('employees.status', '!=', Employee::STATUS_LEFT)
+            ->where('attendance_records.status', AttendanceRecord::STATUS_LEAVE)
+            ->whereBetween('attendance_records.attendance_date', [$monthStart, $monthEnd])
+            ->count();
+
+        $longLeaveCount = EmployeeLeave::query()
             ->join('employees', 'employee_leaves.employee_id', '=', 'employees.id')
             ->where('employees.type', $employeeType)
             ->where('employees.status', '!=', Employee::STATUS_LEFT)
             ->whereDate('employee_leaves.start_date', '<=', $monthEnd)
             ->whereDate('employee_leaves.end_date', '>=', $monthStart)
-            ->get(['employee_leaves.start_date', 'employee_leaves.end_date'])
-            ->sum(function (EmployeeLeave $leave) use ($monthStart, $monthEnd) {
-                $start = Carbon::parse(max($leave->start_date->toDateString(), $monthStart));
-                $end = Carbon::parse(min($leave->end_date->toDateString(), $monthEnd));
+            ->count();
 
-                return $start->diffInDays($end) + 1;
-            });
+        return $dailyLeaveCount + $longLeaveCount;
     }
 
     private function normalizeType(mixed $type): ?string

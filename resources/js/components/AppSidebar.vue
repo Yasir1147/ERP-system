@@ -23,6 +23,10 @@ const mainNavItems: NavItem[] = [
                 href: '/attendance',
             },
             {
+                title: 'Timesheet',
+                href: '/attendance/timesheet',
+            },
+            {
                 title: 'Contracting Attendance',
                 href: '/mark-attendance/contracting',
             },

@@ -139,7 +139,9 @@ const updateLeave = (leave: EmployeeLeave) => {
         return;
     }
 
-    editForm.put(`/employee-leaves/${leave.id}`, {
+    const url = leave.source === 'daily_leave' ? `/employee-leaves/attendance/${leave.id}` : `/employee-leaves/${leave.id}`;
+
+    editForm.put(url, {
         preserveScroll: true,
         onSuccess: cancelEditing,
     });
@@ -154,7 +156,9 @@ const deleteLeave = (leave: EmployeeLeave) => {
         return;
     }
 
-    router.delete(`/employee-leaves/${leave.id}`, {
+    const url = leave.source === 'daily_leave' ? `/employee-leaves/attendance/${leave.id}` : `/employee-leaves/${leave.id}`;
+
+    router.delete(url, {
         preserveScroll: true,
     });
 };
@@ -271,7 +275,7 @@ const deleteLeave = (leave: EmployeeLeave) => {
                                     <InputError v-if="editingLeaveId === leave.id" :message="editForm.errors.start_date" class="mt-2" />
                                 </td>
                                 <td class="px-4 py-3">
-                                    <Input v-if="editingLeaveId === leave.id" v-model="editForm.end_date" type="date" />
+                                    <Input v-if="editingLeaveId === leave.id" v-model="editForm.end_date" type="date" :disabled="leave.source === 'daily_leave'" />
                                     <span v-else>{{ leave.endDateLabel }}</span>
                                     <InputError v-if="editingLeaveId === leave.id" :message="editForm.errors.end_date" class="mt-2" />
                                 </td>
