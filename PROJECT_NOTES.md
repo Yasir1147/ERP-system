@@ -1,6 +1,6 @@
 ﻿# Al Mohafiz ERP / Attendance System - Project Notes
 
-This file is a handoff guide for future Codex sessions or any developer who needs to continue the project safely.
+This file documents the local setup, business rules, and development workflow for the project.
 
 ## Project Location
 
@@ -9,8 +9,6 @@ Local project folder:
 ```powershell
 D:\projects\attendance-system
 ```
-
-Important: do not work in `D:\xampp\htdocs\coplus` for this project. That is a different project.
 
 ## Git Repository
 
@@ -358,7 +356,7 @@ D:\xampp\mysql\data-broken-*
 - Add tests for date restrictions on attendance forms.
 - Add audit columns like `created_by`, `updated_by`, and `deleted_by` where needed.
 
-## Handoff Notes For Future Codex
+## Development Checklist
 
 When continuing this project:
 
