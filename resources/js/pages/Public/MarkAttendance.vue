@@ -199,14 +199,17 @@ const submit = () => {
     form.post(props.submitUrl, {
         preserveScroll: true,
         onSuccess: () => {
-            form.reset('project_id', 'overtime_project_id', 'employee_id', 'status', 'leave_reason', 'has_overtime', 'overtime_hours');
+            form.employee_id = '';
+            form.overtime_project_id = '';
+            form.leave_reason = '';
+            form.has_overtime = false;
+            form.overtime_hours = '';
             projectSearch.value = '';
             overtimeProjectSearch.value = '';
             employeeSearch.value = '';
             projectOpen.value = false;
             overtimeProjectOpen.value = false;
             employeeOpen.value = false;
-            form.attendance_date = today;
         },
     });
 };

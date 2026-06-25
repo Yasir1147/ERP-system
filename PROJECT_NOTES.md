@@ -225,6 +225,8 @@ Duplicate attendance should not be allowed for the same employee and same date.
 
 Attendance records track who submitted the record.
 
+After a successful attendance submission, the public attendance form clears the selected employee, overtime fields, and leave reason, but keeps the selected status, date, and main project. This supports entering multiple employees on the same project with fewer repeated selections.
+
 Monthly attendance timesheet is available at:
 
 ```text
@@ -288,6 +290,8 @@ Payroll report supports:
 - Payslip CSV/Excel export
 - Merged selected payslips PDF/print
 - Payroll report PDF/print
+
+Payroll print pages use `public/al-mohafiz-logo.png` for both the document logo and browser tab favicon.
 
 Payroll save actions handle expired CSRF/session tokens by showing a clear message and refreshing the page so a new token is loaded. To avoid repeated CSRF issues during local development, keep using `http://127.0.0.1:8000` instead of switching between `localhost` and `127.0.0.1`.
 
