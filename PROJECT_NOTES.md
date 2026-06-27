@@ -137,6 +137,8 @@ Authentication:
 /dashboard
 ```
 
+The login page uses a two-column desktop layout with a rope-access/construction collage image background, light overlay, prominent white feature cards, brand/system overview panel, and focused login form. Mobile keeps a single-column login form.
+
 Attendance marking pages:
 
 ```text
@@ -225,7 +227,11 @@ Duplicate attendance should not be allowed for the same employee and same date.
 
 Attendance records track who submitted the record.
 
+The public attendance form supports selecting one or more employees before submitting. A bulk submission creates one attendance record per selected employee using the same selected status, date, project, and overtime values. Backend validation blocks duplicate attendance and employees who are on leave.
+
 After a successful attendance submission, the public attendance form clears the selected employee, overtime fields, and leave reason, but keeps the selected status, date, and main project. This supports entering multiple employees on the same project with fewer repeated selections.
+
+Public attendance custom dropdowns should close when the user clicks outside the open dropdown.
 
 Monthly attendance timesheet is available at:
 
@@ -233,10 +239,16 @@ Monthly attendance timesheet is available at:
 /attendance/timesheet
 ```
 
-Timesheet supports employee type and month filters, sticky employee rows, row highlighting on click, and CSV download through:
+Timesheet supports employee type and month filters, sticky employee rows, row highlighting on click, and a print/PDF view. The legacy CSV route still exists for internal use:
 
 ```text
 /attendance/timesheet-export
+```
+
+Timesheet also supports a print/PDF view with A3 landscape and A4 landscape page-size options:
+
+```text
+/attendance/timesheet-print
 ```
 
 ### Leaves
@@ -293,6 +305,8 @@ Payroll report supports:
 
 Payroll print pages use `public/al-mohafiz-logo.png` for both the document logo and browser tab favicon.
 
+Payslip print pages use visible page borders, full grid borders on salary tables, stronger inner summary borders, and high-contrast text so printed salary details remain readable.
+
 Payroll save actions handle expired CSRF/session tokens by showing a clear message and refreshing the page so a new token is loaded. To avoid repeated CSRF issues during local development, keep using `http://127.0.0.1:8000` instead of switching between `localhost` and `127.0.0.1`.
 
 ## Project Overview
@@ -308,6 +322,8 @@ The Projects Overview page should help answer:
 - What is the total labor cost?
 
 Project employee history is available from the project row action. The current desired modal is focused on Employee Summary only, not detailed attendance records.
+
+The Projects Overview table uses compact column widths so the History action remains visible at normal browser zoom on common desktop screens.
 
 Employee Summary should show:
 

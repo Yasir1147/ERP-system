@@ -323,50 +323,50 @@ const closeProjectHistory = () => {
                 </div>
 
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full min-w-[1600px] table-fixed text-sm">
+                    <table class="w-full min-w-[1320px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[210px] px-4 py-3 font-medium">Project</th>
-                                <th class="w-[150px] px-4 py-3 font-medium">Category</th>
-                                <th class="w-[110px] px-4 py-3 font-medium">Status</th>
-                                <th class="w-[120px] px-4 py-3 font-medium">First Work</th>
-                                <th class="w-[120px] px-4 py-3 font-medium">Last Work</th>
-                                <th class="w-[90px] px-4 py-3 text-right font-medium">Days</th>
-                                <th class="w-[100px] px-4 py-3 text-right font-medium">Worked</th>
-                                <th class="w-[100px] px-4 py-3 text-right font-medium">Labour</th>
-                                <th class="w-[110px] px-4 py-3 text-right font-medium">Entries</th>
-                                <th class="w-[100px] px-4 py-3 text-right font-medium">OT Hrs</th>
-                                <th class="w-[130px] px-4 py-3 text-right font-medium">Basic Cost</th>
-                                <th class="w-[130px] px-4 py-3 text-right font-medium">OT Cost</th>
-                                <th class="w-[140px] px-4 py-3 text-right font-medium">Total Cost</th>
-                                <th class="w-[90px] px-4 py-3 text-center font-medium">History</th>
+                                <th class="w-[190px] px-3 py-3 font-medium">Project</th>
+                                <th class="w-[130px] px-3 py-3 font-medium">Category</th>
+                                <th class="w-[90px] px-3 py-3 font-medium">Status</th>
+                                <th class="w-[105px] px-3 py-3 font-medium">First Work</th>
+                                <th class="w-[105px] px-3 py-3 font-medium">Last Work</th>
+                                <th class="w-[70px] px-3 py-3 text-right font-medium">Days</th>
+                                <th class="w-[80px] px-3 py-3 text-right font-medium">Worked</th>
+                                <th class="w-[80px] px-3 py-3 text-right font-medium">Labour</th>
+                                <th class="w-[80px] px-3 py-3 text-right font-medium">Entries</th>
+                                <th class="w-[75px] px-3 py-3 text-right font-medium">OT Hrs</th>
+                                <th class="w-[105px] px-3 py-3 text-right font-medium">Basic Cost</th>
+                                <th class="w-[105px] px-3 py-3 text-right font-medium">OT Cost</th>
+                                <th class="w-[110px] px-3 py-3 text-right font-medium">Total Cost</th>
+                                <th class="w-[70px] px-3 py-3 text-center font-medium">History</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="row in filteredRows" :key="row.id" class="border-b last:border-b-0">
-                                <td class="px-4 py-3">
+                                <td class="px-3 py-3">
                                     <p class="truncate font-medium">{{ row.name }}</p>
                                     <p v-if="row.missingPayrollSettings.length" class="mt-1 truncate text-xs text-amber-700">
                                         Missing salary: {{ row.missingPayrollSettings.join(', ') }}
                                     </p>
                                 </td>
-                                <td class="px-4 py-3 text-muted-foreground">{{ row.typeLabel }}</td>
-                                <td class="px-4 py-3">
+                                <td class="px-3 py-3 text-muted-foreground">{{ row.typeLabel }}</td>
+                                <td class="px-3 py-3">
                                     <span class="inline-flex rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(row.status)">
                                         {{ statusLabels[row.status] }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3 text-muted-foreground">{{ row.firstWorkDate || '-' }}</td>
-                                <td class="px-4 py-3 text-muted-foreground">{{ row.lastWorkDate || '-' }}</td>
-                                <td class="px-4 py-3 text-right">{{ row.daysSinceStart }}</td>
-                                <td class="px-4 py-3 text-right">{{ row.workedDays }}</td>
-                                <td class="px-4 py-3 text-right">{{ row.labourCount }}</td>
-                                <td class="px-4 py-3 text-right">{{ row.labourEntries }}</td>
-                                <td class="px-4 py-3 text-right">{{ row.overtimeHours }}</td>
-                                <td class="px-4 py-3 text-right">{{ money(row.basicCost) }}</td>
-                                <td class="px-4 py-3 text-right">{{ money(row.overtimeCost) }}</td>
-                                <td class="px-4 py-3 text-right font-semibold">{{ money(row.totalCost) }}</td>
-                                <td class="px-4 py-3 text-center">
+                                <td class="px-3 py-3 text-muted-foreground">{{ row.firstWorkDate || '-' }}</td>
+                                <td class="px-3 py-3 text-muted-foreground">{{ row.lastWorkDate || '-' }}</td>
+                                <td class="px-3 py-3 text-right">{{ row.daysSinceStart }}</td>
+                                <td class="px-3 py-3 text-right">{{ row.workedDays }}</td>
+                                <td class="px-3 py-3 text-right">{{ row.labourCount }}</td>
+                                <td class="px-3 py-3 text-right">{{ row.labourEntries }}</td>
+                                <td class="px-3 py-3 text-right">{{ row.overtimeHours }}</td>
+                                <td class="px-3 py-3 text-right">{{ money(row.basicCost) }}</td>
+                                <td class="px-3 py-3 text-right">{{ money(row.overtimeCost) }}</td>
+                                <td class="px-3 py-3 text-right font-semibold">{{ money(row.totalCost) }}</td>
+                                <td class="px-3 py-3 text-center">
                                     <button
                                         type="button"
                                         class="inline-flex size-8 items-center justify-center rounded-md border text-sm hover:bg-accent"

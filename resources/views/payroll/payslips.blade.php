@@ -6,7 +6,11 @@
     <link rel="icon" type="image/png" href="{{ asset('al-mohafiz-logo.png') }}">
     <title>Merged Payslips - {{ $monthLabel }}</title>
     <style>
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
         body {
             margin: 0;
             background: #f3f4f6;
@@ -40,6 +44,7 @@
             min-height: 297mm;
             margin: 18px auto;
             background: #fff;
+            border: 1.5px solid #111827;
             padding: 18mm;
             box-shadow: 0 12px 34px rgba(15, 23, 42, 0.16);
             page-break-after: always;
@@ -72,7 +77,8 @@
         .brand p,
         .meta p {
             margin: 4px 0 0;
-            color: #6b7280;
+            color: #374151;
+            font-weight: 600;
         }
         .meta {
             text-align: right;
@@ -87,61 +93,78 @@
         }
         .section-title {
             margin: 0 0 8px;
-            color: #374151;
+            color: #111827;
             font-size: 13px;
             letter-spacing: 0.04em;
+            font-weight: 800;
             text-transform: uppercase;
         }
         .info-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            border: 1px solid #e5e7eb;
+            border: 1.4px solid #4b5563;
             border-radius: 8px;
             overflow: hidden;
         }
         .info-item {
             display: grid;
             grid-template-columns: 130px 1fr;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1.2px solid #4b5563;
             min-height: 42px;
+        }
+        .info-item:nth-child(odd) {
+            border-right: 1.2px solid #4b5563;
         }
         .info-item:nth-last-child(-n+2) {
             border-bottom: 0;
         }
         .info-item span {
-            background: #f9fafb;
-            border-right: 1px solid #e5e7eb;
-            color: #6b7280;
+            background: #f3f4f6;
+            border-right: 1.2px solid #4b5563;
+            color: #374151;
+            font-weight: 700;
             padding: 12px;
         }
         .info-item strong {
+            color: #000;
+            font-weight: 800;
             padding: 12px;
         }
         table {
             width: 100%;
-            border-collapse: collapse;
-            border: 1px solid #e5e7eb;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1.4px solid #4b5563;
             border-radius: 8px;
             overflow: hidden;
         }
         th,
         td {
-            border-bottom: 1px solid #e5e7eb;
+            border-right: 1.2px solid #4b5563;
+            border-bottom: 1.2px solid #4b5563;
             padding: 11px 12px;
             text-align: left;
         }
+        th:last-child,
+        td:last-child {
+            border-right: 0;
+        }
+        tbody tr:last-child td {
+            border-bottom: 0;
+        }
         th {
-            background: #f9fafb;
-            color: #6b7280;
+            background: #f3f4f6;
+            color: #374151;
             font-size: 12px;
+            font-weight: 800;
+        }
+        td {
+            color: #000;
             font-weight: 700;
         }
         td.amount,
         th.amount {
             text-align: right;
-        }
-        tr:last-child td {
-            border-bottom: 0;
         }
         .summary-grid {
             display: grid;
@@ -151,10 +174,11 @@
         }
         .note {
             min-height: 92px;
-            border: 1px solid #e5e7eb;
+            border: 1.4px solid #4b5563;
             border-radius: 8px;
             padding: 12px;
-            color: #4b5563;
+            color: #111827;
+            font-weight: 600;
         }
         .total-box {
             border: 2px solid #111827;
@@ -165,7 +189,9 @@
             display: flex;
             justify-content: space-between;
             gap: 12px;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1.2px solid #4b5563;
+            color: #000;
+            font-weight: 700;
             padding: 11px 12px;
         }
         .total-row:last-child {
@@ -211,7 +237,8 @@
                 break-after: page;
                 page-break-after: always;
                 margin: 0;
-                padding: 0;
+                border: 1.5px solid #111827;
+                padding: 10mm;
                 box-shadow: none;
             }
             .page:last-child {

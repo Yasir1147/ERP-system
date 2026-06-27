@@ -8,6 +8,7 @@ use App\Models\EmployeeLeave;
 use App\Models\Project;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -59,9 +60,11 @@ class PublicAttendanceController extends Controller
         $dateRange = $request->user()->attendanceDateRange();
 
         $data = $request->validate([
-            'employee_id' => [
+            'employee_ids' => ['required', 'array', 'min:1'],
+            'employee_ids.*' => [
                 'required',
                 'integer',
+                'distinct',
                 Rule::exists('employees', 'id')->where(fn ($query) => $query
                     ->where('type', $type)
                     ->where('status', '!=', Employee::STATUS_LEFT)),
@@ -93,31 +96,51 @@ class PublicAttendanceController extends Controller
             'leave_reason' => ['nullable', Rule::requiredIf($isLeave), 'string', 'max:1000'],
         ]);
 
-        $alreadyMarked = AttendanceRecord::query()
-            ->where('employee_id', $data['employee_id'])
-            ->whereDate('attendance_date', $data['attendance_date'])
-            ->exists();
+        $employeeIds = collect($data['employee_ids'])->map(fn ($employeeId) => (int) $employeeId)->unique()->values();
 
-        if ($alreadyMarked) {
+        $alreadyMarked = AttendanceRecord::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereDate('attendance_date', $data['attendance_date'])
+            ->pluck('employee_id');
+
+        if ($alreadyMarked->isNotEmpty()) {
+            $names = Employee::query()
+                ->whereIn('id', $alreadyMarked)
+                ->orderByRaw('CAST(code AS UNSIGNED) asc')
+                ->orderBy('name')
+                ->get(['code', 'name'])
+                ->map(fn (Employee $employee) => trim($employee->code.' - '.$employee->name))
+                ->implode(', ');
+
             throw ValidationException::withMessages([
-                'employee_id' => 'Attendance for this employee is already marked on the selected date.',
+                'employee_ids' => 'Attendance is already marked on the selected date for: '.$names.'.',
             ]);
         }
 
-        $employeeUnavailable = Employee::query()
-            ->whereKey($data['employee_id'])
+        $employeeUnavailableIds = Employee::query()
+            ->whereIn('id', $employeeIds)
             ->where('status', Employee::STATUS_ON_LEAVE)
-            ->exists();
+            ->pluck('id');
 
-        $hasLeaveRange = EmployeeLeave::query()
-            ->where('employee_id', $data['employee_id'])
+        $leaveRangeEmployeeIds = EmployeeLeave::query()
+            ->whereIn('employee_id', $employeeIds)
             ->whereDate('start_date', '<=', $data['attendance_date'])
             ->whereDate('end_date', '>=', $data['attendance_date'])
-            ->exists();
+            ->pluck('employee_id');
 
-        if ($employeeUnavailable || $hasLeaveRange) {
+        $unavailableIds = $employeeUnavailableIds->merge($leaveRangeEmployeeIds)->unique()->values();
+
+        if ($unavailableIds->isNotEmpty()) {
+            $names = Employee::query()
+                ->whereIn('id', $unavailableIds)
+                ->orderByRaw('CAST(code AS UNSIGNED) asc')
+                ->orderBy('name')
+                ->get(['code', 'name'])
+                ->map(fn (Employee $employee) => trim($employee->code.' - '.$employee->name))
+                ->implode(', ');
+
             throw ValidationException::withMessages([
-                'employee_id' => 'This employee is on leave for the selected date.',
+                'employee_ids' => 'These employees are on leave for the selected date: '.$names.'.',
             ]);
         }
 
@@ -142,17 +165,26 @@ class PublicAttendanceController extends Controller
         $data['submitted_by'] = $request->user()->id;
         $data['overtime_time'] = null;
 
-        AttendanceRecord::create($data);
+        unset($data['employee_ids']);
 
-        if ($isLeave) {
-            EmployeeLeave::create([
-                'employee_id' => $data['employee_id'],
-                'created_by' => $request->user()->id,
-                'start_date' => $data['attendance_date'],
-                'end_date' => $data['attendance_date'],
-                'reason' => $data['leave_reason'],
-            ]);
-        }
+        DB::transaction(function () use ($data, $employeeIds, $isLeave, $request) {
+            foreach ($employeeIds as $employeeId) {
+                AttendanceRecord::create([
+                    ...$data,
+                    'employee_id' => $employeeId,
+                ]);
+
+                if ($isLeave) {
+                    EmployeeLeave::create([
+                        'employee_id' => $employeeId,
+                        'created_by' => $request->user()->id,
+                        'start_date' => $data['attendance_date'],
+                        'end_date' => $data['attendance_date'],
+                        'reason' => $data['leave_reason'],
+                    ]);
+                }
+            }
+        });
 
         return redirect($this->submitUrl($type));
     }

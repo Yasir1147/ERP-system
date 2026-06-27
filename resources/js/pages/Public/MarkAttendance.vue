@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Head, useForm } from '@inertiajs/vue3';
-import { CalendarDays, CheckCircle2, ChevronDown, Search } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { CalendarDays, CheckCircle2, ChevronDown, Search, X } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 interface Project {
     id: number;
@@ -55,11 +55,14 @@ const employeeSearch = ref('');
 const projectOpen = ref(false);
 const overtimeProjectOpen = ref(false);
 const employeeOpen = ref(false);
+const employeeDropdownRef = ref<HTMLElement | null>(null);
+const projectDropdownRef = ref<HTMLElement | null>(null);
+const overtimeProjectDropdownRef = ref<HTMLElement | null>(null);
 
 const form = useForm({
     project_id: '',
     overtime_project_id: '',
-    employee_id: '',
+    employee_ids: [] as string[],
     status: '',
     leave_reason: '',
     attendance_date: today,
@@ -95,7 +98,21 @@ const filteredEmployees = computed(() => {
     );
 });
 
-const selectedEmployee = computed(() => props.employees.find((employee) => String(employee.id) === form.employee_id));
+const selectedEmployees = computed(() => props.employees.filter((employee) => form.employee_ids.includes(String(employee.id))));
+const selectedEmployeeCount = computed(() => form.employee_ids.length);
+const employeeButtonLabel = computed(() => {
+    if (selectedEmployeeCount.value === 0) {
+        return 'Select employees';
+    }
+
+    if (selectedEmployeeCount.value === 1) {
+        const employee = selectedEmployees.value[0];
+
+        return employee ? `${employee.code} - ${employee.name} - ${employee.profession}` : '1 employee selected';
+    }
+
+    return `${selectedEmployeeCount.value} employees selected`;
+});
 
 const leaveForEmployee = (employee: Employee) => {
     if (employee.status === 'on_leave') {
@@ -135,20 +152,53 @@ const selectOvertimeProject = (project: Project) => {
     overtimeProjectOpen.value = false;
 };
 
-const selectEmployee = (employee: Employee) => {
+const toggleEmployee = (employee: Employee) => {
     if (isEmployeeDisabled(employee)) {
         return;
     }
 
-    form.employee_id = String(employee.id);
-    employeeSearch.value = '';
-    employeeOpen.value = false;
+    const employeeId = String(employee.id);
+
+    if (form.employee_ids.includes(employeeId)) {
+        form.employee_ids = form.employee_ids.filter((id) => id !== employeeId);
+        return;
+    }
+
+    form.employee_ids = [...form.employee_ids, employeeId];
+};
+
+const clearSelectedEmployees = () => {
+    form.employee_ids = [];
 };
 
 const openNativePicker = (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;
     input.showPicker?.();
 };
+
+const closeDropdownsOnOutsideClick = (event: MouseEvent) => {
+    const target = event.target as Node;
+
+    if (employeeDropdownRef.value && !employeeDropdownRef.value.contains(target)) {
+        employeeOpen.value = false;
+    }
+
+    if (projectDropdownRef.value && !projectDropdownRef.value.contains(target)) {
+        projectOpen.value = false;
+    }
+
+    if (overtimeProjectDropdownRef.value && !overtimeProjectDropdownRef.value.contains(target)) {
+        overtimeProjectOpen.value = false;
+    }
+};
+
+onMounted(() => {
+    document.addEventListener('click', closeDropdownsOnOutsideClick);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', closeDropdownsOnOutsideClick);
+});
 
 watch(
     () => form.status,
@@ -173,11 +223,11 @@ watch(
 watch(
     () => form.attendance_date,
     () => {
-        const employee = selectedEmployee.value;
+        form.employee_ids = form.employee_ids.filter((employeeId) => {
+            const employee = props.employees.find((item) => String(item.id) === employeeId);
 
-        if (employee && isEmployeeDisabled(employee)) {
-            form.employee_id = '';
-        }
+            return employee && !isEmployeeDisabled(employee);
+        });
     },
 );
 
@@ -199,7 +249,7 @@ const submit = () => {
     form.post(props.submitUrl, {
         preserveScroll: true,
         onSuccess: () => {
-            form.employee_id = '';
+            form.employee_ids = [];
             form.overtime_project_id = '';
             form.leave_reason = '';
             form.has_overtime = false;
@@ -231,15 +281,15 @@ const submit = () => {
             <form class="rounded-lg border bg-card p-4 shadow-sm sm:p-5" @submit.prevent="submit">
                 <div class="grid gap-5">
                     <div class="grid gap-2">
-                        <Label for="employee-search">Employee</Label>
-                        <div class="relative">
+                        <Label for="employee-search">Employees</Label>
+                        <div ref="employeeDropdownRef" class="relative">
                             <button
                                 type="button"
                                 class="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 @click="employeeOpen = !employeeOpen"
                             >
                                 <span class="min-w-0 truncate">
-                                    {{ selectedEmployee ? `${selectedEmployee.code} - ${selectedEmployee.name} - ${selectedEmployee.profession}` : 'Select employee' }}
+                                    {{ employeeButtonLabel }}
                                 </span>
                                 <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
                             </button>
@@ -247,27 +297,51 @@ const submit = () => {
                             <div v-if="employeeOpen" class="absolute z-20 mt-2 w-full rounded-md border bg-popover p-2 shadow-lg">
                                 <div class="relative">
                                     <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                                    <Input id="employee-search" v-model="employeeSearch" type="search" class="pl-9" placeholder="Search employee" />
+                                    <Input id="employee-search" v-model="employeeSearch" type="search" class="pl-9" placeholder="Search employees" />
+                                </div>
+                                <div v-if="selectedEmployeeCount" class="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
+                                    <span>{{ selectedEmployeeCount }} selected</span>
+                                    <button type="button" class="font-medium text-primary" @click="clearSelectedEmployees">Clear</button>
                                 </div>
                                 <div class="mt-2 max-h-56 overflow-y-auto">
-                            <button
-                                v-for="employee in filteredEmployees"
-                                :key="employee.id"
-                                type="button"
-                                class="flex w-full flex-col rounded-md px-3 py-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
-                                :disabled="isEmployeeDisabled(employee)"
-                                @click="selectEmployee(employee)"
-                            >
-                                        <span class="font-medium">{{ employee.code }} - {{ employee.name }}</span>
-                                        <span class="text-xs text-muted-foreground">
-                                            {{ employee.profession }}<template v-if="employeeLeaveLabel(employee)"> - {{ employeeLeaveLabel(employee) }}</template>
+                                    <button
+                                        v-for="employee in filteredEmployees"
+                                        :key="employee.id"
+                                        type="button"
+                                        class="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
+                                        :disabled="isEmployeeDisabled(employee)"
+                                        @click="toggleEmployee(employee)"
+                                    >
+                                        <span
+                                            class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-input"
+                                            :class="form.employee_ids.includes(String(employee.id)) ? 'border-primary bg-primary text-primary-foreground' : 'bg-background'"
+                                        >
+                                            <CheckCircle2 v-if="form.employee_ids.includes(String(employee.id))" class="size-3" />
                                         </span>
-                            </button>
+                                        <span class="min-w-0">
+                                            <span class="block font-medium">{{ employee.code }} - {{ employee.name }}</span>
+                                            <span class="block text-xs text-muted-foreground">
+                                                {{ employee.profession }}<template v-if="employeeLeaveLabel(employee)"> - {{ employeeLeaveLabel(employee) }}</template>
+                                            </span>
+                                        </span>
+                                    </button>
                                     <div v-if="filteredEmployees.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">No employees found.</div>
                                 </div>
                             </div>
                         </div>
-                        <InputError :message="form.errors.employee_id" />
+                        <div v-if="selectedEmployees.length" class="flex flex-wrap gap-2">
+                            <button
+                                v-for="employee in selectedEmployees"
+                                :key="employee.id"
+                                type="button"
+                                class="inline-flex max-w-full items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs"
+                                @click="toggleEmployee(employee)"
+                            >
+                                <span class="truncate">{{ employee.code }} - {{ employee.name }}</span>
+                                <X class="size-3 shrink-0" />
+                            </button>
+                        </div>
+                        <InputError :message="form.errors.employee_ids" />
                     </div>
 
                     <div class="grid gap-2">
@@ -308,7 +382,7 @@ const submit = () => {
                     <template v-if="isPresent">
                         <div class="grid gap-2">
                             <Label for="project-search">Project</Label>
-                            <div class="relative">
+                            <div ref="projectDropdownRef" class="relative">
                                 <button
                                     type="button"
                                     class="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -350,7 +424,7 @@ const submit = () => {
 
                         <div v-if="form.has_overtime" class="grid gap-2">
                             <Label for="overtime-project-search">Overtime Project</Label>
-                            <div class="relative">
+                            <div ref="overtimeProjectDropdownRef" class="relative">
                                 <button
                                     type="button"
                                     class="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -432,7 +506,7 @@ const submit = () => {
                     <InputError :message="form.errors.attendance_date" />
 
                     <Button type="submit" class="h-11 w-full" :disabled="form.processing">
-                        Submit Attendance
+                        Submit Attendance<template v-if="selectedEmployeeCount"> for {{ selectedEmployeeCount }} {{ selectedEmployeeCount === 1 ? 'Employee' : 'Employees' }}</template>
                     </Button>
 
                     <div v-if="form.recentlySuccessful" class="flex items-center justify-center gap-2 rounded-md border border-green-600/30 bg-green-600/10 px-3 py-2 text-sm text-green-600">

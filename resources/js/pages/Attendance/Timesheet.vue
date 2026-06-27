@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { Download, Search } from 'lucide-vue-next';
+import { FileText, Search } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface TimesheetDate {
@@ -59,6 +59,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const filterType = ref(props.filters.type);
 const filterMonth = ref(props.filters.month);
+const pageSize = ref('a3');
 const search = ref('');
 const selectedEmployeeId = ref<number | null>(null);
 
@@ -88,13 +89,14 @@ const applyFilters = () => {
     );
 };
 
-const exportUrl = computed(() => {
+const printUrl = computed(() => {
     const params = new URLSearchParams({
         type: filterType.value,
         month: filterMonth.value,
+        page_size: pageSize.value,
     });
 
-    return `/attendance/timesheet-export?${params.toString()}`;
+    return `/attendance/timesheet-print?${params.toString()}`;
 });
 
 const statusLabel = (status: string | null) => {
@@ -127,7 +129,7 @@ const selectEmployeeRow = (employeeId: number) => {
                     <p class="mt-1 text-sm text-muted-foreground">Monthly employee attendance with project and overtime details.</p>
                 </div>
 
-                <div class="grid gap-2 sm:grid-cols-[220px_180px_auto_auto]">
+                <div class="grid gap-2 sm:grid-cols-[220px_180px_auto_150px_auto]">
                     <select
                         v-model="filterType"
                         class="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -142,12 +144,21 @@ const selectEmployeeRow = (employeeId: number) => {
                     <button type="button" class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" @click="applyFilters">
                         Filter
                     </button>
+                    <select
+                        v-model="pageSize"
+                        class="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                        <option value="a3">A3 Landscape</option>
+                        <option value="a4">A4 Landscape</option>
+                    </select>
                     <a
-                        :href="exportUrl"
+                        :href="printUrl"
+                        target="_blank"
+                        rel="noopener"
                         class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent"
                     >
-                        <Download class="size-4" />
-                        Download
+                        <FileText class="size-4" />
+                        Report PDF
                     </a>
                 </div>
             </div>

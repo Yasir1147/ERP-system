@@ -7,6 +7,7 @@ use App\Models\Employee;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -67,6 +68,29 @@ class AttendanceTimesheetController extends Controller
             fclose($handle);
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function print(Request $request): View
+    {
+        $selectedType = $this->normalizeType($request->query('type'));
+        $month = $this->normalizeMonth($request->query('month'));
+        $pageSize = $this->normalizePageSize($request->query('page_size'));
+        $timesheet = $this->timesheetData($selectedType, $month);
+
+        return view('attendance.timesheet-print', [
+            'dates' => $timesheet['dates'],
+            'employees' => $timesheet['employees'],
+            'typeLabel' => Employee::TYPES[$selectedType],
+            'monthLabel' => $month->format('F Y'),
+            'filters' => [
+                'type' => $selectedType,
+                'month' => $month->format('Y-m'),
+                'pageSize' => $pageSize,
+            ],
+            'page' => $pageSize === 'a4'
+                ? ['label' => 'A4 Landscape', 'size' => 'A4', 'margin' => '5mm', 'font' => '5.8px', 'employeeWidth' => '32mm', 'cellHeight' => '8mm']
+                : ['label' => 'A3 Landscape', 'size' => 'A3', 'margin' => '7mm', 'font' => '7.2px', 'employeeWidth' => '42mm', 'cellHeight' => '9mm'],
         ]);
     }
 
@@ -196,5 +220,10 @@ class AttendanceTimesheetController extends Controller
         }
 
         return Carbon::today()->startOfMonth();
+    }
+
+    private function normalizePageSize(mixed $pageSize): string
+    {
+        return $pageSize === 'a4' ? 'a4' : 'a3';
     }
 }

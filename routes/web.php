@@ -28,6 +28,7 @@ Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verifi
 Route::get('attendance', AttendanceReportController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.index');
 Route::get('attendance/timesheet', AttendanceTimesheetController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet');
 Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.export');
+Route::get('attendance/timesheet-print', [AttendanceTimesheetController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.print');
 
 Route::middleware(['attendance.access'])->group(function () {
     Route::get('mark-attendance', [PublicAttendanceController::class, 'create'])->name('public-attendance.create');
