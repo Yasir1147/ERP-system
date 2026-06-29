@@ -18,12 +18,15 @@ interface UserRow {
     attendance_backdate_enabled: boolean;
     attendance_backdate_from: string | null;
     attendance_backdate_to: string | null;
+    attendance_employee_type: string | null;
+    receive_fine_emails: boolean;
 }
 
 const props = defineProps<{
     users: UserRow[];
     roles: Record<string, string>;
     currentUserId: number;
+    attendanceTypeOptions: Record<string, string>;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Users', href: '/users' }];
@@ -40,6 +43,8 @@ const createForm = useForm({
     attendance_backdate_enabled: false,
     attendance_backdate_from: '',
     attendance_backdate_to: '',
+    attendance_employee_type: 'all',
+    receive_fine_emails: true,
 });
 
 const editForm = useForm({
@@ -52,6 +57,8 @@ const editForm = useForm({
     attendance_backdate_enabled: false,
     attendance_backdate_from: '',
     attendance_backdate_to: '',
+    attendance_employee_type: 'all',
+    receive_fine_emails: true,
 });
 
 const filteredUsers = computed(() => {
@@ -77,6 +84,8 @@ const createUser = () => {
                 'attendance_backdate_enabled',
                 'attendance_backdate_from',
                 'attendance_backdate_to',
+                'attendance_employee_type',
+                'receive_fine_emails',
             ),
     });
 };
@@ -93,6 +102,8 @@ const startEditing = (user: UserRow) => {
     editForm.attendance_backdate_enabled = user.attendance_backdate_enabled;
     editForm.attendance_backdate_from = user.attendance_backdate_from ?? '';
     editForm.attendance_backdate_to = user.attendance_backdate_to ?? '';
+    editForm.attendance_employee_type = user.attendance_employee_type ?? 'all';
+    editForm.receive_fine_emails = user.receive_fine_emails;
 };
 
 const cancelEditing = () => {
@@ -132,6 +143,22 @@ const backdateLabel = (user: UserRow) => {
     }
 
     return `${formatDate(user.attendance_backdate_from)} - ${formatDate(user.attendance_backdate_to)}`;
+};
+
+const employeeTypeAccessLabel = (user: UserRow) => {
+    if (user.role !== 'attendance_user') {
+        return 'Admin access';
+    }
+
+    return props.attendanceTypeOptions[user.attendance_employee_type || 'all'];
+};
+
+const fineEmailLabel = (user: UserRow) => {
+    if (user.role !== 'admin') {
+        return '-';
+    }
+
+    return user.receive_fine_emails ? 'Enabled' : 'Disabled';
 };
 </script>
 
@@ -188,6 +215,17 @@ const backdateLabel = (user: UserRow) => {
                     </Button>
                 </div>
                 <div v-if="createForm.role === 'attendance_user'" class="mt-4 rounded-md border bg-muted/20 p-3">
+                    <div class="mb-3 grid gap-2 md:max-w-sm">
+                        <Label for="create-attendance-type">Attendance Employee Type</Label>
+                        <select
+                            id="create-attendance-type"
+                            v-model="createForm.attendance_employee_type"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option v-for="(label, type) in attendanceTypeOptions" :key="type" :value="type">{{ label }}</option>
+                        </select>
+                        <InputError :message="createForm.errors.attendance_employee_type" />
+                    </div>
                     <label class="flex items-center gap-3 text-sm font-medium">
                         <input v-model="createForm.attendance_backdate_enabled" type="checkbox" class="size-4 rounded border-input" />
                         Allow backdated attendance
@@ -205,6 +243,13 @@ const backdateLabel = (user: UserRow) => {
                         </div>
                     </div>
                     <InputError :message="createForm.errors.attendance_backdate_enabled" class="mt-2" />
+                </div>
+                <div v-if="createForm.role === 'admin'" class="mt-4 rounded-md border bg-muted/20 p-3">
+                    <label class="flex items-center gap-3 text-sm font-medium">
+                        <input v-model="createForm.receive_fine_emails" type="checkbox" class="size-4 rounded border-input" />
+                        Receive fine ticket emails
+                    </label>
+                    <InputError :message="createForm.errors.receive_fine_emails" class="mt-2" />
                 </div>
             </form>
 
@@ -225,15 +270,17 @@ const backdateLabel = (user: UserRow) => {
                 </div>
 
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full min-w-[1220px] table-fixed text-sm">
+                    <table class="w-full min-w-[1420px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[15%] px-4 py-3 font-medium">Name</th>
-                                <th class="w-[14%] px-4 py-3 font-medium">Username</th>
-                                <th class="w-[20%] px-4 py-3 font-medium">Email</th>
-                                <th class="w-[14%] px-4 py-3 font-medium">Role</th>
-                                <th class="w-[20%] px-4 py-3 font-medium">Backdate Access</th>
-                                <th class="w-[13%] px-4 py-3 font-medium">Password</th>
+                                <th class="w-[14%] px-4 py-3 font-medium">Name</th>
+                                <th class="w-[13%] px-4 py-3 font-medium">Username</th>
+                                <th class="w-[18%] px-4 py-3 font-medium">Email</th>
+                                <th class="w-[13%] px-4 py-3 font-medium">Role</th>
+                                <th class="w-[15%] px-4 py-3 font-medium">Employee Type Access</th>
+                                <th class="w-[14%] px-4 py-3 font-medium">Backdate Access</th>
+                                <th class="w-[12%] px-4 py-3 font-medium">Fine Emails</th>
+                                <th class="w-[10%] px-4 py-3 font-medium">Password</th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
@@ -267,6 +314,20 @@ const backdateLabel = (user: UserRow) => {
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     <div v-if="editingUserId === user.id && editForm.role === 'attendance_user'" class="grid gap-2">
+                                        <select
+                                            v-model="editForm.attendance_employee_type"
+                                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                        >
+                                            <option v-for="(label, type) in attendanceTypeOptions" :key="type" :value="type">{{ label }}</option>
+                                        </select>
+                                        <InputError :message="editForm.errors.attendance_employee_type" />
+                                    </div>
+                                    <span v-else class="inline-flex max-w-full rounded-md border px-2 py-1 text-xs font-medium">
+                                        <span class="truncate">{{ employeeTypeAccessLabel(user) }}</span>
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 align-top">
+                                    <div v-if="editingUserId === user.id && editForm.role === 'attendance_user'" class="grid gap-2">
                                         <label class="flex items-center gap-2 text-xs font-medium">
                                             <input v-model="editForm.attendance_backdate_enabled" type="checkbox" class="size-4 rounded border-input" />
                                             Allow backdated attendance
@@ -282,6 +343,16 @@ const backdateLabel = (user: UserRow) => {
                                     <span v-else class="inline-flex max-w-full rounded-md border px-2 py-1 text-xs font-medium">
                                         <span class="truncate">{{ backdateLabel(user) }}</span>
                                     </span>
+                                </td>
+                                <td class="px-4 py-3 align-top">
+                                    <label v-if="editingUserId === user.id && editForm.role === 'admin'" class="flex items-center gap-2 text-xs font-medium">
+                                        <input v-model="editForm.receive_fine_emails" type="checkbox" class="size-4 rounded border-input" />
+                                        Receive emails
+                                    </label>
+                                    <span v-else class="inline-flex max-w-full rounded-md border px-2 py-1 text-xs font-medium">
+                                        <span class="truncate">{{ fineEmailLabel(user) }}</span>
+                                    </span>
+                                    <InputError v-if="editingUserId === user.id" :message="editForm.errors.receive_fine_emails" class="mt-2" />
                                 </td>
                                 <td class="px-4 py-3">
                                     <div v-if="editingUserId === user.id" class="grid gap-2">

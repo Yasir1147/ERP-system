@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Employee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -26,6 +27,8 @@ class UserController extends Controller
                     'attendance_backdate_enabled',
                     'attendance_backdate_from',
                     'attendance_backdate_to',
+                    'attendance_employee_type',
+                    'receive_fine_emails',
                     'created_at',
                 ])
                 ->map(fn (User $user) => [
@@ -37,6 +40,8 @@ class UserController extends Controller
                     'attendance_backdate_enabled' => $user->attendance_backdate_enabled,
                     'attendance_backdate_from' => $user->attendance_backdate_from?->toDateString(),
                     'attendance_backdate_to' => $user->attendance_backdate_to?->toDateString(),
+                    'attendance_employee_type' => $user->attendance_employee_type,
+                    'receive_fine_emails' => $user->receive_fine_emails,
                     'created_at' => $user->created_at,
                 ]),
             'roles' => [
@@ -44,6 +49,10 @@ class UserController extends Controller
                 User::ROLE_ATTENDANCE => 'Attendance User',
             ],
             'currentUserId' => request()->user()->id,
+            'attendanceTypeOptions' => [
+                'all' => 'All Employee Types',
+                ...Employee::TYPES,
+            ],
         ]);
     }
 
@@ -58,6 +67,8 @@ class UserController extends Controller
             'attendance_backdate_enabled' => ['boolean'],
             'attendance_backdate_from' => ['nullable', 'date', 'required_if:attendance_backdate_enabled,true'],
             'attendance_backdate_to' => ['nullable', 'date', 'required_if:attendance_backdate_enabled,true', 'after_or_equal:attendance_backdate_from', 'before_or_equal:today'],
+            'attendance_employee_type' => ['nullable', Rule::in(['all', ...array_keys(Employee::TYPES)])],
+            'receive_fine_emails' => ['boolean'],
         ]);
 
         $data = $this->normalizeBackdateAccess($data);
@@ -78,6 +89,8 @@ class UserController extends Controller
             'attendance_backdate_enabled' => ['boolean'],
             'attendance_backdate_from' => ['nullable', 'date', 'required_if:attendance_backdate_enabled,true'],
             'attendance_backdate_to' => ['nullable', 'date', 'required_if:attendance_backdate_enabled,true', 'after_or_equal:attendance_backdate_from', 'before_or_equal:today'],
+            'attendance_employee_type' => ['nullable', Rule::in(['all', ...array_keys(Employee::TYPES)])],
+            'receive_fine_emails' => ['boolean'],
         ]);
 
         if (empty($data['password'])) {
@@ -108,6 +121,15 @@ class UserController extends Controller
             $data['attendance_backdate_enabled'] = false;
             $data['attendance_backdate_from'] = null;
             $data['attendance_backdate_to'] = null;
+            $data['attendance_employee_type'] = null;
+            $data['receive_fine_emails'] = (bool) ($data['receive_fine_emails'] ?? true);
+        }
+
+        if ($data['role'] === User::ROLE_ATTENDANCE) {
+            $data['attendance_employee_type'] = ($data['attendance_employee_type'] ?? null) === 'all'
+                ? null
+                : ($data['attendance_employee_type'] ?? null);
+            $data['receive_fine_emails'] = false;
         }
 
         return $data;

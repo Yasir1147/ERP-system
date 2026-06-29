@@ -4,7 +4,7 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { Banknote, BriefcaseBusiness, CalendarCheck, LayoutGrid, Plane, UserCog, Users } from 'lucide-vue-next';
+import { Banknote, BriefcaseBusiness, CalendarCheck, LayoutGrid, Plane, ReceiptText, UserCog, Users } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -55,6 +55,11 @@ const mainNavItems: NavItem[] = [
         title: 'Leaves',
         href: '/employee-leaves',
         icon: Plane,
+    },
+    {
+        title: 'Fines',
+        href: '/fines',
+        icon: ReceiptText,
     },
     {
         title: 'Payroll',

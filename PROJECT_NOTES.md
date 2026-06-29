@@ -139,6 +139,16 @@ Authentication:
 
 The login page uses a two-column desktop layout with a rope-access/construction collage image background, light overlay, prominent white feature cards, brand/system overview panel, and focused login form. Mobile keeps a single-column login form.
 
+/fines is the admin employee fine module. Allowed attendance users can submit fine tickets from /fines/create or the Mark Attendance page link; the Mark Attendance link passes the current employee type so Rope Access pages only list Rope Access employees and Contracting pages only list Contracting employees. Admin users review pending fines, waive them, or apply them to a selected payroll month. Applying a fine increases that employee's payroll deduction and appends a "Fine: reason - amount" remark on the payroll adjustment.
+
+Attendance users can be restricted to All Employee Types, Rope Access only, or Contracting only from the Users page. This restriction applies to Mark Attendance routes and fine ticket creation routes, so a Rope Access-only user cannot open Contracting attendance or Contracting fine ticket links.
+
+Fine ticket email notifications are controlled from Settings > Mail. SMTP settings are stored in the database, with the SMTP password encrypted. Admin users have a "Receive fine ticket emails" checkbox on the Users page; only checked admin users receive the new fine ticket email. If SMTP is disabled or fails, the fine ticket is still saved and the mail failure is logged.
+
+When applying a pending fine to payroll, admin can reduce the deduction amount before applying it. The original fine amount remains on the fine ticket, while the reduced applied amount is used for payroll deduction and noted in payroll remarks.
+
+The admin fine list uses server-side pagination with 5/10/15/25 per-page options, backend search, search-aware counts, and previous/next controls so page load does not grow with fine record count.
+
 Attendance marking pages:
 
 ```text

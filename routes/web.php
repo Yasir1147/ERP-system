@@ -4,6 +4,7 @@ use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AttendanceTimesheetController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeFineController;
 use App\Http\Controllers\EmployeeLeaveController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProjectController;
@@ -18,9 +19,13 @@ Route::get('/', function (Request $request) {
         return redirect()->route('login');
     }
 
-    return $request->user()->role === User::ROLE_ATTENDANCE
-        ? redirect()->route('public-attendance.create')
-        : redirect()->route('dashboard');
+    if ($request->user()->role === User::ROLE_ATTENDANCE) {
+        return $request->user()->defaultAttendanceType() === 'rope_access'
+            ? redirect()->route('public-attendance.rope-access.create')
+            : redirect()->route('public-attendance.contracting.create');
+    }
+
+    return redirect()->route('dashboard');
 })->name('home');
 
 Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verified', 'role:admin'])->name('dashboard');
@@ -31,6 +36,8 @@ Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class,
 Route::get('attendance/timesheet-print', [AttendanceTimesheetController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.print');
 
 Route::middleware(['attendance.access'])->group(function () {
+    Route::get('fines/create', [EmployeeFineController::class, 'create'])->name('fines.create');
+    Route::post('fines', [EmployeeFineController::class, 'store'])->name('fines.store');
     Route::get('mark-attendance', [PublicAttendanceController::class, 'create'])->name('public-attendance.create');
     Route::post('mark-attendance', [PublicAttendanceController::class, 'store'])->name('public-attendance.store');
     Route::get('mark-attendance/contracting', [PublicAttendanceController::class, 'create'])
@@ -65,6 +72,9 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
         ->name('employee-leaves.daily.update');
     Route::delete('employee-leaves/attendance/{attendanceRecord}', [EmployeeLeaveController::class, 'destroyDailyLeave'])
         ->name('employee-leaves.daily.destroy');
+    Route::get('fines', [EmployeeFineController::class, 'index'])->name('fines.index');
+    Route::post('fines/{employeeFine}/apply', [EmployeeFineController::class, 'apply'])->name('fines.apply');
+    Route::post('fines/{employeeFine}/waive', [EmployeeFineController::class, 'waive'])->name('fines.waive');
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::get('payroll/report', [PayrollController::class, 'report'])->name('payroll.report');
     Route::get('payroll/report-print', [PayrollController::class, 'reportPrint'])->name('payroll.report-print');

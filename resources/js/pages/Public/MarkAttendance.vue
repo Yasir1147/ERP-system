@@ -4,7 +4,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { CalendarDays, CheckCircle2, ChevronDown, Search, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
@@ -276,6 +276,9 @@ const submit = () => {
                     <h1 class="text-2xl font-semibold tracking-normal">Mark Attendance</h1>
                     <p class="mt-1 text-sm text-muted-foreground">{{ employeeTypeLabel }} attendance form.</p>
                 </div>
+                <Link :href="`/fines/create?type=${encodeURIComponent(employeeType)}`" class="text-sm font-medium text-primary underline underline-offset-4">
+                    Create Fine Ticket
+                </Link>
             </header>
 
             <form class="rounded-lg border bg-card p-4 shadow-sm sm:p-5" @submit.prevent="submit">

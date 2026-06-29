@@ -30,6 +30,8 @@ class User extends Authenticatable
         'attendance_backdate_enabled',
         'attendance_backdate_from',
         'attendance_backdate_to',
+        'attendance_employee_type',
+        'receive_fine_emails',
     ];
 
     /**
@@ -53,6 +55,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'attendance_backdate_enabled' => 'boolean',
+            'receive_fine_emails' => 'boolean',
             'attendance_backdate_from' => 'date',
             'attendance_backdate_to' => 'date',
         ];
@@ -101,5 +104,19 @@ class User extends Authenticatable
             'message' => 'Only today and the previous 2 days are allowed.',
             'backdateEnabled' => false,
         ];
+    }
+
+    public function canAccessEmployeeType(?string $type): bool
+    {
+        if ($this->isAdmin() || ! $type || ! $this->attendance_employee_type) {
+            return true;
+        }
+
+        return $this->attendance_employee_type === $type;
+    }
+
+    public function defaultAttendanceType(): string
+    {
+        return $this->attendance_employee_type ?: 'contracting';
     }
 }
