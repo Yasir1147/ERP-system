@@ -71,7 +71,7 @@ class UserController extends Controller
             'receive_fine_emails' => ['boolean'],
         ]);
 
-        $data = $this->normalizeBackdateAccess($data);
+        $data = $this->normalizeAttendanceUserAccess($data);
 
         User::create($data);
 
@@ -97,7 +97,7 @@ class UserController extends Controller
             unset($data['password']);
         }
 
-        $data = $this->normalizeBackdateAccess($data);
+        $data = $this->normalizeAttendanceUserAccess($data);
 
         $user->update($data);
 
@@ -113,24 +113,29 @@ class UserController extends Controller
         return to_route('users.index');
     }
 
-    private function normalizeBackdateAccess(array $data): array
+    private function normalizeAttendanceUserAccess(array $data): array
     {
         $data['attendance_backdate_enabled'] = (bool) ($data['attendance_backdate_enabled'] ?? false);
 
-        if ($data['role'] !== User::ROLE_ATTENDANCE || ! $data['attendance_backdate_enabled']) {
+        if ($data['role'] !== User::ROLE_ATTENDANCE) {
             $data['attendance_backdate_enabled'] = false;
             $data['attendance_backdate_from'] = null;
             $data['attendance_backdate_to'] = null;
             $data['attendance_employee_type'] = null;
             $data['receive_fine_emails'] = (bool) ($data['receive_fine_emails'] ?? true);
+
+            return $data;
         }
 
-        if ($data['role'] === User::ROLE_ATTENDANCE) {
-            $data['attendance_employee_type'] = ($data['attendance_employee_type'] ?? null) === 'all'
-                ? null
-                : ($data['attendance_employee_type'] ?? null);
-            $data['receive_fine_emails'] = false;
+        if (! $data['attendance_backdate_enabled']) {
+            $data['attendance_backdate_from'] = null;
+            $data['attendance_backdate_to'] = null;
         }
+
+        $data['attendance_employee_type'] = ($data['attendance_employee_type'] ?? null) === 'all'
+            ? null
+            : ($data['attendance_employee_type'] ?? null);
+        $data['receive_fine_emails'] = false;
 
         return $data;
     }
