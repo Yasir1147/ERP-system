@@ -23,6 +23,16 @@ class AppSetting extends Model
         'mail_from_name',
     ];
 
+    public const ABSENCE_DEDUCTION_APPLY_FIXED_ONLY = 'fixed_only';
+
+    public static function absenceDeductionSettings(): array
+    {
+        return [
+            'enabled' => static::getValue('absence_deduction_enabled', '0') === '1',
+            'apply_to' => static::getValue('absence_deduction_apply_to', self::ABSENCE_DEDUCTION_APPLY_FIXED_ONLY),
+        ];
+    }
+
     public static function getValue(string $key, ?string $default = null): ?string
     {
         $value = static::query()->where('key', $key)->value('value');

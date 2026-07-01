@@ -299,8 +299,10 @@
                     <thead>
                         <tr>
                             <th>Days</th>
+                            <th>Absent</th>
                             <th>Per Day</th>
                             <th>Basic Salary</th>
+                            <th>Absent Ded.</th>
                             <th>OT Hours</th>
                             <th>OT Salary</th>
                             <th class="amount">New Total</th>
@@ -309,8 +311,10 @@
                     <tbody>
                         <tr>
                             <td>{{ $row['presentDays'] }}</td>
+                            <td>{{ $row['absentDays'] }}</td>
                             <td>{{ number_format($row['dailySalary'], 2) }}</td>
                             <td>{{ number_format($row['basicSalary'], 2) }}</td>
+                            <td>{{ number_format($row['absenceDeduction'], 2) }}</td>
                             <td>{{ $row['overtimeHours'] }}</td>
                             <td>{{ number_format($row['overtimeAmount'], 2) }}</td>
                             <td class="amount"><strong>{{ number_format($row['totalSalary'], 2) }}</strong></td>
@@ -331,6 +335,7 @@
                         <div class="total-row"><span>Bonus / Extra</span><strong>{{ number_format($row['bonusExtra'], 2) }}</strong></div>
                         <div class="total-row"><span>Previous Balance</span><strong>{{ number_format($row['previousBalance'], 2) }}</strong></div>
                         <div class="total-row"><span>Total Balance</span><strong>{{ number_format($row['totalBalance'], 2) }}</strong></div>
+                        <div class="total-row"><span>Absent Deduction</span><strong>{{ number_format($row['absenceDeduction'], 2) }}</strong></div>
                         <div class="total-row"><span>Deduction</span><strong>{{ number_format($row['deduction'], 2) }}</strong></div>
                         <div class="total-row"><span>Paid Cash</span><strong>{{ number_format($row['paidByCash'], 2) }}</strong></div>
                         <div class="total-row final"><span>Balance</span><strong>{{ number_format($row['balance'], 2) }}</strong></div>

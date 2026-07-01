@@ -21,6 +21,7 @@ class EmployeeLeaveController extends Controller
             ->with([
                 'employee:id,name,profession,type,status',
                 'creator:id,name,role',
+                'payrollDeductionReviewer:id,name,role',
             ])
             ->latest('start_date')
             ->get()
@@ -41,12 +42,20 @@ class EmployeeLeaveController extends Controller
                 'reason' => $leave->reason,
                 'createdBy' => $leave->creator?->name,
                 'createdByRole' => $leave->creator?->role,
+                'payrollDeductionStatus' => $leave->payroll_deduction_status,
+                'payrollDeductDays' => (int) $leave->payroll_deduct_days,
+                'payrollDeductionMonth' => $leave->payroll_deduction_month?->format('Y-m'),
+                'payrollDeductionMonthLabel' => $leave->payroll_deduction_month?->format('F Y'),
+                'payrollDeductionNote' => $leave->payroll_deduction_note,
+                'payrollDeductionReviewedBy' => $leave->payrollDeductionReviewer?->name,
+                'payrollDeductionReviewedAtLabel' => $leave->payroll_deduction_reviewed_at?->format('d/m/Y h:i A'),
             ]);
 
         $dailyLeaves = AttendanceRecord::query()
             ->with([
                 'employee:id,name,profession,type,status',
                 'submitter:id,name,role',
+                'payrollDeductionReviewer:id,name,role',
             ])
             ->where('status', AttendanceRecord::STATUS_LEAVE)
             ->latest('attendance_date')
@@ -71,6 +80,51 @@ class EmployeeLeaveController extends Controller
                     'reason' => $record->leave_reason,
                     'createdBy' => $record->submitter?->name,
                     'createdByRole' => $record->submitter?->role,
+                    'payrollDeductionStatus' => $record->payroll_deduction_status,
+                    'payrollDeductDays' => (int) $record->payroll_deduct_days,
+                    'payrollDeductionMonth' => $record->payroll_deduction_month?->format('Y-m'),
+                    'payrollDeductionMonthLabel' => $record->payroll_deduction_month?->format('F Y'),
+                    'payrollDeductionNote' => $record->payroll_deduction_note,
+                    'payrollDeductionReviewedBy' => $record->payrollDeductionReviewer?->name,
+                    'payrollDeductionReviewedAtLabel' => $record->payroll_deduction_reviewed_at?->format('d/m/Y h:i A'),
+                ];
+            });
+
+        $dailyAbsents = AttendanceRecord::query()
+            ->with([
+                'employee:id,name,profession,type,status',
+                'submitter:id,name,role',
+            ])
+            ->where('status', AttendanceRecord::STATUS_ABSENT)
+            ->latest('attendance_date')
+            ->get()
+            ->map(function (AttendanceRecord $record) {
+                $date = Carbon::parse($record->attendance_date);
+
+                return [
+                    'id' => $record->id,
+                    'source' => 'daily_absent',
+                    'canEdit' => false,
+                    'employeeId' => $record->employee_id,
+                    'employeeName' => $record->employee?->name,
+                    'employeeProfession' => $record->employee?->profession,
+                    'employeeType' => $record->employee?->type,
+                    'employeeStatus' => $record->employee?->status,
+                    'startDate' => $date->toDateString(),
+                    'endDate' => $date->toDateString(),
+                    'startDateLabel' => $date->format('d/m/Y'),
+                    'endDateLabel' => $date->format('d/m/Y'),
+                    'durationDays' => 1,
+                    'reason' => 'Absent',
+                    'createdBy' => $record->submitter?->name,
+                    'createdByRole' => $record->submitter?->role,
+                    'payrollDeductionStatus' => 'attendance_absent',
+                    'payrollDeductDays' => 1,
+                    'payrollDeductionMonth' => $date->format('Y-m'),
+                    'payrollDeductionMonthLabel' => $date->format('F Y'),
+                    'payrollDeductionNote' => null,
+                    'payrollDeductionReviewedBy' => null,
+                    'payrollDeductionReviewedAtLabel' => null,
                 ];
             });
 
@@ -83,6 +137,7 @@ class EmployeeLeaveController extends Controller
             'employeeTypes' => Employee::TYPES,
             'leaves' => $longLeaves
                 ->merge($dailyLeaves)
+                ->merge($dailyAbsents)
                 ->sortByDesc('startDate')
                 ->values(),
         ]);
@@ -146,6 +201,70 @@ class EmployeeLeaveController extends Controller
         return to_route('employee-leaves.index');
     }
 
+    public function applyDeduction(Request $request, EmployeeLeave $employeeLeave): RedirectResponse
+    {
+        $data = $this->validatedDeductionData($request, $employeeLeave->start_date->diffInDays($employeeLeave->end_date) + 1);
+
+        $employeeLeave->forceFill([
+            'payroll_deduction_status' => EmployeeLeave::PAYROLL_DEDUCTION_APPLIED,
+            'payroll_deduct_days' => (int) $data['payroll_deduct_days'],
+            'payroll_deduction_month' => Carbon::createFromFormat('Y-m', $data['payroll_deduction_month'])->startOfMonth()->toDateString(),
+            'payroll_deduction_note' => $data['payroll_deduction_note'] ?? null,
+            'payroll_deduction_reviewed_by' => $request->user()?->id,
+            'payroll_deduction_reviewed_at' => now(),
+        ])->save();
+
+        return to_route('employee-leaves.index')->with('success', 'Leave deduction applied as absent days.');
+    }
+
+    public function waiveDeduction(Request $request, EmployeeLeave $employeeLeave): RedirectResponse
+    {
+        $employeeLeave->forceFill([
+            'payroll_deduction_status' => EmployeeLeave::PAYROLL_DEDUCTION_WAIVED,
+            'payroll_deduct_days' => 0,
+            'payroll_deduction_month' => null,
+            'payroll_deduction_note' => $request->string('payroll_deduction_note')->trim()->value() ?: null,
+            'payroll_deduction_reviewed_by' => $request->user()?->id,
+            'payroll_deduction_reviewed_at' => now(),
+        ])->save();
+
+        return to_route('employee-leaves.index')->with('success', 'Leave deduction waived.');
+    }
+
+    public function applyDailyLeaveDeduction(Request $request, AttendanceRecord $attendanceRecord): RedirectResponse
+    {
+        abort_unless($attendanceRecord->status === AttendanceRecord::STATUS_LEAVE, 404);
+
+        $data = $this->validatedDeductionData($request, 1);
+
+        $attendanceRecord->forceFill([
+            'payroll_deduction_status' => AttendanceRecord::PAYROLL_DEDUCTION_APPLIED,
+            'payroll_deduct_days' => (int) $data['payroll_deduct_days'],
+            'payroll_deduction_month' => Carbon::createFromFormat('Y-m', $data['payroll_deduction_month'])->startOfMonth()->toDateString(),
+            'payroll_deduction_note' => $data['payroll_deduction_note'] ?? null,
+            'payroll_deduction_reviewed_by' => $request->user()?->id,
+            'payroll_deduction_reviewed_at' => now(),
+        ])->save();
+
+        return to_route('employee-leaves.index')->with('success', 'Daily leave deduction applied as absent days.');
+    }
+
+    public function waiveDailyLeaveDeduction(Request $request, AttendanceRecord $attendanceRecord): RedirectResponse
+    {
+        abort_unless($attendanceRecord->status === AttendanceRecord::STATUS_LEAVE, 404);
+
+        $attendanceRecord->forceFill([
+            'payroll_deduction_status' => AttendanceRecord::PAYROLL_DEDUCTION_WAIVED,
+            'payroll_deduct_days' => 0,
+            'payroll_deduction_month' => null,
+            'payroll_deduction_note' => $request->string('payroll_deduction_note')->trim()->value() ?: null,
+            'payroll_deduction_reviewed_by' => $request->user()?->id,
+            'payroll_deduction_reviewed_at' => now(),
+        ])->save();
+
+        return to_route('employee-leaves.index')->with('success', 'Daily leave deduction waived.');
+    }
+
     private function validatedData(Request $request): array
     {
         return $request->validate([
@@ -175,6 +294,15 @@ class EmployeeLeaveController extends Controller
         $data['end_date'] = $data['start_date'];
 
         return $data;
+    }
+
+    private function validatedDeductionData(Request $request, int $durationDays): array
+    {
+        return $request->validate([
+            'payroll_deduct_days' => ['required', 'integer', 'min:1', 'max:'.$durationDays],
+            'payroll_deduction_month' => ['required', 'date_format:Y-m'],
+            'payroll_deduction_note' => ['nullable', 'string', 'max:1000'],
+        ]);
     }
 
     private function ensureNoOverlap(int $employeeId, string $startDate, string $endDate, ?int $ignoreId = null): void

@@ -31,6 +31,7 @@ Route::get('/', function (Request $request) {
 Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verified', 'role:admin'])->name('dashboard');
 
 Route::get('attendance', AttendanceReportController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.index');
+Route::put('attendance/{attendanceRecord}', [AttendanceReportController::class, 'update'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.update');
 Route::get('attendance/timesheet', AttendanceTimesheetController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet');
 Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.export');
 Route::get('attendance/timesheet-print', [AttendanceTimesheetController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.print');
@@ -68,10 +69,18 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::resource('employee-leaves', EmployeeLeaveController::class)
         ->parameters(['employee-leaves' => 'employeeLeave'])
         ->only(['index', 'store', 'update', 'destroy']);
+    Route::put('employee-leaves/{employeeLeave}/deduction', [EmployeeLeaveController::class, 'applyDeduction'])
+        ->name('employee-leaves.deduction.apply');
+    Route::put('employee-leaves/{employeeLeave}/deduction/waive', [EmployeeLeaveController::class, 'waiveDeduction'])
+        ->name('employee-leaves.deduction.waive');
     Route::put('employee-leaves/attendance/{attendanceRecord}', [EmployeeLeaveController::class, 'updateDailyLeave'])
         ->name('employee-leaves.daily.update');
     Route::delete('employee-leaves/attendance/{attendanceRecord}', [EmployeeLeaveController::class, 'destroyDailyLeave'])
         ->name('employee-leaves.daily.destroy');
+    Route::put('employee-leaves/attendance/{attendanceRecord}/deduction', [EmployeeLeaveController::class, 'applyDailyLeaveDeduction'])
+        ->name('employee-leaves.daily.deduction.apply');
+    Route::put('employee-leaves/attendance/{attendanceRecord}/deduction/waive', [EmployeeLeaveController::class, 'waiveDailyLeaveDeduction'])
+        ->name('employee-leaves.daily.deduction.waive');
     Route::get('fines', [EmployeeFineController::class, 'index'])->name('fines.index');
     Route::post('fines/{employeeFine}/apply', [EmployeeFineController::class, 'apply'])->name('fines.apply');
     Route::post('fines/{employeeFine}/waive', [EmployeeFineController::class, 'waive'])->name('fines.waive');
@@ -85,6 +94,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('payroll/report/{employee}/ledger-export', [PayrollController::class, 'ledgerExport'])->name('payroll.ledger-export');
     Route::get('payroll/report/{employee}/payslip', [PayrollController::class, 'payslip'])->name('payroll.payslip');
     Route::get('payroll/report/{employee}/payslip-export', [PayrollController::class, 'payslipExport'])->name('payroll.payslip-export');
+    Route::put('payroll/absence-rule', [PayrollController::class, 'updateAbsenceRule'])->name('payroll.absence-rule.update');
     Route::put('payroll/settings/{employee}', [PayrollController::class, 'updateSetting'])->name('payroll.settings.update');
     Route::put('payroll/report/{employee}/adjustment', [PayrollController::class, 'updateAdjustment'])->name('payroll.adjustments.update');
     Route::resource('users', UserController::class)->only(['index', 'store', 'update', 'destroy']);

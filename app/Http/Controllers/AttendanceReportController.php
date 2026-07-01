@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
+use App\Models\Project;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -111,7 +113,97 @@ class AttendanceReportController extends Controller
                 'label' => $label,
             ])->values(),
             'employeeTypes' => Employee::TYPES,
+            'projects' => Project::query()
+                ->orderBy('type')
+                ->orderBy('name')
+                ->get(['id', 'name', 'status', 'type'])
+                ->map(fn (Project $project) => [
+                    'id' => $project->id,
+                    'name' => $project->name,
+                    'status' => $project->status,
+                    'type' => $project->type,
+                    'label' => $project->name.' - '.$project->status,
+                ]),
         ]);
+    }
+
+    public function update(Request $request, AttendanceRecord $attendanceRecord): RedirectResponse
+    {
+        $status = $request->input('status');
+        $isPresent = $status === AttendanceRecord::STATUS_PRESENT;
+        $isLeave = $status === AttendanceRecord::STATUS_LEAVE;
+
+        $data = $request->validate([
+            'employee_id' => [
+                'required',
+                'integer',
+                Rule::exists('employees', 'id')->where(fn ($query) => $query->where('status', '!=', Employee::STATUS_LEFT)),
+            ],
+            'attendance_date' => ['required', 'date'],
+            'status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
+            'project_id' => [
+                'nullable',
+                Rule::requiredIf($isPresent),
+                'integer',
+                Rule::exists('projects', 'id'),
+            ],
+            'has_overtime' => ['required', 'boolean'],
+            'overtime_hours' => [
+                'nullable',
+                Rule::requiredIf($isPresent && $request->boolean('has_overtime')),
+                'integer',
+                'between:1,10',
+            ],
+            'overtime_project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')],
+            'leave_reason' => ['nullable', Rule::requiredIf($isLeave), 'string', 'max:1000'],
+        ]);
+
+        $employee = Employee::query()->findOrFail($data['employee_id']);
+
+        if ($isPresent && ! Project::query()->whereKey($data['project_id'])->where('type', $employee->type)->exists()) {
+            return back()->withErrors(['project_id' => 'Selected project does not match employee type.']);
+        }
+
+        if ($isPresent && filled($data['overtime_project_id'] ?? null) && ! Project::query()->whereKey($data['overtime_project_id'])->where('type', $employee->type)->exists()) {
+            return back()->withErrors(['overtime_project_id' => 'Selected overtime project does not match employee type.']);
+        }
+
+        $alreadyMarked = AttendanceRecord::query()
+            ->whereKeyNot($attendanceRecord->id)
+            ->where('employee_id', $data['employee_id'])
+            ->whereDate('attendance_date', $data['attendance_date'])
+            ->exists();
+
+        if ($alreadyMarked) {
+            return back()->withErrors(['attendance_date' => 'Attendance is already marked for this employee on the selected date.']);
+        }
+
+        if (! $isPresent) {
+            $data['project_id'] = null;
+            $data['overtime_project_id'] = null;
+            $data['has_overtime'] = false;
+            $data['overtime_hours'] = null;
+        }
+
+        if (! $isLeave) {
+            $data['leave_reason'] = null;
+        }
+
+        if (! $data['has_overtime']) {
+            $data['overtime_hours'] = null;
+            $data['overtime_project_id'] = null;
+        } elseif (blank($data['overtime_project_id'] ?? null)) {
+            $data['overtime_project_id'] = $data['project_id'];
+        }
+
+        $attendanceRecord->update($data);
+
+        return to_route('attendance.index', [
+            'type' => $request->query('filter_type', 'all'),
+            'employee_id' => $request->query('filter_employee_id', 'all'),
+            'start_date' => $request->query('filter_start_date'),
+            'end_date' => $request->query('filter_end_date'),
+        ])->with('success', 'Attendance record updated.');
     }
 
     private function attendanceRecords(string $startDate, string $endDate, ?string $type, ?int $employeeId): Collection
@@ -132,6 +224,9 @@ class AttendanceReportController extends Controller
                 'attendance_records.status',
                 'attendance_records.attendance_date',
                 'attendance_records.leave_reason',
+                'attendance_records.project_id',
+                'attendance_records.overtime_project_id',
+                'attendance_records.has_overtime',
                 'attendance_records.overtime_hours',
                 'employees.name as employee_name',
                 'employees.profession as employee_profession',
@@ -147,8 +242,11 @@ class AttendanceReportController extends Controller
                 'employeeName' => $record->employee_name,
                 'employeeProfession' => $record->employee_profession,
                 'employeeType' => $record->employee_type,
+                'projectId' => $record->project_id,
                 'projectName' => $record->project_name,
+                'overtimeProjectId' => $record->overtime_project_id,
                 'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
+                'hasOvertime' => (bool) $record->has_overtime,
                 'status' => $record->status,
                 'dateRaw' => Carbon::parse($record->attendance_date)->toDateString(),
                 'date' => Carbon::parse($record->attendance_date)->format('d/m/Y'),

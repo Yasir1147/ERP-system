@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Pencil, Save, X } from 'lucide-vue-next';
+import { Pencil, Save, ShieldMinus, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface PayrollSetting {
@@ -38,6 +38,10 @@ const props = defineProps<{
     typeOptions: TypeOption[];
     employeeTypes: Record<string, string>;
     salaryRules: Record<string, string>;
+    absenceDeductionSettings: {
+        enabled: boolean;
+        apply_to: string;
+    };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -55,6 +59,12 @@ const settingForm = useForm({
     salary_rule: 'present_days',
     standard_hours_per_day: 8,
     is_overtime_enabled: true,
+    type: props.filters.type,
+});
+
+const absenceRuleForm = useForm({
+    absence_deduction_enabled: props.absenceDeductionSettings.enabled,
+    absence_deduction_apply_to: props.absenceDeductionSettings.apply_to,
     type: props.filters.type,
 });
 
@@ -94,6 +104,14 @@ const updateSetting = (employee: Employee) => {
         onSuccess: cancelEditing,
     });
 };
+
+const updateAbsenceRule = () => {
+    absenceRuleForm.type = filterType.value;
+
+    absenceRuleForm.put('/payroll/absence-rule', {
+        preserveScroll: true,
+    });
+};
 </script>
 
 <template>
@@ -118,6 +136,40 @@ const updateSetting = (employee: Employee) => {
                     </button>
                 </div>
             </div>
+
+            <form class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border" @submit.prevent="updateAbsenceRule">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <ShieldMinus class="size-5 text-amber-600" />
+                            <h2 class="text-base font-medium">Absence Deduction Rule</h2>
+                        </div>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            When enabled, absent days deduct one daily salary from fixed 30 days employees. Present-days employees are already paid by attendance days.
+                        </p>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-[minmax(220px,260px)_auto_auto] sm:items-end">
+                        <label class="grid gap-2 text-sm font-medium">
+                            Apply Rule
+                            <select
+                                v-model="absenceRuleForm.absence_deduction_apply_to"
+                                class="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                                <option value="fixed_only">Fixed 30 Days employees only</option>
+                            </select>
+                        </label>
+                        <label class="flex h-10 items-center gap-2 text-sm font-medium">
+                            <input v-model="absenceRuleForm.absence_deduction_enabled" type="checkbox" class="size-4 rounded border-input" />
+                            Enabled
+                        </label>
+                        <Button type="submit" :disabled="absenceRuleForm.processing">
+                            <Save class="size-4" />
+                            Save Rule
+                        </Button>
+                    </div>
+                </div>
+                <InputError :message="absenceRuleForm.errors.absence_deduction_enabled || absenceRuleForm.errors.absence_deduction_apply_to" class="mt-2" />
+            </form>
 
             <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                 <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">

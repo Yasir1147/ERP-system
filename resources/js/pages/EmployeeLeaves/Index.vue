@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Check, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
+import { Check, ShieldCheck, ShieldMinus, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Employee {
@@ -34,6 +34,13 @@ interface EmployeeLeave {
     reason: string | null;
     createdBy: string | null;
     createdByRole: string | null;
+    payrollDeductionStatus: string;
+    payrollDeductDays: number;
+    payrollDeductionMonth: string | null;
+    payrollDeductionMonthLabel: string | null;
+    payrollDeductionNote: string | null;
+    payrollDeductionReviewedBy: string | null;
+    payrollDeductionReviewedAtLabel: string | null;
 }
 
 const props = defineProps<{
@@ -51,6 +58,15 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const editingLeaveId = ref<number | null>(null);
 const search = ref('');
+const currentMonth = new Date().toISOString().slice(0, 7);
+const leaveKey = (leave: EmployeeLeave) => `${leave.source}:${leave.id}`;
+const deductionDays = ref<Record<string, string>>(
+    Object.fromEntries(props.leaves.map((leave) => [leaveKey(leave), leave.payrollDeductDays ? String(leave.payrollDeductDays) : String(Math.min(leave.durationDays, 1))])),
+);
+const deductionMonths = ref<Record<string, string>>(
+    Object.fromEntries(props.leaves.map((leave) => [leaveKey(leave), leave.payrollDeductionMonth || leave.startDate.slice(0, 7) || currentMonth])),
+);
+const deductionNotes = ref<Record<string, string>>(Object.fromEntries(props.leaves.map((leave) => [leaveKey(leave), leave.payrollDeductionNote || ''])));
 
 const createForm = useForm({
     employee_id: '',
@@ -76,10 +92,18 @@ const submittedByLabel = (leave: EmployeeLeave) => {
     return leave.createdByRole === 'admin' ? `${leave.createdBy} (Admin)` : leave.createdBy;
 };
 
-const sourceLabel = (leave: EmployeeLeave) => (leave.source === 'daily_leave' ? 'Daily Leave' : leave.durationDays > 3 ? 'Long Leave' : 'Leave Range');
+const sourceLabel = (leave: EmployeeLeave) => {
+    if (leave.source === 'daily_absent') {
+        return 'Daily Absent';
+    }
+
+    return leave.source === 'daily_leave' ? 'Daily Leave' : leave.durationDays > 3 ? 'Long Leave' : 'Leave Range';
+};
 
 const sourceClass = (leave: EmployeeLeave) =>
-    leave.source === 'daily_leave'
+    leave.source === 'daily_absent'
+        ? 'border-red-600/30 bg-red-600/10 text-red-700'
+        : leave.source === 'daily_leave'
         ? 'border-sky-600/30 bg-sky-600/10 text-sky-700'
         : leave.durationDays > 3
           ? 'border-amber-600/30 bg-amber-600/10 text-amber-700'
@@ -162,6 +186,60 @@ const deleteLeave = (leave: EmployeeLeave) => {
         preserveScroll: true,
     });
 };
+
+const canReviewDeduction = (leave: EmployeeLeave) => leave.source === 'long_leave' || leave.source === 'daily_leave';
+
+const deductionStatusLabel = (leave: EmployeeLeave) => {
+    if (leave.source === 'daily_absent') {
+        return 'Attendance absent';
+    }
+
+    if (leave.payrollDeductionStatus === 'applied') {
+        return `Applied: ${leave.payrollDeductDays} of ${leave.durationDays} day${leave.durationDays === 1 ? '' : 's'} in ${leave.payrollDeductionMonthLabel}`;
+    }
+
+    if (leave.payrollDeductionStatus === 'waived') {
+        return 'Waived';
+    }
+
+    return 'Pending review';
+};
+
+const applyDeduction = (leave: EmployeeLeave) => {
+    if (!canReviewDeduction(leave) || typeof leave.id !== 'number') {
+        return;
+    }
+
+    const url = leave.source === 'daily_leave' ? `/employee-leaves/attendance/${leave.id}/deduction` : `/employee-leaves/${leave.id}/deduction`;
+    const key = leaveKey(leave);
+
+    router.put(
+        url,
+        {
+            payroll_deduct_days: deductionDays.value[key],
+            payroll_deduction_month: deductionMonths.value[key],
+            payroll_deduction_note: deductionNotes.value[key],
+        },
+        { preserveScroll: true },
+    );
+};
+
+const waiveDeduction = (leave: EmployeeLeave) => {
+    if (!canReviewDeduction(leave) || typeof leave.id !== 'number') {
+        return;
+    }
+
+    const url = leave.source === 'daily_leave' ? `/employee-leaves/attendance/${leave.id}/deduction/waive` : `/employee-leaves/${leave.id}/deduction/waive`;
+    const key = leaveKey(leave);
+
+    router.put(
+        url,
+        {
+            payroll_deduction_note: deductionNotes.value[key],
+        },
+        { preserveScroll: true },
+    );
+};
 </script>
 
 <template>
@@ -171,7 +249,7 @@ const deleteLeave = (leave: EmployeeLeave) => {
         <div class="flex h-full min-w-0 flex-1 flex-col gap-4 p-4">
             <div>
                 <h1 class="text-2xl font-semibold tracking-normal">Employee Leaves</h1>
-                <p class="mt-1 text-sm text-muted-foreground">Manage long leave ranges without creating daily attendance records.</p>
+                <p class="mt-1 text-sm text-muted-foreground">Manage leave records, daily absents, and admin payroll deduction decisions.</p>
             </div>
 
             <form class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border" @submit.prevent="createLeave">
@@ -216,7 +294,7 @@ const deleteLeave = (leave: EmployeeLeave) => {
                 <div class="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h2 class="text-base font-medium">Leave List</h2>
-                        <p class="text-sm text-muted-foreground">{{ filteredLeaves.length }} of {{ leaves.length }} leave records, including daily and long leaves</p>
+                        <p class="text-sm text-muted-foreground">{{ filteredLeaves.length }} of {{ leaves.length }} records, including daily leaves, long leaves, and absents</p>
                     </div>
                     <div class="relative w-full md:max-w-sm">
                         <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -233,15 +311,16 @@ const deleteLeave = (leave: EmployeeLeave) => {
                 </div>
 
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full min-w-[1120px] table-fixed text-sm">
+                    <table class="w-full min-w-[1540px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[22%] px-4 py-3 font-medium">Employee</th>
-                                <th class="w-[12%] px-4 py-3 font-medium">Type</th>
-                                <th class="w-[12%] px-4 py-3 font-medium">Start</th>
-                                <th class="w-[12%] px-4 py-3 font-medium">End</th>
-                                <th class="w-[20%] px-4 py-3 font-medium">Reason</th>
-                                <th class="w-[12%] px-4 py-3 font-medium">Created By</th>
+                                <th class="w-[18%] px-4 py-3 font-medium">Employee</th>
+                                <th class="w-[10%] px-4 py-3 font-medium">Type</th>
+                                <th class="w-[10%] px-4 py-3 font-medium">Start</th>
+                                <th class="w-[10%] px-4 py-3 font-medium">End</th>
+                                <th class="w-[14%] px-4 py-3 font-medium">Reason</th>
+                                <th class="w-[11%] px-4 py-3 font-medium">Created By</th>
+                                <th class="w-[280px] px-4 py-3 font-medium">Payroll Deduction</th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
@@ -285,6 +364,43 @@ const deleteLeave = (leave: EmployeeLeave) => {
                                     <InputError v-if="editingLeaveId === leave.id" :message="editForm.errors.reason" class="mt-2" />
                                 </td>
                                 <td class="px-4 py-3 text-muted-foreground">{{ submittedByLabel(leave) }}</td>
+                                <td class="px-4 py-3">
+                                    <div v-if="canReviewDeduction(leave)" class="space-y-2">
+                                        <p
+                                            class="inline-flex rounded-full border px-2 py-1 text-xs font-medium"
+                                            :class="
+                                                leave.payrollDeductionStatus === 'applied'
+                                                    ? 'border-green-600/30 bg-green-600/10 text-green-700'
+                                                    : leave.payrollDeductionStatus === 'waived'
+                                                      ? 'border-slate-500/30 bg-slate-500/10 text-slate-600'
+                                                      : 'border-amber-600/30 bg-amber-600/10 text-amber-700'
+                                            "
+                                        >
+                                            {{ deductionStatusLabel(leave) }}
+                                        </p>
+                                        <div class="grid grid-cols-[74px_1fr] gap-2">
+                                            <Input v-model="deductionDays[leaveKey(leave)]" type="number" min="1" :max="leave.durationDays" class="h-9" />
+                                            <Input v-model="deductionMonths[leaveKey(leave)]" type="month" class="h-9" />
+                                        </div>
+                                        <Input v-model="deductionNotes[leaveKey(leave)]" type="text" class="h-9" placeholder="Admin note" />
+                                        <p v-if="leave.payrollDeductionReviewedBy" class="text-xs text-muted-foreground">
+                                            Reviewed by {{ leave.payrollDeductionReviewedBy }}<template v-if="leave.payrollDeductionReviewedAtLabel"> - {{ leave.payrollDeductionReviewedAtLabel }}</template>
+                                        </p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <Button size="sm" type="button" @click="applyDeduction(leave)">
+                                                <ShieldMinus class="size-4" />
+                                                Apply as Absent
+                                            </Button>
+                                            <Button size="sm" type="button" variant="outline" @click="waiveDeduction(leave)">
+                                                <ShieldCheck class="size-4" />
+                                                Waive
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div v-else class="text-xs text-muted-foreground">
+                                        {{ deductionStatusLabel(leave) }}
+                                    </div>
+                                </td>
                                 <td class="px-4 py-3">
                                     <div class="flex justify-end gap-2">
                                         <template v-if="editingLeaveId === leave.id">

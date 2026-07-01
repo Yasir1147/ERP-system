@@ -28,6 +28,7 @@ interface PayrollRow {
     overtimeHours: number;
     hourlyRate: number;
     basicSalary: number;
+    absenceDeduction: number;
     overtimeAmount: number;
     totalSalary: number;
     bonusExtra: number;
@@ -65,8 +66,10 @@ const props = defineProps<{
     summary: {
         employeeCount: number;
         presentDays: number;
+        absentDays: number;
         overtimeHours: number;
         basicSalary: number;
+        absenceDeduction: number;
         overtimeAmount: number;
         totalSalary: number;
         totalBalance: number;
@@ -82,6 +85,10 @@ const props = defineProps<{
     employeeTypes: Record<string, string>;
     salaryRules: Record<string, string>;
     selectedMonthLabel: string;
+    absenceDeductionSettings: {
+        enabled: boolean;
+        apply_to: string;
+    };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -338,7 +345,8 @@ const rowPreviousBalance = (row: PayrollRow) => {
 
 const liveTotalBalance = (row: PayrollRow) => row.totalSalary + numeric(adjustments[row.employeeId]?.bonusExtra || '0') + rowPreviousBalance(row);
 
-const liveBalance = (row: PayrollRow) => liveTotalBalance(row) - numeric(adjustments[row.employeeId]?.deduction || '0') - numeric(adjustments[row.employeeId]?.paidByCash || '0');
+const liveBalance = (row: PayrollRow) =>
+    liveTotalBalance(row) - row.absenceDeduction - numeric(adjustments[row.employeeId]?.deduction || '0') - numeric(adjustments[row.employeeId]?.paidByCash || '0');
 
 const ledgerKey = (row: LedgerRow) => `${row.employeeId}-${row.month}`;
 
@@ -352,7 +360,7 @@ const liveLedgerTotalBalance = (row: LedgerRow) =>
     row.totalSalary + numeric(ledgerAdjustments[ledgerKey(row)]?.bonusExtra || '0') + ledgerPreviousBalance(row);
 
 const liveLedgerBalance = (row: LedgerRow) =>
-    liveLedgerTotalBalance(row) - numeric(ledgerAdjustments[ledgerKey(row)]?.deduction || '0') - numeric(ledgerAdjustments[ledgerKey(row)]?.paidByCash || '0');
+    liveLedgerTotalBalance(row) - row.absenceDeduction - numeric(ledgerAdjustments[ledgerKey(row)]?.deduction || '0') - numeric(ledgerAdjustments[ledgerKey(row)]?.paidByCash || '0');
 
 const applyFilters = () => {
     router.get(
@@ -649,7 +657,7 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                 </div>
             </div>
 
-            <div class="grid auto-rows-min gap-4 md:grid-cols-5">
+            <div class="grid auto-rows-min gap-4 md:grid-cols-3 xl:grid-cols-6">
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <div class="flex items-center justify-between gap-3">
                         <div>
@@ -669,6 +677,11 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                     </div>
                 </div>
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                    <p class="text-sm text-muted-foreground">Absent Days</p>
+                    <p class="mt-2 text-3xl font-semibold">{{ summary.absentDays }}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">Fixed rule {{ absenceDeductionSettings.enabled ? 'active' : 'off' }}</p>
+                </div>
+                <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <div class="flex items-center justify-between gap-3">
                         <div>
                             <p class="text-sm text-muted-foreground">Overtime Hours</p>
@@ -676,6 +689,10 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                         </div>
                         <Clock3 class="size-6 text-sky-600" />
                     </div>
+                </div>
+                <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                    <p class="text-sm text-muted-foreground">Absent Deduction</p>
+                    <p class="mt-2 text-2xl font-semibold">{{ money(summary.absenceDeduction) }}</p>
                 </div>
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <p class="text-sm text-muted-foreground">Paid by Cash</p>
@@ -758,7 +775,7 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
 
                 <div v-if="filteredRows.length" class="mt-4 overflow-hidden rounded-md border">
                     <div class="max-h-[560px] overflow-auto">
-                        <table class="w-full min-w-[1970px] table-fixed text-sm">
+                        <table class="w-full min-w-[2170px] table-fixed text-sm">
                             <thead class="sticky top-0 z-10 border-b bg-card text-left text-xs font-medium text-muted-foreground">
                                 <tr>
                                     <th class="w-[48px] px-3 py-2 text-center font-medium">
@@ -774,8 +791,10 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                     <th class="w-[54px] px-3 py-2 font-medium">S.No</th>
                                     <th class="w-[230px] px-3 py-2 font-medium">Employee</th>
                                     <th class="w-[70px] px-3 py-2 font-medium">Days</th>
+                                    <th class="w-[70px] px-3 py-2 font-medium">Absent</th>
                                     <th class="w-[90px] px-3 py-2 font-medium">Per Day</th>
                                     <th class="w-[100px] px-3 py-2 font-medium">Salary</th>
+                                    <th class="w-[110px] px-3 py-2 font-medium">Absent Ded.</th>
                                     <th class="w-[80px] px-3 py-2 font-medium">OT Hrs</th>
                                     <th class="w-[100px] px-3 py-2 font-medium">OT Salary</th>
                                     <th class="w-[110px] px-3 py-2 font-medium">New Total</th>
@@ -811,8 +830,10 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                         </div>
                                     </td>
                                     <td class="px-3 py-3">{{ row.presentDays }}</td>
+                                    <td class="px-3 py-3">{{ row.absentDays }}</td>
                                     <td class="px-3 py-3">{{ money(row.dailySalary) }}</td>
                                     <td class="px-3 py-3">{{ money(row.basicSalary) }}</td>
+                                    <td class="px-3 py-3">{{ money(row.absenceDeduction) }}</td>
                                     <td class="px-3 py-3">{{ row.overtimeHours }}</td>
                                     <td class="px-3 py-3">{{ money(row.overtimeAmount) }}</td>
                                     <td class="px-3 py-3 font-semibold">{{ money(row.totalSalary) }}</td>
@@ -953,13 +974,15 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
 
                         <div v-else-if="ledgerRows.length" class="overflow-hidden rounded-md border">
                             <div class="max-h-[68vh] overflow-auto">
-                                <table class="w-full min-w-[1840px] table-fixed text-sm">
+                                <table class="w-full min-w-[2040px] table-fixed text-sm">
                                     <thead class="sticky top-0 z-10 border-b bg-card text-left text-xs font-medium text-muted-foreground">
                                         <tr>
                                             <th class="w-[120px] px-3 py-2 font-medium">Month</th>
                                             <th class="w-[70px] px-3 py-2 font-medium">Days</th>
+                                            <th class="w-[70px] px-3 py-2 font-medium">Absent</th>
                                             <th class="w-[90px] px-3 py-2 font-medium">Per Day</th>
                                             <th class="w-[100px] px-3 py-2 font-medium">Salary</th>
+                                            <th class="w-[110px] px-3 py-2 font-medium">Absent Ded.</th>
                                             <th class="w-[80px] px-3 py-2 font-medium">OT Hrs</th>
                                             <th class="w-[100px] px-3 py-2 font-medium">OT Salary</th>
                                             <th class="w-[110px] px-3 py-2 font-medium">New Total</th>
@@ -977,8 +1000,10 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                         <tr v-for="row in ledgerRows" :key="ledgerKey(row)" class="border-b last:border-b-0">
                                             <td class="px-3 py-3 font-medium">{{ row.monthLabel }}</td>
                                             <td class="px-3 py-3">{{ row.presentDays }}</td>
+                                            <td class="px-3 py-3">{{ row.absentDays }}</td>
                                             <td class="px-3 py-3">{{ money(row.dailySalary) }}</td>
                                             <td class="px-3 py-3">{{ money(row.basicSalary) }}</td>
+                                            <td class="px-3 py-3">{{ money(row.absenceDeduction) }}</td>
                                             <td class="px-3 py-3">{{ row.overtimeHours }}</td>
                                             <td class="px-3 py-3">{{ money(row.overtimeAmount) }}</td>
                                             <td class="px-3 py-3 font-semibold">{{ money(row.totalSalary) }}</td>

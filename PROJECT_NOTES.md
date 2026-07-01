@@ -272,7 +272,13 @@ There are two leave types in the UI:
 
 Long leave is considered more than 3 days.
 
-Admins can edit and delete both daily leave attendance records and long leave range records from the Leaves page. Daily leave remains a single-day attendance record, so its end date is not separately editable.
+Admins can edit and delete both daily leave attendance records and long leave range records from the Leaves page. Daily leave remains a single-day attendance record, so its end date is not separately editable. Daily absent attendance records are also shown on the Leaves page as read-only records so admin can review leave/absent activity from one place.
+
+Leave payroll decisions are admin controlled. A leave record is not converted into an attendance absent record. Instead, admin can apply part or all of a leave as payroll absent days by setting `Deduct Days`, `Payroll Month`, and an optional note on the Leaves page. Payroll then adds those approved leave deduction days to the existing Absent count for that selected month, and the payroll remarks include the leave reason. Admin can also waive a leave deduction.
+
+Attendance users may submit future dates only when the selected status is Leave. Present and Absent remain limited to the configured attendance date range and cannot be marked for future dates. Leave submissions support a start/end date range; the system creates leave range records for admin review instead of creating daily attendance rows for every leave day.
+
+Admins can correct existing daily attendance records from Attendance > Overview. The edit action updates the existing record instead of creating a duplicate, and supports status, employee/date, project, overtime, and leave reason changes. This is the correct workflow when an allowed user accidentally marks Absent instead of Present.
 
 Employees on active leave should not be selectable for attendance marking.
 
@@ -291,6 +297,9 @@ Supported payroll concepts:
 - Present-days rule
 - Overtime hours
 - Overtime salary
+- Absent days
+- Leave days applied as absent
+- Automatic absent deduction
 - Bonus / extra
 - Previous balance
 - Manual previous balance override
@@ -302,9 +311,16 @@ Supported payroll concepts:
 
 Previous balance carries forward month-to-month. Admin can manually override previous balance when needed.
 
+Payroll > Absence Deduction Rule controls absent salary deduction. The current recommended rule is a global on/off setting that applies to Fixed 30 Days employees only. When enabled, fixed-salary employees keep their fixed 30-day basic salary, but payroll subtracts `absent days * daily salary` as a separate Absent Deduction before manual deduction and paid cash. Present-days employees are already paid only for attended days, so absent deduction remains 0 for them.
+
+Leaves approved for payroll deduction are included inside the existing Absent count instead of adding a separate payroll column. For example, if admin applies 2 days from a 3-day leave as absent, payroll shows those 2 days inside Absent and the Absent Deduction follows the active absence deduction rule. Remarks show the leave deduction reason.
+
+Fixed 30 Days payroll caps payable/present-day payroll count at 30 days. In 31-day months, extra attendance records remain visible in attendance reports, but payroll present days and fixed-salary absent deduction are capped so fixed employees are not paid or deducted beyond the 30-day salary basis.
+
 Payroll report supports:
 
 - Filtering by employee type, employee, and month
+- Showing present days, absent days, and absent deduction
 - Editing payroll adjustments
 - Saving one row
 - Saving selected rows in bulk

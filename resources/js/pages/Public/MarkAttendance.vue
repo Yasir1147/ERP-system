@@ -66,12 +66,18 @@ const form = useForm({
     status: '',
     leave_reason: '',
     attendance_date: today,
+    attendance_end_date: today,
     has_overtime: false,
     overtime_hours: '',
 });
 
 const isPresent = computed(() => form.status === 'present');
 const isLeave = computed(() => form.status === 'leave');
+const attendanceDateMax = computed(() => (isLeave.value ? undefined : props.attendanceDateMax));
+const attendanceDateHelp = computed(() =>
+    isLeave.value ? 'Future leave date ranges are allowed. Admin will review payroll deduction.' : props.attendanceDateHelp,
+);
+const attendanceEndDateMin = computed(() => (isLeave.value ? form.attendance_date || props.attendanceDateMin : props.attendanceDateMin));
 
 const filteredProjects = computed(() => {
     const query = projectSearch.value.trim().toLowerCase();
@@ -216,6 +222,11 @@ watch(
 
         if (status !== 'leave') {
             form.leave_reason = '';
+            form.attendance_end_date = form.attendance_date;
+        }
+
+        if (status === 'leave' && (!form.attendance_end_date || form.attendance_end_date < form.attendance_date)) {
+            form.attendance_end_date = form.attendance_date;
         }
     },
 );
@@ -223,6 +234,10 @@ watch(
 watch(
     () => form.attendance_date,
     () => {
+        if (!isLeave.value || !form.attendance_end_date || form.attendance_end_date < form.attendance_date) {
+            form.attendance_end_date = form.attendance_date;
+        }
+
         form.employee_ids = form.employee_ids.filter((employeeId) => {
             const employee = props.employees.find((item) => String(item.id) === employeeId);
 
@@ -245,6 +260,7 @@ watch(
 
 const submit = () => {
     form.attendance_date = form.attendance_date || today;
+    form.attendance_end_date = isLeave.value ? form.attendance_end_date || form.attendance_date : form.attendance_date;
 
     form.post(props.submitUrl, {
         preserveScroll: true,
@@ -252,6 +268,7 @@ const submit = () => {
             form.employee_ids = [];
             form.overtime_project_id = '';
             form.leave_reason = '';
+            form.attendance_end_date = form.attendance_date;
             form.has_overtime = false;
             form.overtime_hours = '';
             projectSearch.value = '';
@@ -364,22 +381,37 @@ const submit = () => {
                     </div>
 
                     <div v-if="form.status" class="grid gap-2">
-                        <Label for="attendance-date">Attendance Date</Label>
-                        <div class="relative">
-                            <CalendarDays class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                id="attendance-date"
-                                v-model="form.attendance_date"
-                                type="date"
-                                :min="props.attendanceDateMin"
-                                :max="props.attendanceDateMax"
-                                class="pl-9"
-                                @click="openNativePicker"
-                                @focus="openNativePicker"
-                            />
+                        <Label for="attendance-date">{{ isLeave ? 'Leave Date Range' : 'Attendance Date' }}</Label>
+                        <div class="grid gap-2" :class="isLeave ? 'sm:grid-cols-2' : ''">
+                            <div class="relative">
+                                <CalendarDays class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    id="attendance-date"
+                                    v-model="form.attendance_date"
+                                    type="date"
+                                    :min="props.attendanceDateMin"
+                                    :max="attendanceDateMax"
+                                    class="pl-9"
+                                    @click="openNativePicker"
+                                    @focus="openNativePicker"
+                                />
+                            </div>
+                            <div v-if="isLeave" class="relative">
+                                <CalendarDays class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    id="attendance-end-date"
+                                    v-model="form.attendance_end_date"
+                                    type="date"
+                                    :min="attendanceEndDateMin"
+                                    class="pl-9"
+                                    @click="openNativePicker"
+                                    @focus="openNativePicker"
+                                />
+                            </div>
                         </div>
                         <p class="text-xs text-muted-foreground">{{ attendanceDateHelp }}</p>
                         <InputError :message="form.errors.attendance_date" />
+                        <InputError :message="form.errors.attendance_end_date" />
                     </div>
 
                     <template v-if="isPresent">

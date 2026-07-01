@@ -20,6 +20,16 @@ class AttendanceRecord extends Model
         self::STATUS_LEAVE,
     ];
 
+    public const PAYROLL_DEDUCTION_PENDING = 'pending';
+    public const PAYROLL_DEDUCTION_APPLIED = 'applied';
+    public const PAYROLL_DEDUCTION_WAIVED = 'waived';
+
+    public const PAYROLL_DEDUCTION_STATUSES = [
+        self::PAYROLL_DEDUCTION_PENDING,
+        self::PAYROLL_DEDUCTION_APPLIED,
+        self::PAYROLL_DEDUCTION_WAIVED,
+    ];
+
     protected $fillable = [
         'project_id',
         'overtime_project_id',
@@ -27,6 +37,12 @@ class AttendanceRecord extends Model
         'submitted_by',
         'status',
         'leave_reason',
+        'payroll_deduction_status',
+        'payroll_deduct_days',
+        'payroll_deduction_month',
+        'payroll_deduction_note',
+        'payroll_deduction_reviewed_by',
+        'payroll_deduction_reviewed_at',
         'attendance_date',
         'has_overtime',
         'overtime_time',
@@ -37,6 +53,9 @@ class AttendanceRecord extends Model
         'attendance_date' => 'date',
         'has_overtime' => 'boolean',
         'overtime_hours' => 'integer',
+        'payroll_deduction_month' => 'date',
+        'payroll_deduction_reviewed_at' => 'datetime',
+        'payroll_deduct_days' => 'integer',
     ];
 
     public function employee(): BelongsTo
@@ -52,5 +71,10 @@ class AttendanceRecord extends Model
     public function submitter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function payrollDeductionReviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'payroll_deduction_reviewed_by');
     }
 }

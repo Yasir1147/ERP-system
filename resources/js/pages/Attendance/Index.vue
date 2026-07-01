@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
-import { BriefcaseBusiness, CalendarCheck, Clock3, ClipboardX, Plane, Search } from 'lucide-vue-next';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { BriefcaseBusiness, CalendarCheck, Clock3, ClipboardX, Pencil, Plane, Search, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Employee {
@@ -20,8 +20,11 @@ interface AttendanceRecord {
     employeeName: string;
     employeeProfession: string;
     employeeType: string;
+    projectId: number | null;
     projectName: string | null;
+    overtimeProjectId: number | null;
     overtimeProjectName: string | null;
+    hasOvertime: boolean;
     status: string;
     dateRaw: string;
     date: string;
@@ -29,6 +32,14 @@ interface AttendanceRecord {
     overtimeHours: number | null;
     submittedBy: string | null;
     submittedByRole: string | null;
+}
+
+interface Project {
+    id: number;
+    name: string;
+    status: string;
+    type: string;
+    label: string;
 }
 
 interface Summary {
@@ -64,6 +75,7 @@ const props = defineProps<{
     };
     typeOptions: TypeOption[];
     employeeTypes: Record<string, string>;
+    projects: Project[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -78,8 +90,11 @@ const filterEmployeeId = ref(props.filters.employeeId);
 const startDate = ref(props.filters.startDate);
 const endDate = ref(props.filters.endDate);
 const search = ref('');
+const editingRecord = ref<AttendanceRecord | null>(null);
 
 const employeeOptions = computed(() => props.employees.filter((employee) => filterType.value === 'all' || employee.type === filterType.value));
+const editEmployee = computed(() => props.employees.find((employee) => String(employee.id) === editForm.employee_id));
+const editProjectOptions = computed(() => props.projects.filter((project) => !editEmployee.value || project.type === editEmployee.value.type));
 const maxProjectDays = computed(() => Math.max(1, ...props.projectSummary.map((project) => project.days)));
 const maxStatusCount = computed(() => Math.max(1, props.summary.present, props.summary.absent, props.summary.leave));
 
@@ -142,6 +157,111 @@ const submittedByLabel = (record: AttendanceRecord) => {
     }
 
     return record.submittedByRole === 'admin' ? `${record.submittedBy} (Admin)` : record.submittedBy;
+};
+
+const actualAttendanceId = (record: AttendanceRecord) => {
+    const match = record.id.match(/^attendance-(\d+)$/);
+
+    return match ? match[1] : null;
+};
+
+const editForm = useForm({
+    employee_id: '',
+    attendance_date: '',
+    status: '',
+    project_id: '',
+    has_overtime: false,
+    overtime_project_id: '',
+    overtime_hours: '',
+    leave_reason: '',
+});
+
+const startEditing = (record: AttendanceRecord) => {
+    const id = actualAttendanceId(record);
+
+    if (!id) {
+        return;
+    }
+
+    editingRecord.value = record;
+    editForm.clearErrors();
+    editForm.employee_id = String(record.employeeId);
+    editForm.attendance_date = record.dateRaw;
+    editForm.status = record.status;
+    editForm.project_id = record.projectId ? String(record.projectId) : '';
+    editForm.has_overtime = Boolean(record.hasOvertime || record.overtimeHours);
+    editForm.overtime_project_id = record.overtimeProjectId ? String(record.overtimeProjectId) : '';
+    editForm.overtime_hours = record.overtimeHours ? String(record.overtimeHours) : '';
+    editForm.leave_reason = record.reason || '';
+};
+
+const closeEdit = () => {
+    editingRecord.value = null;
+    editForm.reset();
+    editForm.clearErrors();
+};
+
+watch(
+    () => editForm.status,
+    (status) => {
+        if (status !== 'present') {
+            editForm.project_id = '';
+            editForm.has_overtime = false;
+            editForm.overtime_project_id = '';
+            editForm.overtime_hours = '';
+        }
+
+        if (status !== 'leave') {
+            editForm.leave_reason = '';
+        }
+    },
+);
+
+watch(
+    () => editForm.has_overtime,
+    (hasOvertime) => {
+        if (!hasOvertime) {
+            editForm.overtime_project_id = '';
+            editForm.overtime_hours = '';
+        }
+    },
+);
+
+watch(
+    () => editForm.employee_id,
+    () => {
+        if (!editProjectOptions.value.some((project) => String(project.id) === editForm.project_id)) {
+            editForm.project_id = '';
+        }
+
+        if (!editProjectOptions.value.some((project) => String(project.id) === editForm.overtime_project_id)) {
+            editForm.overtime_project_id = '';
+        }
+    },
+);
+
+const updateAttendance = () => {
+    if (!editingRecord.value) {
+        return;
+    }
+
+    const id = actualAttendanceId(editingRecord.value);
+
+    if (!id) {
+        return;
+    }
+
+    const query = new URLSearchParams({
+        filter_type: filterType.value,
+        filter_employee_id: filterEmployeeId.value,
+        filter_start_date: startDate.value,
+        filter_end_date: endDate.value,
+    });
+
+    editForm.put(`/attendance/${id}?${query.toString()}`, {
+        preserveScroll: true,
+        onSuccess: closeEdit,
+    });
 };
 </script>
 
@@ -307,7 +427,7 @@ const submittedByLabel = (record: AttendanceRecord) => {
                 </div>
 
                 <div v-if="filteredRecords.length" class="mt-4 overflow-hidden rounded-md border">
-                    <div class="grid min-w-[980px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+                    <div class="grid min-w-[1080px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_90px] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
                         <span>Date</span>
                         <span>Employee</span>
                         <span>Type</span>
@@ -315,12 +435,13 @@ const submittedByLabel = (record: AttendanceRecord) => {
                         <span>Status</span>
                         <span>Overtime</span>
                         <span>Submitted By</span>
+                        <span class="text-right">Action</span>
                     </div>
                     <div class="max-h-[520px] overflow-auto">
                         <div
                             v-for="record in filteredRecords"
                             :key="record.id"
-                            class="grid min-w-[980px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr] items-center gap-3 border-b px-3 py-3 text-sm last:border-b-0"
+                            class="grid min-w-[1080px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_90px] items-center gap-3 border-b px-3 py-3 text-sm last:border-b-0"
                         >
                             <span class="text-muted-foreground">{{ record.date }}</span>
                             <div class="min-w-0">
@@ -338,6 +459,17 @@ const submittedByLabel = (record: AttendanceRecord) => {
                                 }}
                             </span>
                             <span class="truncate text-muted-foreground">{{ submittedByLabel(record) }}</span>
+                            <span class="text-right">
+                                <button
+                                    v-if="actualAttendanceId(record)"
+                                    type="button"
+                                    class="inline-flex size-9 items-center justify-center rounded-md border hover:bg-accent"
+                                    title="Edit attendance"
+                                    @click="startEditing(record)"
+                                >
+                                    <Pencil class="size-4" />
+                                </button>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -345,6 +477,110 @@ const submittedByLabel = (record: AttendanceRecord) => {
                 <div v-else class="mt-4 flex min-h-56 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                     No attendance records match the selected filters.
                 </div>
+            </div>
+        </div>
+
+        <div v-if="editingRecord" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+            <div class="w-full max-w-2xl rounded-lg border bg-background shadow-xl">
+                <div class="flex items-center justify-between border-b px-5 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold">Edit Attendance</h2>
+                        <p class="text-sm text-muted-foreground">{{ editingRecord.employeeName }} - {{ editingRecord.date }}</p>
+                    </div>
+                    <button type="button" class="inline-flex size-9 items-center justify-center rounded-md border hover:bg-accent" @click="closeEdit">
+                        <X class="size-4" />
+                    </button>
+                </div>
+
+                <form class="grid gap-4 p-5" @submit.prevent="updateAttendance">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">Employee</label>
+                            <select v-model="editForm.employee_id" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                                <option v-for="employee in props.employees" :key="employee.id" :value="String(employee.id)">
+                                    {{ employee.label }}
+                                </option>
+                            </select>
+                            <p v-if="editForm.errors.employee_id" class="text-sm text-red-600">{{ editForm.errors.employee_id }}</p>
+                        </div>
+
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">Date</label>
+                            <input v-model="editForm.attendance_date" type="date" class="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+                            <p v-if="editForm.errors.attendance_date" class="text-sm text-red-600">{{ editForm.errors.attendance_date }}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-2">
+                        <label class="text-sm font-medium">Status</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label
+                                v-for="status in ['present', 'absent', 'leave']"
+                                :key="status"
+                                class="flex h-10 cursor-pointer items-center justify-center rounded-md border text-sm font-medium capitalize"
+                                :class="editForm.status === status ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-background'"
+                            >
+                                <input v-model="editForm.status" type="radio" name="edit-status" :value="status" class="sr-only" />
+                                {{ status }}
+                            </label>
+                        </div>
+                        <p v-if="editForm.errors.status" class="text-sm text-red-600">{{ editForm.errors.status }}</p>
+                    </div>
+
+                    <template v-if="editForm.status === 'present'">
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div class="grid gap-2">
+                                <label class="text-sm font-medium">Project</label>
+                                <select v-model="editForm.project_id" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                                    <option value="">Select project</option>
+                                    <option v-for="project in editProjectOptions" :key="project.id" :value="String(project.id)">
+                                        {{ project.label }}
+                                    </option>
+                                </select>
+                                <p v-if="editForm.errors.project_id" class="text-sm text-red-600">{{ editForm.errors.project_id }}</p>
+                            </div>
+
+                            <label class="mt-7 flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium">
+                                <input v-model="editForm.has_overtime" type="checkbox" class="size-4" />
+                                Overtime applied
+                            </label>
+                        </div>
+
+                        <div v-if="editForm.has_overtime" class="grid gap-4 md:grid-cols-2">
+                            <div class="grid gap-2">
+                                <label class="text-sm font-medium">Overtime Project</label>
+                                <select v-model="editForm.overtime_project_id" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                                    <option value="">Same as main project</option>
+                                    <option v-for="project in editProjectOptions" :key="project.id" :value="String(project.id)">
+                                        {{ project.label }}
+                                    </option>
+                                </select>
+                                <p v-if="editForm.errors.overtime_project_id" class="text-sm text-red-600">{{ editForm.errors.overtime_project_id }}</p>
+                            </div>
+                            <div class="grid gap-2">
+                                <label class="text-sm font-medium">Overtime Hours</label>
+                                <select v-model="editForm.overtime_hours" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                                    <option value="">Select hours</option>
+                                    <option v-for="hour in 10" :key="hour" :value="String(hour)">{{ hour }}</option>
+                                </select>
+                                <p v-if="editForm.errors.overtime_hours" class="text-sm text-red-600">{{ editForm.errors.overtime_hours }}</p>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div v-if="editForm.status === 'leave'" class="grid gap-2">
+                        <label class="text-sm font-medium">Leave Reason</label>
+                        <textarea v-model="editForm.leave_reason" rows="3" class="rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Leave reason" />
+                        <p v-if="editForm.errors.leave_reason" class="text-sm text-red-600">{{ editForm.errors.leave_reason }}</p>
+                    </div>
+
+                    <div class="flex justify-end gap-2 border-t pt-4">
+                        <button type="button" class="h-10 rounded-md border px-4 text-sm font-medium hover:bg-accent" @click="closeEdit">Cancel</button>
+                        <button type="submit" class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" :disabled="editForm.processing">
+                            Save Attendance
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </AppLayout>

@@ -136,7 +136,7 @@
         }
         .summary {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(6, minmax(0, 1fr));
             gap: 10px;
             margin-top: 14px;
         }
@@ -213,8 +213,10 @@
                     <tr>
                         <th>Month</th>
                         <th class="amount">Days</th>
+                        <th class="amount">Absent</th>
                         <th class="amount">Per Day</th>
                         <th class="amount">Salary</th>
+                        <th class="amount">Absent Ded.</th>
                         <th class="amount">OT Hrs</th>
                         <th class="amount">OT Salary</th>
                         <th class="amount">New Total</th>
@@ -232,8 +234,10 @@
                         <tr>
                             <td><strong>{{ $row['monthLabel'] }}</strong></td>
                             <td class="amount">{{ $row['presentDays'] }}</td>
+                            <td class="amount">{{ $row['absentDays'] }}</td>
                             <td class="amount">{{ number_format($row['dailySalary'], 2) }}</td>
                             <td class="amount">{{ number_format($row['basicSalary'], 2) }}</td>
+                            <td class="amount">{{ number_format($row['absenceDeduction'], 2) }}</td>
                             <td class="amount">{{ $row['overtimeHours'] }}</td>
                             <td class="amount">{{ number_format($row['overtimeAmount'], 2) }}</td>
                             <td class="amount"><strong>{{ number_format($row['totalSalary'], 2) }}</strong></td>
@@ -249,8 +253,10 @@
                     <tr class="total-row">
                         <td>Total</td>
                         <td class="amount">{{ $totals['presentDays'] }}</td>
+                        <td class="amount">{{ $totals['absentDays'] }}</td>
                         <td></td>
                         <td class="amount">{{ number_format($totals['basicSalary'], 2) }}</td>
+                        <td class="amount">{{ number_format($totals['absenceDeduction'], 2) }}</td>
                         <td class="amount">{{ $totals['overtimeHours'] }}</td>
                         <td class="amount">{{ number_format($totals['overtimeAmount'], 2) }}</td>
                         <td class="amount">{{ number_format($totals['totalSalary'], 2) }}</td>
@@ -268,9 +274,10 @@
 
         <section class="summary">
             <div class="summary-card"><span>Present Days</span><strong>{{ $totals['presentDays'] }}</strong></div>
+            <div class="summary-card"><span>Absent Days</span><strong>{{ $totals['absentDays'] }}</strong></div>
             <div class="summary-card"><span>OT Hours</span><strong>{{ $totals['overtimeHours'] }}</strong></div>
             <div class="summary-card"><span>Total Salary</span><strong>{{ number_format($totals['totalSalary'], 2) }}</strong></div>
-            <div class="summary-card"><span>Paid Cash</span><strong>{{ number_format($totals['paidByCash'], 2) }}</strong></div>
+            <div class="summary-card"><span>Absent Deduction</span><strong>{{ number_format($totals['absenceDeduction'], 2) }}</strong></div>
             <div class="summary-card"><span>Ending Balance</span><strong>{{ number_format($totals['endingBalance'], 2) }}</strong></div>
         </section>
 

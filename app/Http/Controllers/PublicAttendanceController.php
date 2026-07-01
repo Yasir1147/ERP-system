@@ -79,7 +79,14 @@ class PublicAttendanceController extends Controller
             'attendance_date' => [
                 'required',
                 'date',
-                ...$this->attendanceDateRules($dateRange),
+                ...$this->attendanceDateRules($dateRange, $isLeave),
+            ],
+            'attendance_end_date' => [
+                'nullable',
+                Rule::requiredIf($isLeave),
+                'date',
+                'after_or_equal:attendance_date',
+                ...$this->attendanceDateRules($dateRange, $isLeave),
             ],
             'has_overtime' => ['required', 'boolean'],
             'overtime_hours' => [
@@ -98,9 +105,12 @@ class PublicAttendanceController extends Controller
 
         $employeeIds = collect($data['employee_ids'])->map(fn ($employeeId) => (int) $employeeId)->unique()->values();
 
+        $leaveStartDate = $data['attendance_date'];
+        $leaveEndDate = $isLeave ? ($data['attendance_end_date'] ?? $data['attendance_date']) : $data['attendance_date'];
+
         $alreadyMarked = AttendanceRecord::query()
             ->whereIn('employee_id', $employeeIds)
-            ->whereDate('attendance_date', $data['attendance_date'])
+            ->whereBetween('attendance_date', [$leaveStartDate, $leaveEndDate])
             ->pluck('employee_id');
 
         if ($alreadyMarked->isNotEmpty()) {
@@ -113,7 +123,7 @@ class PublicAttendanceController extends Controller
                 ->implode(', ');
 
             throw ValidationException::withMessages([
-                'employee_ids' => 'Attendance is already marked on the selected date for: '.$names.'.',
+                'employee_ids' => 'Attendance is already marked in the selected date range for: '.$names.'.',
             ]);
         }
 
@@ -124,8 +134,8 @@ class PublicAttendanceController extends Controller
 
         $leaveRangeEmployeeIds = EmployeeLeave::query()
             ->whereIn('employee_id', $employeeIds)
-            ->whereDate('start_date', '<=', $data['attendance_date'])
-            ->whereDate('end_date', '>=', $data['attendance_date'])
+            ->whereDate('start_date', '<=', $leaveEndDate)
+            ->whereDate('end_date', '>=', $leaveStartDate)
             ->pluck('employee_id');
 
         $unavailableIds = $employeeUnavailableIds->merge($leaveRangeEmployeeIds)->unique()->values();
@@ -140,7 +150,7 @@ class PublicAttendanceController extends Controller
                 ->implode(', ');
 
             throw ValidationException::withMessages([
-                'employee_ids' => 'These employees are on leave for the selected date: '.$names.'.',
+                'employee_ids' => 'These employees are on leave for the selected date range: '.$names.'.',
             ]);
         }
 
@@ -167,22 +177,26 @@ class PublicAttendanceController extends Controller
 
         unset($data['employee_ids']);
 
-        DB::transaction(function () use ($data, $employeeIds, $isLeave, $request) {
+        DB::transaction(function () use ($data, $employeeIds, $isLeave, $leaveStartDate, $leaveEndDate, $request) {
             foreach ($employeeIds as $employeeId) {
-                AttendanceRecord::create([
-                    ...$data,
-                    'employee_id' => $employeeId,
-                ]);
-
                 if ($isLeave) {
                     EmployeeLeave::create([
                         'employee_id' => $employeeId,
                         'created_by' => $request->user()->id,
-                        'start_date' => $data['attendance_date'],
-                        'end_date' => $data['attendance_date'],
+                        'start_date' => $leaveStartDate,
+                        'end_date' => $leaveEndDate,
                         'reason' => $data['leave_reason'],
                     ]);
+
+                    continue;
                 }
+
+                unset($data['attendance_end_date']);
+
+                AttendanceRecord::create([
+                    ...$data,
+                    'employee_id' => $employeeId,
+                ]);
             }
         });
 
@@ -205,9 +219,9 @@ class PublicAttendanceController extends Controller
             : '/mark-attendance/contracting';
     }
 
-    private function attendanceDateRules(array $dateRange): array
+    private function attendanceDateRules(array $dateRange, bool $isLeave): array
     {
-        $rules = ['before_or_equal:'.$dateRange['max']];
+        $rules = $isLeave ? [] : ['before_or_equal:'.$dateRange['max']];
 
         if ($dateRange['min']) {
             $rules[] = 'after_or_equal:'.$dateRange['min'];
