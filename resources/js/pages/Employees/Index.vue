@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import SortableHeader from '@/components/SortableHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,6 +40,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const editingEmployeeId = ref<number | null>(null);
 const search = ref('');
+type SortKey = 'code' | 'name' | 'profession' | 'status';
+const sortKey = ref<SortKey>('code');
+const sortDirection = ref<'asc' | 'desc'>('asc');
 
 const createForm = useForm({
     code: props.nextEmployeeCode,
@@ -59,14 +63,32 @@ const editForm = useForm({
 const filteredEmployees = computed(() => {
     const query = search.value.trim().toLowerCase();
 
-    if (!query) {
-        return props.employees;
+    const employees = query
+        ? props.employees.filter((employee) =>
+              [employee.code, employee.name, employee.profession, props.employeeStatuses[employee.status]].some((value) => value.toLowerCase().includes(query)),
+          )
+        : props.employees;
+
+    return [...employees].sort((first, second) => {
+        const firstValue = sortKey.value === 'status' ? props.employeeStatuses[first.status] : first[sortKey.value];
+        const secondValue = sortKey.value === 'status' ? props.employeeStatuses[second.status] : second[sortKey.value];
+        const comparison = String(firstValue).localeCompare(String(secondValue), undefined, { numeric: true, sensitivity: 'base' });
+
+        return sortDirection.value === 'asc' ? comparison : -comparison;
+    });
+});
+
+const sortEmployees = (key: string) => {
+    const nextKey = key as SortKey;
+
+    if (sortKey.value === nextKey) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+        return;
     }
 
-    return props.employees.filter((employee) =>
-        [employee.code, employee.name, employee.profession, props.employeeStatuses[employee.status]].some((value) => value.toLowerCase().includes(query)),
-    );
-});
+    sortKey.value = nextKey;
+    sortDirection.value = 'asc';
+};
 
 const createEmployee = () => {
     createForm.type = props.employeeType;
@@ -185,10 +207,18 @@ const deleteEmployee = (employee: Employee) => {
                     <table class="w-full min-w-[900px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[14%] px-4 py-3 font-medium">Code</th>
-                                <th class="w-[31%] px-4 py-3 font-medium">Name</th>
-                                <th class="w-[28%] px-4 py-3 font-medium">Profession</th>
-                                <th class="w-[18%] px-4 py-3 font-medium">Status</th>
+                                <th class="w-[14%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Code" column="code" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                                </th>
+                                <th class="w-[31%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Name" column="name" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                                </th>
+                                <th class="w-[28%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Profession" column="profession" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                                </th>
+                                <th class="w-[18%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                                </th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>

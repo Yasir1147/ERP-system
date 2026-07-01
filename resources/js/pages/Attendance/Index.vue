@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SortableHeader from '@/components/SortableHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
@@ -90,6 +91,9 @@ const filterEmployeeId = ref(props.filters.employeeId);
 const startDate = ref(props.filters.startDate);
 const endDate = ref(props.filters.endDate);
 const search = ref('');
+type SortKey = 'date' | 'employee' | 'type' | 'project' | 'status' | 'overtime' | 'submitted_by';
+const sortKey = ref<SortKey>('date');
+const sortDirection = ref<'asc' | 'desc'>('desc');
 const editingRecord = ref<AttendanceRecord | null>(null);
 
 const employeeOptions = computed(() => props.employees.filter((employee) => filterType.value === 'all' || employee.type === filterType.value));
@@ -101,25 +105,56 @@ const maxStatusCount = computed(() => Math.max(1, props.summary.present, props.s
 const filteredRecords = computed(() => {
     const query = search.value.trim().toLowerCase();
 
-    if (!query) {
-        return props.records;
+    const records = query
+        ? props.records.filter((record) =>
+              [
+                  record.employeeName,
+                  record.employeeProfession,
+                  props.employeeTypes[record.employeeType],
+                  record.projectName,
+                  record.status,
+                  record.reason,
+                  record.submittedBy,
+                  record.date,
+              ]
+                  .filter(Boolean)
+                  .some((value) => String(value).toLowerCase().includes(query)),
+          )
+        : props.records;
+
+    return [...records].sort((first, second) => {
+        const valueFor = (record: AttendanceRecord) => {
+            if (sortKey.value === 'date') return record.dateRaw;
+            if (sortKey.value === 'employee') return record.employeeName;
+            if (sortKey.value === 'type') return props.employeeTypes[record.employeeType];
+            if (sortKey.value === 'project') return record.reason || record.projectName || '';
+            if (sortKey.value === 'status') return record.status;
+            if (sortKey.value === 'overtime') return record.overtimeHours || 0;
+            return submittedByLabel(record);
+        };
+
+        const firstValue = valueFor(first);
+        const secondValue = valueFor(second);
+        const comparison =
+            typeof firstValue === 'number' && typeof secondValue === 'number'
+                ? firstValue - secondValue
+                : String(firstValue).localeCompare(String(secondValue), undefined, { numeric: true, sensitivity: 'base' });
+
+        return sortDirection.value === 'asc' ? comparison : -comparison;
+    });
+});
+
+const sortRecords = (key: string) => {
+    const nextKey = key as SortKey;
+
+    if (sortKey.value === nextKey) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+        return;
     }
 
-    return props.records.filter((record) =>
-        [
-            record.employeeName,
-            record.employeeProfession,
-            props.employeeTypes[record.employeeType],
-            record.projectName,
-            record.status,
-            record.reason,
-            record.submittedBy,
-            record.date,
-        ]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(query)),
-    );
-});
+    sortKey.value = nextKey;
+    sortDirection.value = nextKey === 'date' ? 'desc' : 'asc';
+};
 
 watch(filterType, () => {
     if (!employeeOptions.value.some((employee) => String(employee.id) === filterEmployeeId.value)) {
@@ -428,13 +463,13 @@ const updateAttendance = () => {
 
                 <div v-if="filteredRecords.length" class="mt-4 overflow-hidden rounded-md border">
                     <div class="grid min-w-[1080px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_90px] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-                        <span>Date</span>
-                        <span>Employee</span>
-                        <span>Type</span>
-                        <span>Project / Reason</span>
-                        <span>Status</span>
-                        <span>Overtime</span>
-                        <span>Submitted By</span>
+                        <SortableHeader label="Date" column="date" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
+                        <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
+                        <SortableHeader label="Type" column="type" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
+                        <SortableHeader label="Project / Reason" column="project" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
+                        <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
+                        <SortableHeader label="Overtime" column="overtime" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
+                        <SortableHeader label="Submitted By" column="submitted_by" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
                         <span class="text-right">Action</span>
                     </div>
                     <div class="max-h-[520px] overflow-auto">

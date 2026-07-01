@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import SortableHeader from '@/components/SortableHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,6 +59,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const editingLeaveId = ref<number | null>(null);
 const search = ref('');
+type SortKey = 'employee' | 'type' | 'start' | 'end' | 'duration' | 'created_by' | 'deduction_status';
+const sortKey = ref<SortKey>('start');
+const sortDirection = ref<'asc' | 'desc'>('desc');
 const currentMonth = new Date().toISOString().slice(0, 7);
 const leaveKey = (leave: EmployeeLeave) => `${leave.source}:${leave.id}`;
 const deductionDays = ref<Record<string, string>>(
@@ -112,25 +116,56 @@ const sourceClass = (leave: EmployeeLeave) =>
 const filteredLeaves = computed(() => {
     const query = search.value.trim().toLowerCase();
 
-    if (!query) {
-        return props.leaves;
+    const leaves = query
+        ? props.leaves.filter((leave) =>
+              [
+                  leave.employeeName,
+                  leave.employeeProfession,
+                  props.employeeTypes[leave.employeeType],
+                  leave.reason,
+                  sourceLabel(leave),
+                  leave.startDateLabel,
+                  leave.endDateLabel,
+                  leave.createdBy,
+              ]
+                  .filter(Boolean)
+                  .some((value) => String(value).toLowerCase().includes(query)),
+          )
+        : props.leaves;
+
+    return [...leaves].sort((first, second) => {
+        const valueFor = (leave: EmployeeLeave) => {
+            if (sortKey.value === 'employee') return leave.employeeName;
+            if (sortKey.value === 'type') return sourceLabel(leave);
+            if (sortKey.value === 'start') return leave.startDate;
+            if (sortKey.value === 'end') return leave.endDate;
+            if (sortKey.value === 'duration') return leave.durationDays;
+            if (sortKey.value === 'created_by') return submittedByLabel(leave);
+            return deductionStatusLabel(leave);
+        };
+
+        const firstValue = valueFor(first);
+        const secondValue = valueFor(second);
+        const comparison =
+            typeof firstValue === 'number' && typeof secondValue === 'number'
+                ? firstValue - secondValue
+                : String(firstValue).localeCompare(String(secondValue), undefined, { numeric: true, sensitivity: 'base' });
+
+        return sortDirection.value === 'asc' ? comparison : -comparison;
+    });
+});
+
+const sortLeaves = (key: string) => {
+    const nextKey = key as SortKey;
+
+    if (sortKey.value === nextKey) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+        return;
     }
 
-    return props.leaves.filter((leave) =>
-        [
-            leave.employeeName,
-            leave.employeeProfession,
-            props.employeeTypes[leave.employeeType],
-            leave.reason,
-            sourceLabel(leave),
-            leave.startDateLabel,
-            leave.endDateLabel,
-            leave.createdBy,
-        ]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(query)),
-    );
-});
+    sortKey.value = nextKey;
+    sortDirection.value = nextKey === 'start' || nextKey === 'end' ? 'desc' : 'asc';
+};
 
 const createLeave = () => {
     createForm.post('/employee-leaves', {
@@ -314,13 +349,25 @@ const waiveDeduction = (leave: EmployeeLeave) => {
                     <table class="w-full min-w-[1540px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[18%] px-4 py-3 font-medium">Employee</th>
-                                <th class="w-[10%] px-4 py-3 font-medium">Type</th>
-                                <th class="w-[10%] px-4 py-3 font-medium">Start</th>
-                                <th class="w-[10%] px-4 py-3 font-medium">End</th>
+                                <th class="w-[18%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortLeaves" />
+                                </th>
+                                <th class="w-[10%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Type" column="type" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortLeaves" />
+                                </th>
+                                <th class="w-[10%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Start" column="start" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortLeaves" />
+                                </th>
+                                <th class="w-[10%] px-4 py-3 font-medium">
+                                    <SortableHeader label="End" column="end" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortLeaves" />
+                                </th>
                                 <th class="w-[14%] px-4 py-3 font-medium">Reason</th>
-                                <th class="w-[11%] px-4 py-3 font-medium">Created By</th>
-                                <th class="w-[280px] px-4 py-3 font-medium">Payroll Deduction</th>
+                                <th class="w-[11%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Created By" column="created_by" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortLeaves" />
+                                </th>
+                                <th class="w-[280px] px-4 py-3 font-medium">
+                                    <SortableHeader label="Payroll Deduction" column="deduction_status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortLeaves" />
+                                </th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>

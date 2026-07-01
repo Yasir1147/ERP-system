@@ -35,11 +35,12 @@ class PayrollController extends Controller
             ->get()
             ->map(fn (Employee $employee) => [
                 'id' => $employee->id,
+                'code' => $employee->code,
                 'name' => $employee->name,
                 'profession' => $employee->profession,
                 'type' => $employee->type,
                 'status' => $employee->status,
-                'label' => $employee->name.' - '.$employee->profession,
+                'label' => trim($employee->code.' - '.$employee->name.' - '.$employee->profession),
                 'payrollSetting' => $this->settingPayload($employee),
             ]);
 

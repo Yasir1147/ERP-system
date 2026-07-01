@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import SortableHeader from '@/components/SortableHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Pencil, Save, ShieldMinus, X } from 'lucide-vue-next';
+import { Pencil, Save, Search, ShieldMinus, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface PayrollSetting {
@@ -17,6 +18,7 @@ interface PayrollSetting {
 
 interface Employee {
     id: number;
+    code: string | null;
     name: string;
     profession: string;
     type: string;
@@ -53,6 +55,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const filterType = ref(props.filters.type);
 const editingEmployeeId = ref<number | null>(null);
+const search = ref('');
+type SortKey = 'employee' | 'daily_salary' | 'salary_rule' | 'hours_per_day' | 'overtime';
+const sortKey = ref<SortKey>('employee');
+const sortDirection = ref<'asc' | 'desc'>('asc');
 
 const settingForm = useForm({
     daily_salary: '0.00',
@@ -68,7 +74,64 @@ const absenceRuleForm = useForm({
     type: props.filters.type,
 });
 
-const employeeOptions = computed(() => props.employees.filter((employee) => filterType.value === 'all' || employee.type === filterType.value));
+const sortValue = (employee: Employee, key: SortKey) => {
+    if (key === 'daily_salary') {
+        return Number(employee.payrollSetting.dailySalary);
+    }
+
+    if (key === 'salary_rule') {
+        return salaryRules[employee.payrollSetting.salaryRule] ?? employee.payrollSetting.salaryRule;
+    }
+
+    if (key === 'hours_per_day') {
+        return Number(employee.payrollSetting.standardHoursPerDay);
+    }
+
+    if (key === 'overtime') {
+        return employee.payrollSetting.isOvertimeEnabled ? 1 : 0;
+    }
+
+    return employee.code ? `${employee.code.padStart(12, '0')} ${employee.name}` : employee.name;
+};
+
+const sortEmployees = (key: string) => {
+    const nextKey = key as SortKey;
+
+    if (sortKey.value === nextKey) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+        return;
+    }
+
+    sortKey.value = nextKey;
+    sortDirection.value = 'asc';
+};
+
+const employeeOptions = computed(() => {
+    const query = search.value.trim().toLowerCase();
+
+    return props.employees
+        .filter((employee) => filterType.value === 'all' || employee.type === filterType.value)
+        .filter((employee) => {
+            if (!query) {
+                return true;
+            }
+
+            return [employee.code, employee.name, employee.profession, props.employeeTypes[employee.type], employee.label]
+                .filter(Boolean)
+                .some((value) => String(value).toLowerCase().includes(query));
+        })
+        .sort((first, second) => {
+            const firstValue = sortValue(first, sortKey.value);
+            const secondValue = sortValue(second, sortKey.value);
+
+            const comparison =
+                typeof firstValue === 'number' && typeof secondValue === 'number'
+                    ? firstValue - secondValue
+                    : String(firstValue).localeCompare(String(secondValue), undefined, { numeric: true, sensitivity: 'base' });
+
+            return sortDirection.value === 'asc' ? comparison : -comparison;
+        });
+});
 
 const money = (value: number) =>
     new Intl.NumberFormat('en-US', {
@@ -175,22 +238,26 @@ const updateAbsenceRule = () => {
                 <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <h2 class="text-base font-medium">Salary Settings</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">Set per day salary, payroll rule, and overtime settings.</p>
+                        <p class="mt-1 text-sm text-muted-foreground">{{ employeeOptions.length }} of {{ employees.length }} employees. Set per day salary, payroll rule, and overtime settings.</p>
+                    </div>
+                    <div class="relative w-full sm:max-w-sm">
+                        <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input v-model="search" type="search" class="pl-9" placeholder="Search by code, name, profession, or type" />
                     </div>
                 </div>
                 <div class="mt-4 overflow-hidden rounded-md border">
                     <div class="grid min-w-[980px] grid-cols-[1fr_0.75fr_0.7fr_0.7fr_0.65fr_120px] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-                        <span>Employee</span>
-                        <span>Daily Salary</span>
-                        <span>Salary Rule</span>
-                        <span>Hours / Day</span>
-                        <span>Overtime</span>
+                        <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                        <SortableHeader label="Daily Salary" column="daily_salary" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                        <SortableHeader label="Salary Rule" column="salary_rule" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                        <SortableHeader label="Hours / Day" column="hours_per_day" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                        <SortableHeader label="Overtime" column="overtime" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
                         <span class="text-right">Actions</span>
                     </div>
                     <div class="max-h-[640px] overflow-auto">
                         <div v-for="employee in employeeOptions" :key="employee.id" class="grid min-w-[980px] grid-cols-[1fr_0.75fr_0.7fr_0.7fr_0.65fr_120px] items-start gap-3 border-b px-3 py-3 text-sm last:border-b-0">
                             <div class="min-w-0">
-                                <p class="truncate font-medium">{{ employee.name }}</p>
+                                <p class="truncate font-medium">{{ employee.code ? `${employee.code} - ${employee.name}` : employee.name }}</p>
                                 <p class="truncate text-xs text-muted-foreground">{{ employee.profession }} - {{ employeeTypes[employee.type] }}</p>
                             </div>
                             <div>

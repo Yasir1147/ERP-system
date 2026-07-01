@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SortableHeader from '@/components/SortableHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
@@ -102,6 +103,25 @@ const filterType = ref(props.filters.type);
 const filterEmployeeId = ref(props.filters.employeeId);
 const filterMonth = ref(props.filters.month);
 const search = ref('');
+type SortKey =
+    | 'employee'
+    | 'days'
+    | 'absent'
+    | 'per_day'
+    | 'salary'
+    | 'absent_deduction'
+    | 'ot_hours'
+    | 'ot_salary'
+    | 'new_total'
+    | 'bonus'
+    | 'previous_balance'
+    | 'total_balance'
+    | 'deduction'
+    | 'paid_cash'
+    | 'balance'
+    | 'remarks';
+const sortKey = ref<SortKey>('employee');
+const sortDirection = ref<'asc' | 'desc'>('asc');
 const selectedEmployeeIds = ref<number[]>([]);
 const bulkRemarks = ref('');
 const savingEmployeeId = ref<number | null>(null);
@@ -143,22 +163,52 @@ const employeeOptions = computed(() => props.employees.filter((employee) => filt
 
 const filteredRows = computed(() => {
     const query = search.value.trim().toLowerCase();
+    const rows = query
+        ? props.payrollRows.filter((row) =>
+              [
+                  row.employeeName,
+                  row.employeeProfession,
+                  props.employeeTypes[row.employeeType],
+                  props.salaryRules[row.salaryRule],
+                  adjustments[row.employeeId]?.remarks,
+              ]
+                  .filter(Boolean)
+                  .some((value) => String(value).toLowerCase().includes(query)),
+          )
+        : props.payrollRows;
 
-    if (!query) {
-        return props.payrollRows;
-    }
+    return [...rows].sort((first, second) => {
+        const numericAdjustment = (employeeId: number, key: 'bonusExtra' | 'previousBalance' | 'deduction' | 'paidByCash') => Number(adjustments[employeeId]?.[key] || 0);
+        const totalBalance = (row: PayrollRow) => row.totalSalary + numericAdjustment(row.employeeId, 'bonusExtra') + numericAdjustment(row.employeeId, 'previousBalance');
+        const balance = (row: PayrollRow) => totalBalance(row) - numericAdjustment(row.employeeId, 'deduction') - numericAdjustment(row.employeeId, 'paidByCash');
+        const valueFor = (row: PayrollRow) => {
+            if (sortKey.value === 'employee') return row.employeeName;
+            if (sortKey.value === 'days') return row.presentDays;
+            if (sortKey.value === 'absent') return row.absentDays;
+            if (sortKey.value === 'per_day') return row.dailySalary;
+            if (sortKey.value === 'salary') return row.basicSalary;
+            if (sortKey.value === 'absent_deduction') return row.absenceDeduction;
+            if (sortKey.value === 'ot_hours') return row.overtimeHours;
+            if (sortKey.value === 'ot_salary') return row.overtimeAmount;
+            if (sortKey.value === 'new_total') return row.totalSalary;
+            if (sortKey.value === 'bonus') return numericAdjustment(row.employeeId, 'bonusExtra');
+            if (sortKey.value === 'previous_balance') return numericAdjustment(row.employeeId, 'previousBalance');
+            if (sortKey.value === 'total_balance') return totalBalance(row);
+            if (sortKey.value === 'deduction') return numericAdjustment(row.employeeId, 'deduction');
+            if (sortKey.value === 'paid_cash') return numericAdjustment(row.employeeId, 'paidByCash');
+            if (sortKey.value === 'balance') return balance(row);
+            return adjustments[row.employeeId]?.remarks || '';
+        };
 
-    return props.payrollRows.filter((row) =>
-        [
-            row.employeeName,
-            row.employeeProfession,
-            props.employeeTypes[row.employeeType],
-            props.salaryRules[row.salaryRule],
-            adjustments[row.employeeId]?.remarks,
-        ]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(query)),
-    );
+        const firstValue = valueFor(first);
+        const secondValue = valueFor(second);
+        const comparison =
+            typeof firstValue === 'number' && typeof secondValue === 'number'
+                ? firstValue - secondValue
+                : String(firstValue).localeCompare(String(secondValue), undefined, { numeric: true, sensitivity: 'base' });
+
+        return sortDirection.value === 'asc' ? comparison : -comparison;
+    });
 });
 
 const visibleRowIds = computed(() => filteredRows.value.map((row) => row.employeeId));
@@ -334,6 +384,18 @@ const money = (value: number) =>
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     }).format(value);
+
+const sortPayrollRows = (key: string) => {
+    const nextKey = key as SortKey;
+
+    if (sortKey.value === nextKey) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+        return;
+    }
+
+    sortKey.value = nextKey;
+    sortDirection.value = 'asc';
+};
 
 const numeric = (value: string) => Number(value || 0);
 
@@ -789,22 +851,54 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                         />
                                     </th>
                                     <th class="w-[54px] px-3 py-2 font-medium">S.No</th>
-                                    <th class="w-[230px] px-3 py-2 font-medium">Employee</th>
-                                    <th class="w-[70px] px-3 py-2 font-medium">Days</th>
-                                    <th class="w-[70px] px-3 py-2 font-medium">Absent</th>
-                                    <th class="w-[90px] px-3 py-2 font-medium">Per Day</th>
-                                    <th class="w-[100px] px-3 py-2 font-medium">Salary</th>
-                                    <th class="w-[110px] px-3 py-2 font-medium">Absent Ded.</th>
-                                    <th class="w-[80px] px-3 py-2 font-medium">OT Hrs</th>
-                                    <th class="w-[100px] px-3 py-2 font-medium">OT Salary</th>
-                                    <th class="w-[110px] px-3 py-2 font-medium">New Total</th>
-                                    <th class="w-[130px] px-3 py-2 font-medium">Bonus</th>
-                                    <th class="w-[130px] px-3 py-2 font-medium">Pr. Balance</th>
-                                    <th class="w-[120px] px-3 py-2 font-medium">Total Balance</th>
-                                    <th class="w-[130px] px-3 py-2 font-medium">Deduction</th>
-                                    <th class="w-[130px] px-3 py-2 font-medium">Paid Cash</th>
-                                    <th class="w-[110px] px-3 py-2 font-medium">Balance</th>
-                                    <th class="w-[180px] px-3 py-2 font-medium">Remarks</th>
+                                    <th class="w-[230px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[70px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Days" column="days" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[70px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Absent" column="absent" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[90px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Per Day" column="per_day" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[100px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Salary" column="salary" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[110px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Absent Ded." column="absent_deduction" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[80px] px-3 py-2 font-medium">
+                                        <SortableHeader label="OT Hrs" column="ot_hours" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[100px] px-3 py-2 font-medium">
+                                        <SortableHeader label="OT Salary" column="ot_salary" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[110px] px-3 py-2 font-medium">
+                                        <SortableHeader label="New Total" column="new_total" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[130px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Bonus" column="bonus" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[130px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Pr. Balance" column="previous_balance" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[120px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Total Balance" column="total_balance" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[130px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Deduction" column="deduction" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[130px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Paid Cash" column="paid_cash" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[110px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Balance" column="balance" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
+                                    <th class="w-[180px] px-3 py-2 font-medium">
+                                        <SortableHeader label="Remarks" column="remarks" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                    </th>
                                     <th class="w-[42px] px-1 py-2 text-center font-medium">Ledger</th>
                                     <th class="w-[42px] px-1 py-2 text-center font-medium">PDF</th>
                                     <th class="w-[42px] px-1 py-2 text-center font-medium">Excel</th>

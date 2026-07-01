@@ -331,6 +331,10 @@ Payroll report supports:
 - Merged selected payslips PDF/print
 - Payroll report PDF/print
 
+Payroll salary settings list shows employee codes with names and supports searching by code, name, profession, and employee type. The salary settings table can also be sorted ascending or descending by employee, daily salary, salary rule, hours per day, and overtime status.
+
+Core admin/reporting lists use clickable sortable headers with ascending/descending direction indicators. Sorting is available on employee lists, project lists, attendance detail, leaves, fines, payroll salary settings, payroll report, and projects overview. Fines sorting is handled through server-side query sorting so pagination remains accurate.
+
 Payroll print pages use `public/al-mohafiz-logo.png` for both the document logo and browser tab favicon.
 
 Payslip print pages use visible page borders, full grid borders on salary tables, stronger inner summary borders, and high-contrast text so printed salary details remain readable.

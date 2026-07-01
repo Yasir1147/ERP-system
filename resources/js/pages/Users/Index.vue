@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import SortableHeader from '@/components/SortableHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +33,9 @@ const props = defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Users', href: '/users' }];
 const search = ref('');
 const editingUserId = ref<number | null>(null);
+type SortKey = 'name' | 'username' | 'email' | 'role' | 'employee_type' | 'backdate' | 'fine_emails';
+const sortKey = ref<SortKey>('name');
+const sortDirection = ref<'asc' | 'desc'>('asc');
 
 const createForm = useForm({
     name: '',
@@ -59,16 +63,6 @@ const editForm = useForm({
     attendance_backdate_to: '',
     attendance_employee_type: 'all',
     receive_fine_emails: true,
-});
-
-const filteredUsers = computed(() => {
-    const query = search.value.trim().toLowerCase();
-
-    if (!query) return props.users;
-
-    return props.users.filter((user) =>
-        [user.name, user.username, user.email, props.roles[user.role]].filter(Boolean).some((value) => value.toLowerCase().includes(query)),
-    );
 });
 
 const createUser = () => {
@@ -159,6 +153,43 @@ const fineEmailLabel = (user: UserRow) => {
     }
 
     return user.receive_fine_emails ? 'Enabled' : 'Disabled';
+};
+
+const filteredUsers = computed(() => {
+    const query = search.value.trim().toLowerCase();
+    const users = query
+        ? props.users.filter((user) =>
+              [user.name, user.username, user.email, props.roles[user.role], employeeTypeAccessLabel(user), backdateLabel(user), fineEmailLabel(user)]
+                  .filter(Boolean)
+                  .some((value) => value.toLowerCase().includes(query)),
+          )
+        : props.users;
+
+    return [...users].sort((first, second) => {
+        const valueFor = (user: UserRow) => {
+            if (sortKey.value === 'role') return props.roles[user.role];
+            if (sortKey.value === 'employee_type') return employeeTypeAccessLabel(user);
+            if (sortKey.value === 'backdate') return backdateLabel(user);
+            if (sortKey.value === 'fine_emails') return fineEmailLabel(user);
+            return user[sortKey.value];
+        };
+
+        const comparison = String(valueFor(first)).localeCompare(String(valueFor(second)), undefined, { numeric: true, sensitivity: 'base' });
+
+        return sortDirection.value === 'asc' ? comparison : -comparison;
+    });
+});
+
+const sortUsers = (key: string) => {
+    const nextKey = key as SortKey;
+
+    if (sortKey.value === nextKey) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+        return;
+    }
+
+    sortKey.value = nextKey;
+    sortDirection.value = 'asc';
 };
 </script>
 
@@ -273,13 +304,27 @@ const fineEmailLabel = (user: UserRow) => {
                     <table class="w-full min-w-[1420px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[14%] px-4 py-3 font-medium">Name</th>
-                                <th class="w-[13%] px-4 py-3 font-medium">Username</th>
-                                <th class="w-[18%] px-4 py-3 font-medium">Email</th>
-                                <th class="w-[13%] px-4 py-3 font-medium">Role</th>
-                                <th class="w-[15%] px-4 py-3 font-medium">Employee Type Access</th>
-                                <th class="w-[14%] px-4 py-3 font-medium">Backdate Access</th>
-                                <th class="w-[12%] px-4 py-3 font-medium">Fine Emails</th>
+                                <th class="w-[14%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Name" column="name" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortUsers" />
+                                </th>
+                                <th class="w-[13%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Username" column="username" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortUsers" />
+                                </th>
+                                <th class="w-[18%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Email" column="email" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortUsers" />
+                                </th>
+                                <th class="w-[13%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Role" column="role" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortUsers" />
+                                </th>
+                                <th class="w-[15%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Employee Type Access" column="employee_type" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortUsers" />
+                                </th>
+                                <th class="w-[14%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Backdate Access" column="backdate" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortUsers" />
+                                </th>
+                                <th class="w-[12%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Fine Emails" column="fine_emails" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortUsers" />
+                                </th>
                                 <th class="w-[10%] px-4 py-3 font-medium">Password</th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>

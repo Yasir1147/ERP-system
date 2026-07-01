@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import SortableHeader from '@/components/SortableHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -57,6 +58,8 @@ const props = defineProps<{
     filters: {
         search: string;
         perPage: number;
+        sort: string;
+        direction: 'asc' | 'desc';
     };
     employeeTypes: Record<string, string>;
     reasons: string[];
@@ -69,6 +72,8 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Fines', href: '/fines' }];
 const page = usePage();
 const search = ref(props.filters.search || '');
 const perPage = ref(props.filters.perPage || 5);
+const sortKey = ref(props.filters.sort || 'fine_date');
+const sortDirection = ref<'asc' | 'desc'>(props.filters.direction || 'desc');
 const employeeSearch = ref('');
 const employeeOpen = ref(false);
 const employeeDropdownRef = ref<HTMLElement | null>(null);
@@ -134,6 +139,8 @@ const reloadFines = (pageNumber = 1) => {
         {
             search: search.value.trim() || undefined,
             per_page: perPage.value,
+            sort: sortKey.value,
+            direction: sortDirection.value,
             page: pageNumber,
         },
         {
@@ -153,6 +160,17 @@ watch(search, () => {
 });
 
 watch(perPage, () => reloadFines(1));
+
+const sortFines = (key: string) => {
+    if (sortKey.value === key) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortKey.value = key;
+        sortDirection.value = key === 'fine_date' ? 'desc' : 'asc';
+    }
+
+    reloadFines(1);
+};
 
 const createFine = () => {
     createForm.post('/fines', {
@@ -347,13 +365,25 @@ const waiveFine = (fine: Fine) => {
                     <table class="w-full min-w-[1500px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[230px] px-4 py-3 font-medium">Employee</th>
-                                <th class="w-[110px] px-4 py-3 font-medium">Fine Date</th>
-                                <th class="w-[170px] px-4 py-3 font-medium">Reason</th>
-                                <th class="w-[110px] px-4 py-3 text-right font-medium">Amount</th>
-                                <th class="w-[140px] px-4 py-3 font-medium">Status</th>
+                                <th class="w-[230px] px-4 py-3 font-medium">
+                                    <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortFines" />
+                                </th>
+                                <th class="w-[110px] px-4 py-3 font-medium">
+                                    <SortableHeader label="Fine Date" column="fine_date" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortFines" />
+                                </th>
+                                <th class="w-[170px] px-4 py-3 font-medium">
+                                    <SortableHeader label="Reason" column="reason" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortFines" />
+                                </th>
+                                <th class="w-[110px] px-4 py-3 text-right font-medium">
+                                    <SortableHeader label="Amount" column="amount" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortFines" />
+                                </th>
+                                <th class="w-[140px] px-4 py-3 font-medium">
+                                    <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortFines" />
+                                </th>
                                 <th class="w-[220px] px-4 py-3 font-medium">Notes</th>
-                                <th class="w-[150px] px-4 py-3 font-medium">Created By</th>
+                                <th class="w-[150px] px-4 py-3 font-medium">
+                                    <SortableHeader label="Created By" column="created_by" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortFines" />
+                                </th>
                                 <th class="w-[380px] px-4 py-3 font-medium">Admin Action</th>
                             </tr>
                         </thead>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SortableHeader from '@/components/SortableHeader.vue';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
@@ -95,6 +96,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 const filterType = ref(props.filters.type);
 const filterProjectId = ref(props.filters.projectId);
 const search = ref('');
+type SortKey =
+    | 'project'
+    | 'category'
+    | 'status'
+    | 'first_work'
+    | 'last_work'
+    | 'days'
+    | 'worked'
+    | 'labour'
+    | 'entries'
+    | 'ot_hours'
+    | 'basic_cost'
+    | 'ot_cost'
+    | 'total_cost';
+const sortKey = ref<SortKey>('project');
+const sortDirection = ref<'asc' | 'desc'>('asc');
 const historyOpen = ref(false);
 const historyLoading = ref(false);
 const historyError = ref('');
@@ -134,16 +151,53 @@ const statusLabels = computed(() =>
 const filteredRows = computed(() => {
     const query = search.value.trim().toLowerCase();
 
-    if (!query) {
-        return props.overviewRows;
+    const rows = query
+        ? props.overviewRows.filter((row) =>
+              [row.name, row.typeLabel, row.status, statusLabels.value[row.status], row.firstWorkDate, row.lastWorkDate]
+                  .filter(Boolean)
+                  .some((value) => String(value).toLowerCase().includes(query)),
+          )
+        : props.overviewRows;
+
+    return [...rows].sort((first, second) => {
+        const valueFor = (row: OverviewRow) => {
+            if (sortKey.value === 'project') return row.name;
+            if (sortKey.value === 'category') return row.typeLabel;
+            if (sortKey.value === 'status') return statusLabels.value[row.status];
+            if (sortKey.value === 'first_work') return row.firstWorkDate || '';
+            if (sortKey.value === 'last_work') return row.lastWorkDate || '';
+            if (sortKey.value === 'days') return row.daysSinceStart;
+            if (sortKey.value === 'worked') return row.workedDays;
+            if (sortKey.value === 'labour') return row.labourCount;
+            if (sortKey.value === 'entries') return row.labourEntries;
+            if (sortKey.value === 'ot_hours') return row.overtimeHours;
+            if (sortKey.value === 'basic_cost') return row.basicCost;
+            if (sortKey.value === 'ot_cost') return row.overtimeCost;
+            return row.totalCost;
+        };
+
+        const firstValue = valueFor(first);
+        const secondValue = valueFor(second);
+        const comparison =
+            typeof firstValue === 'number' && typeof secondValue === 'number'
+                ? firstValue - secondValue
+                : String(firstValue).localeCompare(String(secondValue), undefined, { numeric: true, sensitivity: 'base' });
+
+        return sortDirection.value === 'asc' ? comparison : -comparison;
+    });
+});
+
+const sortRows = (key: string) => {
+    const nextKey = key as SortKey;
+
+    if (sortKey.value === nextKey) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+        return;
     }
 
-    return props.overviewRows.filter((row) =>
-        [row.name, row.typeLabel, row.status, statusLabels.value[row.status], row.firstWorkDate, row.lastWorkDate]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(query)),
-    );
-});
+    sortKey.value = nextKey;
+    sortDirection.value = ['first_work', 'last_work', 'total_cost'].includes(nextKey) ? 'desc' : 'asc';
+};
 
 const money = (value: number) =>
     new Intl.NumberFormat('en-US', {
@@ -326,19 +380,45 @@ const closeProjectHistory = () => {
                     <table class="w-full min-w-[1320px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[190px] px-3 py-3 font-medium">Project</th>
-                                <th class="w-[130px] px-3 py-3 font-medium">Category</th>
-                                <th class="w-[90px] px-3 py-3 font-medium">Status</th>
-                                <th class="w-[105px] px-3 py-3 font-medium">First Work</th>
-                                <th class="w-[105px] px-3 py-3 font-medium">Last Work</th>
-                                <th class="w-[70px] px-3 py-3 text-right font-medium">Days</th>
-                                <th class="w-[80px] px-3 py-3 text-right font-medium">Worked</th>
-                                <th class="w-[80px] px-3 py-3 text-right font-medium">Labour</th>
-                                <th class="w-[80px] px-3 py-3 text-right font-medium">Entries</th>
-                                <th class="w-[75px] px-3 py-3 text-right font-medium">OT Hrs</th>
-                                <th class="w-[105px] px-3 py-3 text-right font-medium">Basic Cost</th>
-                                <th class="w-[105px] px-3 py-3 text-right font-medium">OT Cost</th>
-                                <th class="w-[110px] px-3 py-3 text-right font-medium">Total Cost</th>
+                                <th class="w-[190px] px-3 py-3 font-medium">
+                                    <SortableHeader label="Project" column="project" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[130px] px-3 py-3 font-medium">
+                                    <SortableHeader label="Category" column="category" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[90px] px-3 py-3 font-medium">
+                                    <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[105px] px-3 py-3 font-medium">
+                                    <SortableHeader label="First Work" column="first_work" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[105px] px-3 py-3 font-medium">
+                                    <SortableHeader label="Last Work" column="last_work" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[70px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader label="Days" column="days" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[80px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader label="Worked" column="worked" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[80px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader label="Labour" column="labour" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[80px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader label="Entries" column="entries" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[75px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader label="OT Hrs" column="ot_hours" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[105px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader label="Basic Cost" column="basic_cost" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[105px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader label="OT Cost" column="ot_cost" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
+                                <th class="w-[110px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader label="Total Cost" column="total_cost" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                </th>
                                 <th class="w-[70px] px-3 py-3 text-center font-medium">History</th>
                             </tr>
                         </thead>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import SortableHeader from '@/components/SortableHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +37,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const editingProjectId = ref<number | null>(null);
 const search = ref('');
+type SortKey = 'name' | 'status';
+const sortKey = ref<SortKey>('name');
+const sortDirection = ref<'asc' | 'desc'>('asc');
 
 const createForm = useForm({
     name: '',
@@ -63,16 +67,34 @@ const statusLabels = computed(() =>
 const filteredProjects = computed(() => {
     const query = search.value.trim().toLowerCase();
 
-    if (!query) {
-        return props.projects;
+    const projects = query
+        ? props.projects.filter((project) =>
+              [project.name, project.status, statusLabels.value[project.status]]
+                  .filter(Boolean)
+                  .some((value) => value.toLowerCase().includes(query)),
+          )
+        : props.projects;
+
+    return [...projects].sort((first, second) => {
+        const firstValue = sortKey.value === 'status' ? statusLabels.value[first.status] : first.name;
+        const secondValue = sortKey.value === 'status' ? statusLabels.value[second.status] : second.name;
+        const comparison = firstValue.localeCompare(secondValue, undefined, { numeric: true, sensitivity: 'base' });
+
+        return sortDirection.value === 'asc' ? comparison : -comparison;
+    });
+});
+
+const sortProjects = (key: string) => {
+    const nextKey = key as SortKey;
+
+    if (sortKey.value === nextKey) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+        return;
     }
 
-    return props.projects.filter((project) =>
-        [project.name, project.status, statusLabels.value[project.status]]
-            .filter(Boolean)
-            .some((value) => value.toLowerCase().includes(query)),
-    );
-});
+    sortKey.value = nextKey;
+    sortDirection.value = 'asc';
+};
 
 const createProject = () => {
     createForm.type = props.projectType;
@@ -176,8 +198,12 @@ const deleteProject = (project: Project) => {
                     <table class="w-full min-w-[640px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[55%] px-4 py-3 font-medium">Project Name</th>
-                                <th class="w-[30%] px-4 py-3 font-medium">Status</th>
+                                <th class="w-[55%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Project Name" column="name" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortProjects" />
+                                </th>
+                                <th class="w-[30%] px-4 py-3 font-medium">
+                                    <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortProjects" />
+                                </th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>

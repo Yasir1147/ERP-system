@@ -25,7 +25,9 @@ class EmployeeFineController extends Controller
         $perPage = (int) $request->query('per_page', 5);
         $perPage = in_array($perPage, [5, 10, 15, 25], true) ? $perPage : 5;
         $search = trim((string) $request->query('search', ''));
-        $fineRows = $this->fineRows($search, $perPage);
+        $sort = (string) $request->query('sort', 'fine_date');
+        $direction = $request->query('direction') === 'asc' ? 'asc' : 'desc';
+        $fineRows = $this->fineRows($search, $perPage, $sort, $direction);
 
         return Inertia::render('Fines/Index', [
             'employees' => $this->employeeOptions(),
@@ -41,6 +43,8 @@ class EmployeeFineController extends Controller
             'filters' => [
                 'search' => $search,
                 'perPage' => $perPage,
+                'sort' => $sort,
+                'direction' => $direction,
             ],
             'employeeTypes' => Employee::TYPES,
             'reasons' => EmployeeFine::REASONS,
@@ -247,9 +251,22 @@ class EmployeeFineController extends Controller
         }
     }
 
-    private function fineRows(string $search, int $perPage)
+    private function fineRows(string $search, int $perPage, string $sort, string $direction)
     {
+        $sortColumns = [
+            'employee' => 'sort_employees.name',
+            'fine_date' => 'employee_fines.fine_date',
+            'reason' => 'employee_fines.reason',
+            'amount' => 'employee_fines.amount',
+            'status' => 'employee_fines.status',
+            'created_by' => 'sort_creators.name',
+        ];
+        $sortColumn = $sortColumns[$sort] ?? $sortColumns['fine_date'];
+
         return EmployeeFine::query()
+            ->select('employee_fines.*')
+            ->leftJoin('employees as sort_employees', 'sort_employees.id', '=', 'employee_fines.employee_id')
+            ->leftJoin('users as sort_creators', 'sort_creators.id', '=', 'employee_fines.created_by')
             ->with(['employee:id,code,name,profession,type,status', 'creator:id,name,role', 'reviewer:id,name,role'])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
@@ -269,8 +286,8 @@ class EmployeeFineController extends Controller
                         ->orWhereHas('reviewer', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
                 });
             })
-            ->latest('fine_date')
-            ->latest('id')
+            ->orderBy($sortColumn, $direction)
+            ->orderBy('employee_fines.id', $direction)
             ->paginate($perPage)
             ->withQueryString()
             ->through(fn (EmployeeFine $fine) => [
