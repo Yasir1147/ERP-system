@@ -335,6 +335,8 @@ Payroll salary settings list shows employee codes with names and supports search
 
 Core admin/reporting lists use clickable sortable headers with ascending/descending direction indicators. Sorting is available on employee lists, project lists, attendance detail, leaves, fines, payroll salary settings, payroll report, and projects overview. Fines sorting is handled through server-side query sorting so pagination remains accurate.
 
+Leave list rows are converted to base collections before merging long leave, daily leave, and absent records. This avoids Laravel Eloquent collection merge errors when the rows are already mapped to arrays.
+
 Payroll print pages use `public/al-mohafiz-logo.png` for both the document logo and browser tab favicon.
 
 Payslip print pages use visible page borders, full grid borders on salary tables, stronger inner summary borders, and high-contrast text so printed salary details remain readable.

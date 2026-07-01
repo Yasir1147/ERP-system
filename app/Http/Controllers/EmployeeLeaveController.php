@@ -49,7 +49,8 @@ class EmployeeLeaveController extends Controller
                 'payrollDeductionNote' => $leave->payroll_deduction_note,
                 'payrollDeductionReviewedBy' => $leave->payrollDeductionReviewer?->name,
                 'payrollDeductionReviewedAtLabel' => $leave->payroll_deduction_reviewed_at?->format('d/m/Y h:i A'),
-            ]);
+            ])
+            ->toBase();
 
         $dailyLeaves = AttendanceRecord::query()
             ->with([
@@ -88,7 +89,8 @@ class EmployeeLeaveController extends Controller
                     'payrollDeductionReviewedBy' => $record->payrollDeductionReviewer?->name,
                     'payrollDeductionReviewedAtLabel' => $record->payroll_deduction_reviewed_at?->format('d/m/Y h:i A'),
                 ];
-            });
+            })
+            ->toBase();
 
         $dailyAbsents = AttendanceRecord::query()
             ->with([
@@ -126,7 +128,8 @@ class EmployeeLeaveController extends Controller
                     'payrollDeductionReviewedBy' => null,
                     'payrollDeductionReviewedAtLabel' => null,
                 ];
-            });
+            })
+            ->toBase();
 
         return Inertia::render('EmployeeLeaves/Index', [
             'employees' => Employee::query()
