@@ -185,6 +185,8 @@ Current role concept:
 
 Normal attendance users can log in with username-only according to the current business requirement. Admin users still use password login.
 
+Public self-registration is disabled. New users must be created by an admin from the Users page, and the login page must not show a sign-up link.
+
 Admin can temporarily allow an attendance user to enter older missing attendance from the Users page. The access is controlled per user with:
 
 - `attendance_backdate_enabled`
