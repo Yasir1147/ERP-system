@@ -151,6 +151,8 @@ When applying a pending fine to payroll, admin can reduce the deduction amount b
 
 The admin fine list uses server-side pagination with 5/10/15/25 per-page options, backend search, search-aware counts, and previous/next controls so page load does not grow with fine record count.
 
+Fine list backend search must qualify `employee_fines` columns when joins are present. In particular, use `employee_fines.status` rather than plain `status`, otherwise MySQL can throw an ambiguous column error when searching fines.
+
 Attendance marking pages:
 
 ```text
@@ -334,6 +336,8 @@ Payroll report supports:
 - Payroll report PDF/print
 
 Payroll salary settings list shows employee codes with names and supports searching by code, name, profession, and employee type. The salary settings table can also be sorted ascending or descending by employee, daily salary, salary rule, hours per day, and overtime status.
+
+Employee-facing admin/report lists should show employee code with the employee name when available. Search should include employee code on payroll report, attendance report, dashboard daily attendance, leave list, and fine list.
 
 Core admin/reporting lists use clickable sortable headers with ascending/descending direction indicators. Sorting is available on employee lists, project lists, attendance detail, leaves, fines, payroll salary settings, payroll report, and projects overview. Fines sorting is handled through server-side query sorting so pagination remains accurate.
 

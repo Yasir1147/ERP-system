@@ -19,7 +19,7 @@ class EmployeeLeaveController extends Controller
     {
         $longLeaves = EmployeeLeave::query()
             ->with([
-                'employee:id,name,profession,type,status',
+                'employee:id,code,name,profession,type,status',
                 'creator:id,name,role',
                 'payrollDeductionReviewer:id,name,role',
             ])
@@ -30,6 +30,7 @@ class EmployeeLeaveController extends Controller
                 'source' => 'long_leave',
                 'canEdit' => true,
                 'employeeId' => $leave->employee_id,
+                'employeeCode' => $leave->employee?->code,
                 'employeeName' => $leave->employee?->name,
                 'employeeProfession' => $leave->employee?->profession,
                 'employeeType' => $leave->employee?->type,
@@ -54,7 +55,7 @@ class EmployeeLeaveController extends Controller
 
         $dailyLeaves = AttendanceRecord::query()
             ->with([
-                'employee:id,name,profession,type,status',
+                'employee:id,code,name,profession,type,status',
                 'submitter:id,name,role',
                 'payrollDeductionReviewer:id,name,role',
             ])
@@ -69,6 +70,7 @@ class EmployeeLeaveController extends Controller
                     'source' => 'daily_leave',
                     'canEdit' => true,
                     'employeeId' => $record->employee_id,
+                    'employeeCode' => $record->employee?->code,
                     'employeeName' => $record->employee?->name,
                     'employeeProfession' => $record->employee?->profession,
                     'employeeType' => $record->employee?->type,
@@ -94,7 +96,7 @@ class EmployeeLeaveController extends Controller
 
         $dailyAbsents = AttendanceRecord::query()
             ->with([
-                'employee:id,name,profession,type,status',
+                'employee:id,code,name,profession,type,status',
                 'submitter:id,name,role',
             ])
             ->where('status', AttendanceRecord::STATUS_ABSENT)
@@ -108,6 +110,7 @@ class EmployeeLeaveController extends Controller
                     'source' => 'daily_absent',
                     'canEdit' => false,
                     'employeeId' => $record->employee_id,
+                    'employeeCode' => $record->employee?->code,
                     'employeeName' => $record->employee?->name,
                     'employeeProfession' => $record->employee?->profession,
                     'employeeType' => $record->employee?->type,
@@ -135,8 +138,9 @@ class EmployeeLeaveController extends Controller
             'employees' => Employee::query()
                 ->where('status', '!=', Employee::STATUS_LEFT)
                 ->orderBy('type')
+                ->orderBy('code')
                 ->orderBy('name')
-                ->get(['id', 'name', 'profession', 'type', 'status']),
+                ->get(['id', 'code', 'name', 'profession', 'type', 'status']),
             'employeeTypes' => Employee::TYPES,
             'leaves' => $longLeaves
                 ->merge($dailyLeaves)

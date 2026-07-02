@@ -100,6 +100,7 @@ class DashboardController extends Controller
                 'attendance_records.attendance_date',
                 'attendance_records.leave_reason',
                 'attendance_records.overtime_hours',
+                'employees.code as employee_code',
                 'employees.name as employee_name',
                 'employees.profession as employee_profession',
                 'employees.type as employee_type',
@@ -110,6 +111,7 @@ class DashboardController extends Controller
             ])
             ->map(fn ($record) => [
                 'id' => $record->id,
+                'employeeCode' => $record->employee_code,
                 'employeeName' => $record->employee_name,
                 'employeeProfession' => $record->employee_profession,
                 'employeeType' => $record->employee_type,
@@ -137,6 +139,7 @@ class DashboardController extends Controller
             ->get([
                 'employee_leaves.id',
                 'employee_leaves.reason',
+                'employees.code as employee_code',
                 'employees.name as employee_name',
                 'employees.profession as employee_profession',
                 'employees.type as employee_type',
@@ -145,6 +148,7 @@ class DashboardController extends Controller
             ])
             ->map(fn ($record) => [
                 'id' => 'leave-'.$record->id,
+                'employeeCode' => $record->employee_code,
                 'employeeName' => $record->employee_name,
                 'employeeProfession' => $record->employee_profession,
                 'employeeType' => $record->employee_type,
@@ -177,7 +181,7 @@ class DashboardController extends Controller
             ->values();
 
         $completedLongLeaves = EmployeeLeave::query()
-            ->with('employee:id,name,profession,type,status')
+            ->with('employee:id,code,name,profession,type,status')
             ->whereDate('end_date', '<=', $selectedDate)
             ->when($selectedType, fn ($query) => $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('type', $selectedType)))
             ->latest('end_date')
@@ -186,6 +190,7 @@ class DashboardController extends Controller
             ->filter(fn (EmployeeLeave $leave) => $leave->employee?->status !== Employee::STATUS_LEFT)
             ->map(fn (EmployeeLeave $leave) => [
                 'id' => $leave->id,
+                'employeeCode' => $leave->employee?->code,
                 'employeeName' => $leave->employee?->name,
                 'employeeProfession' => $leave->employee?->profession,
                 'employeeType' => $leave->employee?->type,

@@ -40,7 +40,7 @@ class PayrollController extends Controller
                 'profession' => $employee->profession,
                 'type' => $employee->type,
                 'status' => $employee->status,
-                'label' => trim($employee->code.' - '.$employee->name.' - '.$employee->profession),
+                'label' => collect([$employee->code, $employee->name, $employee->profession])->filter()->implode(' - '),
                 'payrollSetting' => $this->settingPayload($employee),
             ]);
 
@@ -67,15 +67,17 @@ class PayrollController extends Controller
 
         $employees = Employee::query()
             ->orderBy('type')
+            ->orderBy('code')
             ->orderBy('name')
-            ->get(['id', 'name', 'profession', 'type', 'status'])
+            ->get(['id', 'code', 'name', 'profession', 'type', 'status'])
             ->map(fn (Employee $employee) => [
                 'id' => $employee->id,
+                'code' => $employee->code,
                 'name' => $employee->name,
                 'profession' => $employee->profession,
                 'type' => $employee->type,
                 'status' => $employee->status,
-                'label' => $employee->name.' - '.$employee->profession,
+                'label' => collect([$employee->code, $employee->name, $employee->profession])->filter()->implode(' - '),
             ]);
 
         $payrollRows = $this->payrollRows($monthStart, $monthEnd, $month->toDateString(), $selectedType, $selectedEmployeeId);
@@ -669,6 +671,7 @@ class PayrollController extends Controller
 
         return [
             'employeeId' => $employee->id,
+            'employeeCode' => $employee->code,
             'employeeName' => $employee->name,
             'employeeProfession' => $employee->profession,
             'employeeType' => $employee->type,

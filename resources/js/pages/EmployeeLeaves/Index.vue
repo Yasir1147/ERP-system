@@ -12,6 +12,7 @@ import { computed, ref } from 'vue';
 
 interface Employee {
     id: number;
+    code: string | null;
     name: string;
     profession: string;
     type: string;
@@ -23,6 +24,7 @@ interface EmployeeLeave {
     source: string;
     canEdit: boolean;
     employeeId: number;
+    employeeCode: string | null;
     employeeName: string;
     employeeProfession: string;
     employeeType: string;
@@ -86,7 +88,8 @@ const editForm = useForm({
     reason: '',
 });
 
-const employeeLabel = (employee: Employee) => `${employee.name} - ${employee.profession} (${props.employeeTypes[employee.type]})`;
+const employeeLabel = (employee: Employee) => `${employee.code ? `${employee.code} - ` : ''}${employee.name} - ${employee.profession} (${props.employeeTypes[employee.type]})`;
+const leaveEmployeeLabel = (leave: EmployeeLeave) => (leave.employeeCode ? `${leave.employeeCode} - ${leave.employeeName}` : leave.employeeName);
 
 const submittedByLabel = (leave: EmployeeLeave) => {
     if (!leave.createdBy) {
@@ -120,6 +123,7 @@ const filteredLeaves = computed(() => {
         ? props.leaves.filter((leave) =>
               [
                   leave.employeeName,
+                  leave.employeeCode,
                   leave.employeeProfession,
                   props.employeeTypes[leave.employeeType],
                   leave.reason,
@@ -135,7 +139,7 @@ const filteredLeaves = computed(() => {
 
     return [...leaves].sort((first, second) => {
         const valueFor = (leave: EmployeeLeave) => {
-            if (sortKey.value === 'employee') return leave.employeeName;
+            if (sortKey.value === 'employee') return leave.employeeCode || leave.employeeName;
             if (sortKey.value === 'type') return sourceLabel(leave);
             if (sortKey.value === 'start') return leave.startDate;
             if (sortKey.value === 'end') return leave.endDate;
@@ -384,7 +388,7 @@ const waiveDeduction = (leave: EmployeeLeave) => {
                                         </option>
                                     </select>
                                     <div v-else class="min-w-0">
-                                        <p class="truncate font-medium">{{ leave.employeeName }}</p>
+                                        <p class="truncate font-medium">{{ leaveEmployeeLabel(leave) }}</p>
                                         <p class="truncate text-xs text-muted-foreground">{{ leave.employeeProfession }} - {{ employeeTypes[leave.employeeType] }}</p>
                                     </div>
                                     <InputError v-if="editingLeaveId === leave.id" :message="editForm.errors.employee_id" class="mt-2" />

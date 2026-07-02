@@ -33,15 +33,17 @@ class AttendanceReportController extends Controller
         $employees = Employee::query()
             ->when($selectedType, fn ($query) => $query->where('type', $selectedType))
             ->orderBy('type')
+            ->orderBy('code')
             ->orderBy('name')
-            ->get(['id', 'name', 'profession', 'type', 'status'])
+            ->get(['id', 'code', 'name', 'profession', 'type', 'status'])
             ->map(fn (Employee $employee) => [
                 'id' => $employee->id,
+                'code' => $employee->code,
                 'name' => $employee->name,
                 'profession' => $employee->profession,
                 'type' => $employee->type,
                 'status' => $employee->status,
-                'label' => $employee->name.' - '.$employee->profession,
+                'label' => collect([$employee->code, $employee->name, $employee->profession])->filter()->implode(' - '),
             ]);
 
         $attendanceRecords = $this->attendanceRecords($startDate, $endDate, $selectedType, $selectedEmployeeId);
@@ -228,6 +230,7 @@ class AttendanceReportController extends Controller
                 'attendance_records.overtime_project_id',
                 'attendance_records.has_overtime',
                 'attendance_records.overtime_hours',
+                'employees.code as employee_code',
                 'employees.name as employee_name',
                 'employees.profession as employee_profession',
                 'employees.type as employee_type',
@@ -239,6 +242,7 @@ class AttendanceReportController extends Controller
             ->map(fn ($record) => [
                 'id' => 'attendance-'.$record->id,
                 'employeeId' => $record->employee_id,
+                'employeeCode' => $record->employee_code,
                 'employeeName' => $record->employee_name,
                 'employeeProfession' => $record->employee_profession,
                 'employeeType' => $record->employee_type,
@@ -275,6 +279,7 @@ class AttendanceReportController extends Controller
                 'employee_leaves.start_date',
                 'employee_leaves.end_date',
                 'employee_leaves.reason',
+                'employees.code as employee_code',
                 'employees.name as employee_name',
                 'employees.profession as employee_profession',
                 'employees.type as employee_type',
@@ -290,6 +295,7 @@ class AttendanceReportController extends Controller
                     ->map(fn (Carbon $date) => [
                         'id' => 'leave-'.$leave->id.'-'.$date->toDateString(),
                         'employeeId' => $leave->employee_id,
+                        'employeeCode' => $leave->employee_code,
                         'employeeName' => $leave->employee_name,
                         'employeeProfession' => $leave->employee_profession,
                         'employeeType' => $leave->employee_type,

@@ -8,6 +8,7 @@ import { computed, ref, watch } from 'vue';
 
 interface Employee {
     id: number;
+    code: string | null;
     name: string;
     profession: string;
     type: string;
@@ -18,6 +19,7 @@ interface Employee {
 interface AttendanceRecord {
     id: string;
     employeeId: number;
+    employeeCode: string | null;
     employeeName: string;
     employeeProfession: string;
     employeeType: string;
@@ -109,6 +111,7 @@ const filteredRecords = computed(() => {
         ? props.records.filter((record) =>
               [
                   record.employeeName,
+                  record.employeeCode,
                   record.employeeProfession,
                   props.employeeTypes[record.employeeType],
                   record.projectName,
@@ -125,7 +128,7 @@ const filteredRecords = computed(() => {
     return [...records].sort((first, second) => {
         const valueFor = (record: AttendanceRecord) => {
             if (sortKey.value === 'date') return record.dateRaw;
-            if (sortKey.value === 'employee') return record.employeeName;
+            if (sortKey.value === 'employee') return record.employeeCode || record.employeeName;
             if (sortKey.value === 'type') return props.employeeTypes[record.employeeType];
             if (sortKey.value === 'project') return record.reason || record.projectName || '';
             if (sortKey.value === 'status') return record.status;
@@ -193,6 +196,8 @@ const submittedByLabel = (record: AttendanceRecord) => {
 
     return record.submittedByRole === 'admin' ? `${record.submittedBy} (Admin)` : record.submittedBy;
 };
+
+const employeeDisplayName = (record: AttendanceRecord) => (record.employeeCode ? `${record.employeeCode} - ${record.employeeName}` : record.employeeName);
 
 const actualAttendanceId = (record: AttendanceRecord) => {
     const match = record.id.match(/^attendance-(\d+)$/);
@@ -480,7 +485,7 @@ const updateAttendance = () => {
                         >
                             <span class="text-muted-foreground">{{ record.date }}</span>
                             <div class="min-w-0">
-                                <p class="truncate font-medium">{{ record.employeeName }}</p>
+                                <p class="truncate font-medium">{{ employeeDisplayName(record) }}</p>
                                 <p class="truncate text-xs text-muted-foreground">{{ record.employeeProfession }}</p>
                             </div>
                             <span class="truncate text-muted-foreground">{{ employeeTypes[record.employeeType] }}</span>

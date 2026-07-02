@@ -21,6 +21,7 @@ interface ProjectAttendance {
 
 interface AttendanceRecord {
     id: number | string;
+    employeeCode: string | null;
     employeeName: string;
     employeeProfession: string;
     employeeType: string;
@@ -45,6 +46,7 @@ interface MonthlySummary {
 
 interface CompletedLongLeave {
     id: number;
+    employeeCode: string | null;
     employeeName: string;
     employeeProfession: string;
     employeeType: string;
@@ -111,10 +113,13 @@ const matchesSearch = (record: AttendanceRecord, query: string) => {
         return true;
     }
 
-    return [record.employeeName, record.employeeProfession, record.projectName, record.leaveReason, record.status, record.submittedBy]
+    return [record.employeeName, record.employeeCode, record.employeeProfession, record.projectName, record.leaveReason, record.status, record.submittedBy]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalized));
 };
+
+const employeeDisplayName = (record: Pick<AttendanceRecord | CompletedLongLeave, 'employeeCode' | 'employeeName'>) =>
+    record.employeeCode ? `${record.employeeCode} - ${record.employeeName}` : record.employeeName;
 
 const submittedByLabel = (record: AttendanceRecord) => {
     if (!record.submittedBy) {
@@ -207,7 +212,7 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                     <div v-for="leave in completedLongLeaves" :key="leave.id" class="rounded-md border border-amber-600/20 bg-background/70 p-3 text-sm">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
-                                <p class="truncate font-medium text-foreground">{{ leave.employeeName }}</p>
+                                <p class="truncate font-medium text-foreground">{{ employeeDisplayName(leave) }}</p>
                                 <p class="truncate text-xs text-muted-foreground">{{ leave.employeeProfession }} - {{ leave.durationDays }} days</p>
                             </div>
                             <span class="shrink-0 rounded-full border border-amber-600/30 px-2 py-1 text-xs text-amber-700">Ended {{ leave.endDateLabel }}</span>
@@ -326,7 +331,7 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                         <div class="max-h-96 overflow-auto">
                             <div v-for="record in filteredRopeRecords" :key="record.id" class="grid min-w-[760px] grid-cols-[1fr_0.75fr_0.6fr_0.55fr_0.8fr] items-center gap-3 border-b px-3 py-3 text-sm last:border-b-0">
                                 <div class="min-w-0">
-                                    <p class="truncate font-medium">{{ record.employeeName }}</p>
+                                    <p class="truncate font-medium">{{ employeeDisplayName(record) }}</p>
                                     <p class="truncate text-xs text-muted-foreground">{{ record.employeeProfession }}</p>
                                 </div>
                                 <span class="truncate text-muted-foreground">{{ record.leaveReason || record.projectName || '-' }}</span>
@@ -367,7 +372,7 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                         <div class="max-h-96 overflow-auto">
                             <div v-for="record in filteredContractingRecords" :key="record.id" class="grid min-w-[760px] grid-cols-[1fr_0.75fr_0.6fr_0.55fr_0.8fr] items-center gap-3 border-b px-3 py-3 text-sm last:border-b-0">
                                 <div class="min-w-0">
-                                    <p class="truncate font-medium">{{ record.employeeName }}</p>
+                                    <p class="truncate font-medium">{{ employeeDisplayName(record) }}</p>
                                     <p class="truncate text-xs text-muted-foreground">{{ record.employeeProfession }}</p>
                                 </div>
                                 <span class="truncate text-muted-foreground">{{ record.leaveReason || record.projectName || '-' }}</span>

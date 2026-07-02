@@ -8,6 +8,7 @@ import { computed, reactive, ref, watch } from 'vue';
 
 interface Employee {
     id: number;
+    code: string | null;
     name: string;
     profession: string;
     type: string;
@@ -17,6 +18,7 @@ interface Employee {
 
 interface PayrollRow {
     employeeId: number;
+    employeeCode: string | null;
     employeeName: string;
     employeeProfession: string;
     employeeType: string;
@@ -167,6 +169,7 @@ const filteredRows = computed(() => {
         ? props.payrollRows.filter((row) =>
               [
                   row.employeeName,
+                  row.employeeCode,
                   row.employeeProfession,
                   props.employeeTypes[row.employeeType],
                   props.salaryRules[row.salaryRule],
@@ -182,7 +185,7 @@ const filteredRows = computed(() => {
         const totalBalance = (row: PayrollRow) => row.totalSalary + numericAdjustment(row.employeeId, 'bonusExtra') + numericAdjustment(row.employeeId, 'previousBalance');
         const balance = (row: PayrollRow) => totalBalance(row) - numericAdjustment(row.employeeId, 'deduction') - numericAdjustment(row.employeeId, 'paidByCash');
         const valueFor = (row: PayrollRow) => {
-            if (sortKey.value === 'employee') return row.employeeName;
+            if (sortKey.value === 'employee') return row.employeeCode || row.employeeName;
             if (sortKey.value === 'days') return row.presentDays;
             if (sortKey.value === 'absent') return row.absentDays;
             if (sortKey.value === 'per_day') return row.dailySalary;
@@ -220,6 +223,8 @@ const allVisibleSelected = computed(() => visibleRowIds.value.length > 0 && sele
 const someVisibleSelected = computed(() => selectedVisibleCount.value > 0 && !allVisibleSelected.value);
 
 const selectedRows = computed(() => props.payrollRows.filter((row) => selectedEmployeeIds.value.includes(row.employeeId)));
+
+const employeeDisplayName = (row: PayrollRow) => (row.employeeCode ? `${row.employeeCode} - ${row.employeeName}` : row.employeeName);
 
 const bulkPayslipsUrl = computed(() => {
     const params = new URLSearchParams({
@@ -919,7 +924,7 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                     <td class="px-3 py-3 text-muted-foreground">{{ index + 1 }}</td>
                                     <td class="px-3 py-3">
                                         <div class="min-w-0">
-                                            <p class="truncate font-medium">{{ row.employeeName }}</p>
+                                            <p class="truncate font-medium">{{ employeeDisplayName(row) }}</p>
                                             <p class="truncate text-xs text-muted-foreground">{{ row.employeeProfession }} - {{ employeeTypes[row.employeeType] }}</p>
                                         </div>
                                     </td>

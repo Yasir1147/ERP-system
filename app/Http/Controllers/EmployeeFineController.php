@@ -211,7 +211,7 @@ class EmployeeFineController extends Controller
                 'profession' => $employee->profession,
                 'type' => $employee->type,
                 'status' => $employee->status,
-                'label' => trim($employee->code.' - '.$employee->name.' - '.$employee->profession),
+                'label' => collect([$employee->code, $employee->name, $employee->profession])->filter()->implode(' - '),
             ]);
     }
 
@@ -271,10 +271,10 @@ class EmployeeFineController extends Controller
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query
-                        ->where('reason', 'like', '%'.$search.'%')
-                        ->orWhere('note', 'like', '%'.$search.'%')
-                        ->orWhere('admin_note', 'like', '%'.$search.'%')
-                        ->orWhere('status', 'like', '%'.$search.'%')
+                        ->where('employee_fines.reason', 'like', '%'.$search.'%')
+                        ->orWhere('employee_fines.note', 'like', '%'.$search.'%')
+                        ->orWhere('employee_fines.admin_note', 'like', '%'.$search.'%')
+                        ->orWhere('employee_fines.status', 'like', '%'.$search.'%')
                         ->orWhereHas('employee', function ($query) use ($search) {
                             $query
                                 ->where('code', 'like', '%'.$search.'%')
