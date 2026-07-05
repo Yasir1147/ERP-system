@@ -19,7 +19,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::table('attendance_records')->whereNull('project_id')->delete();
+        // DB::table('attendance_records')->whereNull('project_id')->delete();
         DB::statement('ALTER TABLE attendance_records MODIFY project_id BIGINT UNSIGNED NOT NULL');
 
         Schema::table('attendance_records', function (Blueprint $table) {
