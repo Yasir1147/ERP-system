@@ -11,6 +11,7 @@ import { computed, ref } from 'vue';
 
 interface PayrollSetting {
     dailySalary: string;
+    monthlySalary: string;
     salaryRule: string;
     standardHoursPerDay: number;
     isOvertimeEnabled: boolean;
@@ -56,12 +57,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 const filterType = ref(props.filters.type);
 const editingEmployeeId = ref<number | null>(null);
 const search = ref('');
-type SortKey = 'employee' | 'daily_salary' | 'salary_rule' | 'hours_per_day' | 'overtime';
+type SortKey = 'employee' | 'daily_salary' | 'monthly_salary' | 'salary_rule' | 'hours_per_day' | 'overtime';
 const sortKey = ref<SortKey>('employee');
 const sortDirection = ref<'asc' | 'desc'>('asc');
 
 const settingForm = useForm({
     daily_salary: '0.00',
+    monthly_salary: '',
     salary_rule: 'present_days',
     standard_hours_per_day: 8,
     is_overtime_enabled: true,
@@ -76,7 +78,11 @@ const absenceRuleForm = useForm({
 
 const sortValue = (employee: Employee, key: SortKey) => {
     if (key === 'daily_salary') {
-        return Number(employee.payrollSetting.dailySalary);
+        return displayDailySalary(employee);
+    }
+
+    if (key === 'monthly_salary') {
+        return Number(employee.payrollSetting.monthlySalary || 0);
     }
 
     if (key === 'salary_rule') {
@@ -92,6 +98,14 @@ const sortValue = (employee: Employee, key: SortKey) => {
     }
 
     return employee.code ? `${employee.code.padStart(12, '0')} ${employee.name}` : employee.name;
+};
+
+const displayDailySalary = (employee: Employee) => {
+    if (employee.payrollSetting.salaryRule === 'fixed_30_days' && employee.payrollSetting.monthlySalary) {
+        return Number(employee.payrollSetting.monthlySalary) / 30;
+    }
+
+    return Number(employee.payrollSetting.dailySalary);
 };
 
 const sortEmployees = (key: string) => {
@@ -147,6 +161,7 @@ const startEditing = (employee: Employee) => {
     editingEmployeeId.value = employee.id;
     settingForm.clearErrors();
     settingForm.daily_salary = employee.payrollSetting.dailySalary;
+    settingForm.monthly_salary = employee.payrollSetting.monthlySalary;
     settingForm.salary_rule = employee.payrollSetting.salaryRule;
     settingForm.standard_hours_per_day = employee.payrollSetting.standardHoursPerDay;
     settingForm.is_overtime_enabled = employee.payrollSetting.isOvertimeEnabled;
@@ -246,24 +261,40 @@ const updateAbsenceRule = () => {
                     </div>
                 </div>
                 <div class="mt-4 overflow-hidden rounded-md border">
-                    <div class="grid min-w-[980px] grid-cols-[1fr_0.75fr_0.7fr_0.7fr_0.65fr_120px] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+                    <div class="grid min-w-[1160px] grid-cols-[1fr_0.7fr_0.7fr_0.7fr_0.65fr_0.6fr_120px] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
                         <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
                         <SortableHeader label="Daily Salary" column="daily_salary" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
+                        <SortableHeader label="Monthly Salary" column="monthly_salary" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
                         <SortableHeader label="Salary Rule" column="salary_rule" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
                         <SortableHeader label="Hours / Day" column="hours_per_day" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
                         <SortableHeader label="Overtime" column="overtime" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortEmployees" />
                         <span class="text-right">Actions</span>
                     </div>
                     <div class="max-h-[640px] overflow-auto">
-                        <div v-for="employee in employeeOptions" :key="employee.id" class="grid min-w-[980px] grid-cols-[1fr_0.75fr_0.7fr_0.7fr_0.65fr_120px] items-start gap-3 border-b px-3 py-3 text-sm last:border-b-0">
+                        <div v-for="employee in employeeOptions" :key="employee.id" class="grid min-w-[1160px] grid-cols-[1fr_0.7fr_0.7fr_0.7fr_0.65fr_0.6fr_120px] items-start gap-3 border-b px-3 py-3 text-sm last:border-b-0">
                             <div class="min-w-0">
                                 <p class="truncate font-medium">{{ employee.code ? `${employee.code} - ${employee.name}` : employee.name }}</p>
                                 <p class="truncate text-xs text-muted-foreground">{{ employee.profession }} - {{ employeeTypes[employee.type] }}</p>
                             </div>
                             <div>
                                 <Input v-if="editingEmployeeId === employee.id" v-model="settingForm.daily_salary" type="number" min="0" step="0.01" />
-                                <span v-else>{{ money(Number(employee.payrollSetting.dailySalary)) }}</span>
+                                <span v-else>{{ money(displayDailySalary(employee)) }}</span>
                                 <InputError v-if="editingEmployeeId === employee.id" :message="settingForm.errors.daily_salary" class="mt-2" />
+                            </div>
+                            <div>
+                                <template v-if="editingEmployeeId === employee.id">
+                                    <Input
+                                        v-model="settingForm.monthly_salary"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        :disabled="settingForm.salary_rule !== 'fixed_30_days'"
+                                        :placeholder="settingForm.salary_rule === 'fixed_30_days' ? 'Monthly amount' : 'Present days only'"
+                                    />
+                                    <p v-if="settingForm.salary_rule === 'fixed_30_days'" class="mt-1 text-[11px] leading-tight text-muted-foreground">Used as exact fixed salary.</p>
+                                </template>
+                                <span v-else>{{ employee.payrollSetting.salaryRule === 'fixed_30_days' && employee.payrollSetting.monthlySalary ? money(Number(employee.payrollSetting.monthlySalary)) : '-' }}</span>
+                                <InputError v-if="editingEmployeeId === employee.id" :message="settingForm.errors.monthly_salary" class="mt-2" />
                             </div>
                             <div>
                                 <select

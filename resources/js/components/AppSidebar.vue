@@ -4,7 +4,7 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { Banknote, BriefcaseBusiness, CalendarCheck, LayoutGrid, Plane, ReceiptText, UserCog, Users } from 'lucide-vue-next';
+import { Banknote, BriefcaseBusiness, Building2, CalendarCheck, CircleDollarSign, LayoutGrid, Plane, ReceiptText, UserCog, Users } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -60,6 +60,26 @@ const mainNavItems: NavItem[] = [
         title: 'Fines',
         href: '/fines',
         icon: ReceiptText,
+    },
+    {
+        title: 'Expenses',
+        href: '/expenses',
+        icon: CircleDollarSign,
+    },
+    {
+        title: 'Office Staff',
+        href: '/office-staff',
+        icon: Building2,
+        items: [
+            {
+                title: 'Staff List',
+                href: '/office-staff',
+            },
+            {
+                title: 'Attendance Report',
+                href: '/office-attendance/report',
+            },
+        ],
     },
     {
         title: 'Payroll',

@@ -4,8 +4,12 @@ use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AttendanceTimesheetController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeExpenseController;
 use App\Http\Controllers\EmployeeFineController;
 use App\Http\Controllers\EmployeeLeaveController;
+use App\Http\Controllers\OfficeAttendanceController;
+use App\Http\Controllers\OfficeAttendanceReportController;
+use App\Http\Controllers\OfficeStaffController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PublicAttendanceController;
@@ -25,6 +29,10 @@ Route::get('/', function (Request $request) {
             : redirect()->route('public-attendance.contracting.create');
     }
 
+    if ($request->user()->role === User::ROLE_OFFICE_STAFF) {
+        return redirect()->route('office-attendance.create');
+    }
+
     return redirect()->route('dashboard');
 })->name('home');
 
@@ -37,6 +45,8 @@ Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class,
 Route::get('attendance/timesheet-print', [AttendanceTimesheetController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.print');
 
 Route::middleware(['attendance.access'])->group(function () {
+    Route::get('expenses/create', [EmployeeExpenseController::class, 'create'])->name('expenses.create');
+    Route::post('expenses', [EmployeeExpenseController::class, 'store'])->name('expenses.store');
     Route::get('fines/create', [EmployeeFineController::class, 'create'])->name('fines.create');
     Route::post('fines', [EmployeeFineController::class, 'store'])->name('fines.store');
     Route::get('mark-attendance', [PublicAttendanceController::class, 'create'])->name('public-attendance.create');
@@ -53,6 +63,11 @@ Route::middleware(['attendance.access'])->group(function () {
     Route::post('mark-attendance/rope-access', [PublicAttendanceController::class, 'store'])
         ->defaults('type', 'rope_access')
         ->name('public-attendance.rope-access.store');
+});
+
+Route::middleware(['auth', 'role:office_staff'])->group(function () {
+    Route::get('office-attendance/mark', [OfficeAttendanceController::class, 'create'])->name('office-attendance.create');
+    Route::post('office-attendance/mark', [OfficeAttendanceController::class, 'store'])->name('office-attendance.store');
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
@@ -84,6 +99,15 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('fines', [EmployeeFineController::class, 'index'])->name('fines.index');
     Route::post('fines/{employeeFine}/apply', [EmployeeFineController::class, 'apply'])->name('fines.apply');
     Route::post('fines/{employeeFine}/waive', [EmployeeFineController::class, 'waive'])->name('fines.waive');
+    Route::get('expenses', [EmployeeExpenseController::class, 'index'])->name('expenses.index');
+    Route::post('expenses/{employeeExpense}/approve', [EmployeeExpenseController::class, 'approve'])->name('expenses.approve');
+    Route::post('expenses/{employeeExpense}/reject', [EmployeeExpenseController::class, 'reject'])->name('expenses.reject');
+    Route::delete('expenses/{employeeExpense}', [EmployeeExpenseController::class, 'destroy'])->name('expenses.destroy');
+    Route::resource('office-staff', OfficeStaffController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::get('office-attendance/report', [OfficeAttendanceReportController::class, 'index'])->name('office-attendance.report');
+    Route::get('office-attendance/report/{officeStaff}/details', [OfficeAttendanceReportController::class, 'details'])->name('office-attendance.details');
+    Route::put('office-attendance/report/{officeAttendance}', [OfficeAttendanceReportController::class, 'update'])->name('office-attendance.update');
+    Route::get('office-attendance/report-print', [OfficeAttendanceReportController::class, 'print'])->name('office-attendance.report.print');
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::get('payroll/report', [PayrollController::class, 'report'])->name('payroll.report');
     Route::get('payroll/report-print', [PayrollController::class, 'reportPrint'])->name('payroll.report-print');

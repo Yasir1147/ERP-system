@@ -46,6 +46,7 @@ class PublicAttendanceController extends Controller
             'employeeType' => $type,
             'employeeTypeLabel' => Employee::TYPES[$type],
             'submitUrl' => $this->submitUrl($type),
+            'expenseCreateUrl' => $type === 'rope_access' ? '/expenses/create?type=rope_access' : null,
             'attendanceDateMin' => $dateRange['min'],
             'attendanceDateMax' => $dateRange['max'],
             'attendanceDateHelp' => $dateRange['message'],
@@ -138,7 +139,7 @@ class PublicAttendanceController extends Controller
             ->whereDate('end_date', '>=', $leaveStartDate)
             ->pluck('employee_id');
 
-        $unavailableIds = $employeeUnavailableIds->merge($leaveRangeEmployeeIds)->unique()->values();
+        $unavailableIds = $employeeUnavailableIds->merge($leaveRangeEmployeeIds)->uniqid()->values();
 
         if ($unavailableIds->isNotEmpty()) {
             $names = Employee::query()

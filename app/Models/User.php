@@ -16,6 +16,8 @@ class User extends Authenticatable
 
     public const ROLE_ATTENDANCE = 'attendance_user';
 
+    public const ROLE_OFFICE_STAFF = 'office_staff';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -32,6 +34,7 @@ class User extends Authenticatable
         'attendance_backdate_to',
         'attendance_employee_type',
         'receive_fine_emails',
+        'email_verified_at',
     ];
 
     /**
@@ -69,6 +72,11 @@ class User extends Authenticatable
     public function isAttendanceUser(): bool
     {
         return $this->role === self::ROLE_ATTENDANCE;
+    }
+
+    public function isOfficeStaff(): bool
+    {
+        return $this->role === self::ROLE_OFFICE_STAFF;
     }
 
     public function attendanceDateRange(): array

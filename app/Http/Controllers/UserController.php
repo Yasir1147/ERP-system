@@ -17,6 +17,7 @@ class UserController extends Controller
     {
         return Inertia::render('Users/Index', [
             'users' => User::query()
+                ->where('role', '!=', User::ROLE_OFFICE_STAFF)
                 ->latest()
                 ->get([
                     'id',

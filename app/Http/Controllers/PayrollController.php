@@ -153,10 +153,15 @@ class PayrollController extends Controller
     {
         $data = $request->validate([
             'daily_salary' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
+            'monthly_salary' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'salary_rule' => ['required', Rule::in(array_keys(EmployeePayrollSetting::RULES))],
             'standard_hours_per_day' => ['required', 'integer', 'min:1', 'max:24'],
             'is_overtime_enabled' => ['required', 'boolean'],
         ]);
+
+        $data['monthly_salary'] = $data['salary_rule'] === EmployeePayrollSetting::RULE_FIXED_30_DAYS
+            ? round((float) ($data['monthly_salary'] ?? ((float) $data['daily_salary'] * 30)), 2)
+            : null;
 
         $employee->payrollSetting()->updateOrCreate(
             ['employee_id' => $employee->id],
@@ -626,8 +631,14 @@ class PayrollController extends Controller
         $overtimeHours = (int) $employeeRecords->sum(fn ($record) => (int) ($record->overtime_hours ?? 0));
         $dailySalary = (float) ($setting?->daily_salary ?? 0);
         $salaryRule = $setting?->salary_rule ?? EmployeePayrollSetting::RULE_PRESENT_DAYS;
+        $monthlySalary = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
+            ? (float) ($setting?->monthly_salary ?? round($dailySalary * 30, 2))
+            : null;
+        $effectiveDailySalary = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS && $monthlySalary !== null
+            ? $monthlySalary / 30
+            : $dailySalary;
         $standardHours = max(1, (int) ($setting?->standard_hours_per_day ?? 8));
-        $hourlyRate = $dailySalary / $standardHours;
+        $hourlyRate = $effectiveDailySalary / $standardHours;
         $presentDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
             ? min($realPresentDays, 30)
             : $realPresentDays;
@@ -637,9 +648,11 @@ class PayrollController extends Controller
         $effectiveRealAbsentDays = min($realAbsentDays, $absentDays);
         $effectiveLeaveDeductedAsAbsentDays = max(0, $absentDays - $effectiveRealAbsentDays);
         $payableDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS ? 30 : $presentDays;
-        $basicSalary = $dailySalary * $payableDays;
+        $basicSalary = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
+            ? (float) ($monthlySalary ?? 0)
+            : $dailySalary * $payableDays;
         $absenceDeduction = $absenceSettings['enabled'] && $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
-            ? $dailySalary * $absentDays
+            ? $effectiveDailySalary * $absentDays
             : 0;
         $overtimeAmount = $setting?->is_overtime_enabled === false ? 0 : $overtimeHours * $hourlyRate;
         $totalSalary = $basicSalary + $overtimeAmount;
@@ -675,7 +688,9 @@ class PayrollController extends Controller
             'employeeName' => $employee->name,
             'employeeProfession' => $employee->profession,
             'employeeType' => $employee->type,
-            'dailySalary' => round($dailySalary, 2),
+            'dailySalary' => round($effectiveDailySalary, 2),
+            'configuredDailySalary' => round($dailySalary, 2),
+            'monthlySalary' => $monthlySalary !== null ? round($monthlySalary, 2) : null,
             'salaryRule' => $salaryRule,
             'standardHoursPerDay' => $standardHours,
             'presentDays' => $presentDays,
@@ -828,6 +843,7 @@ class PayrollController extends Controller
 
         return [
             'dailySalary' => (string) ($setting?->daily_salary ?? '0.00'),
+            'monthlySalary' => (string) ($setting?->monthly_salary ?? ''),
             'salaryRule' => $setting?->salary_rule ?? EmployeePayrollSetting::RULE_PRESENT_DAYS,
             'standardHoursPerDay' => (int) ($setting?->standard_hours_per_day ?? 8),
             'isOvertimeEnabled' => $setting?->is_overtime_enabled ?? true,

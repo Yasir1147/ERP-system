@@ -141,6 +141,8 @@ The login page uses a two-column desktop layout with a rope-access/construction 
 
 /fines is the admin employee fine module. Allowed attendance users can submit fine tickets from /fines/create or the Mark Attendance page link; the Mark Attendance link passes the current employee type so Rope Access pages only list Rope Access employees and Contracting pages only list Contracting employees. Admin users review pending fines, waive them, or apply them to a selected payroll month. Applying a fine increases that employee's payroll deduction and appends a "Fine: reason - amount" remark on the payroll adjustment.
 
+`/expenses` is the admin daily expense module for Rope Access bills. Attendance users with Rope Access access can submit expense bills from `/expenses/create?type=rope_access` or the Rope Access Mark Attendance page link. The form stores expense date, purpose, amount, optional note, and receipt image. The receipt file input uses mobile camera capture hints, so phones can take a receipt photo directly from the upload control. Selected receipt photos are compressed in the browser before upload to avoid large mobile-camera files being rejected, while the server allows receipt images up to 10 MB. Client-side OCR reads the selected receipt image and suggests purpose and total amount, including common receipt and invoice labels like grand total, net total, total amount, and cash withdrawal, but users must verify/edit those fields before submitting because receipt quality can vary. Receipt images are stored on the Laravel public disk under `expense-receipts`, so `php artisan storage:link` must exist on the server. Admin users can filter by date range/status/search, see totals, open receipt images, approve/reject submitted expense bills, and delete expense bills; deleting also removes the stored receipt image.
+
 Attendance users can be restricted to All Employee Types, Rope Access only, or Contracting only from the Users page. This restriction is independent from backdate access and applies to Mark Attendance routes and fine ticket creation routes, so a Rope Access-only user cannot open Contracting attendance or Contracting fine ticket links.
 
 When an already-authenticated attendance user hits a restricted employee-type route, the Access Denied page should offer a logout action. Do not send authenticated users directly to /login from that state, because /login is a guest route and will not switch accounts cleanly.
@@ -173,6 +175,7 @@ Dashboard and admin modules:
 /projects/rope_access
 /projects/contracting
 /employee-leaves
+/expenses
 /payroll
 /payroll/report
 /users
@@ -249,6 +252,10 @@ After a successful attendance submission, the public attendance form clears the 
 
 Public attendance custom dropdowns should close when the user clicks outside the open dropdown.
 
+The public attendance employee search text should reset whenever the employee dropdown closes, including outside clicks and button-toggle close. Selected employees must remain selected while only the search filter is cleared.
+
+The app appearance defaults to Light, not System, so desktop and mobile users see the white theme unless they explicitly choose Dark or System from Settings > Appearance. Theme initialization should run before the Vue app mounts to avoid a dark first paint on mobile browsers.
+
 Monthly attendance timesheet is available at:
 
 ```text
@@ -297,6 +304,7 @@ Payroll calculates monthly salary from attendance and salary settings.
 Supported payroll concepts:
 
 - Per-day salary
+- Exact monthly salary for Fixed 30 Days employees
 - Fixed 30 days rule
 - Present-days rule
 - Overtime hours
@@ -315,7 +323,9 @@ Supported payroll concepts:
 
 Previous balance carries forward month-to-month. Admin can manually override previous balance when needed.
 
-Payroll > Absence Deduction Rule controls absent salary deduction. The current recommended rule is a global on/off setting that applies to Fixed 30 Days employees only. When enabled, fixed-salary employees keep their fixed 30-day basic salary, but payroll subtracts `absent days * daily salary` as a separate Absent Deduction before manual deduction and paid cash. Present-days employees are already paid only for attended days, so absent deduction remains 0 for them.
+Payroll settings support an exact `Monthly Salary` for Fixed 30 Days employees. Payroll uses that monthly value as the fixed base salary, then derives the daily and hourly basis from `monthly salary / 30` for absent deduction and overtime. This avoids rounded daily salary issues such as `56.65 * 30 = 1699.50` when the intended monthly salary is `1700.00`. Present-days employees continue to use per-day salary only.
+
+Payroll > Absence Deduction Rule controls absent salary deduction. The current recommended rule is a global on/off setting that applies to Fixed 30 Days employees only. When enabled, fixed-salary employees keep their fixed 30-day basic salary, but payroll subtracts `absent days * fixed daily basis` as a separate Absent Deduction before manual deduction and paid cash. Present-days employees are already paid only for attended days, so absent deduction remains 0 for them.
 
 Leaves approved for payroll deduction are included inside the existing Absent count instead of adding a separate payroll column. For example, if admin applies 2 days from a 3-day leave as absent, payroll shows those 2 days inside Absent and the Absent Deduction follows the active absence deduction rule. Remarks show the leave deduction reason.
 
@@ -344,6 +354,8 @@ Core admin/reporting lists use clickable sortable headers with ascending/descend
 Leave list rows are converted to base collections before merging long leave, daily leave, and absent records. This avoids Laravel Eloquent collection merge errors when the rows are already mapped to arrays.
 
 Payroll print pages use `public/al-mohafiz-logo.png` for both the document logo and browser tab favicon.
+
+Browser favicons should use Al Mohafiz assets only. The main Inertia layout and print pages should point to `public/favicon-32x32.png` or `public/favicon.ico` with an `al-mohafiz` cache-busting query so old browser icons do not remain visible.
 
 Payslip print pages use visible page borders, full grid borders on salary tables, stronger inner summary borders, and high-contrast text so printed salary details remain readable.
 
@@ -382,6 +394,45 @@ Employee Summary should show:
 All application UI text, validation messages, alerts, and exports should be in English only.
 
 Do not add Urdu or Roman Urdu text in code, Vue pages, Blade views, controllers, validation messages, or exported PDF/CSV labels.
+
+## Office Staff Attendance Module
+
+Office staff are managed separately from regular attendance users. Admin creates staff from `Office Staff > Staff List`; the system creates a linked `office_staff` user automatically with username-only login. Admin can edit the staff username from the Office Staff list; this updates the linked login user and must remain unique.
+
+The application timezone is `Asia/Dubai` through `APP_TIMEZONE`. Check-in/check-out times use Laravel `now()`, so server `.env` must include `APP_TIMEZONE=Asia/Dubai` and config cache must be cleared after changing it.
+
+Office staff can mark only their own daily office attendance from `/office-attendance/mark`.
+Office staff login must always redirect to `/office-attendance/mark`, even if the browser previously opened an admin-only page. Do not use Laravel's intended URL redirect for office staff or attendance users because it can send them back to a forbidden admin route and show a 403.
+
+Work modes:
+
+- Office Work
+- Remote Work
+
+Office attendance also tracks optional check-in and check-out times:
+
+- Staff can save current server time using Check In and Check Out buttons on `/office-attendance/mark`.
+- Office attendance supports multiple check-in/check-out sessions in the same day. Check In is available when there is no open session. After check-in, Check In is disabled and Check Out remains available until checkout is saved. After checkout, Check In becomes available again as "Check In Again". Checkout before check-in and duplicate checkout attempts are blocked by the controller.
+- Staff can still update work mode and note for the current day.
+- Admin can edit work mode, first check-in time, last check-out time, and note from `Office Staff > Attendance Report`. The details popup and print report show the session count and session summary for repeated same-day check-ins.
+- Existing attendance records can remain without check-in/check-out times because both fields are nullable.
+
+Admin can review office staff attendance from `Office Staff > Attendance Report`. The report supports:
+
+- Date range filter, including multi-month ranges such as January to July.
+- All staff or single staff filter.
+- Remote/office work mode filter.
+- Search by code, name, designation, or note.
+- Staff summary rows with a Details action. The Details popup uses a wide desktop dialog and shows that staff member's attendance rows, date/mode/search filters, inline admin edits, and a selected-staff PDF link. Its detail table keeps check-in, check-out, and session columns wide enough for time picker controls and repeated session text.
+- Browser print/PDF report from `/office-attendance/report-print`, including check-in and check-out time columns.
+
+Database tables:
+
+- `office_staff`
+- `office_staff_attendances`
+- `office_staff_attendance_sessions`
+
+Office staff users are intentionally hidden from the normal `Users` admin page. Manage them from the Office Staff module to avoid mixing admin/attendance-user permissions with staff attendance logins.
 
 ## Safety Checklist Before Major Changes
 

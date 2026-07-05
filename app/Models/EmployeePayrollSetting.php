@@ -21,6 +21,7 @@ class EmployeePayrollSetting extends Model
     protected $fillable = [
         'employee_id',
         'daily_salary',
+        'monthly_salary',
         'salary_rule',
         'standard_hours_per_day',
         'is_overtime_enabled',
@@ -28,6 +29,7 @@ class EmployeePayrollSetting extends Model
 
     protected $casts = [
         'daily_salary' => 'decimal:2',
+        'monthly_salary' => 'decimal:2',
         'standard_hours_per_day' => 'integer',
         'is_overtime_enabled' => 'boolean',
     ];

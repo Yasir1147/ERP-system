@@ -54,7 +54,7 @@ class LoginRequest extends FormRequest
             $this->failAuthentication();
         }
 
-        if ($user->role === User::ROLE_ATTENDANCE && $user->username === $login) {
+        if (in_array($user->role, [User::ROLE_ATTENDANCE, User::ROLE_OFFICE_STAFF], true) && $user->username === $login) {
             Auth::login($user, $this->boolean('remember'));
             RateLimiter::clear($this->throttleKey());
 

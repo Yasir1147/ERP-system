@@ -36,8 +36,12 @@ class AuthenticatedSessionController extends Controller
 
         if ($request->user()->role === User::ROLE_ATTENDANCE) {
             return $request->user()->defaultAttendanceType() === 'rope_access'
-                ? redirect()->intended(route('public-attendance.rope-access.create', absolute: false))
-                : redirect()->intended(route('public-attendance.contracting.create', absolute: false));
+                ? redirect()->route('public-attendance.rope-access.create')
+                : redirect()->route('public-attendance.contracting.create');
+        }
+
+        if ($request->user()->role === User::ROLE_OFFICE_STAFF) {
+            return redirect()->route('office-attendance.create');
         }
 
         return redirect()->intended(route('dashboard', absolute: false));
