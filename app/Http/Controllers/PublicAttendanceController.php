@@ -139,7 +139,7 @@ class PublicAttendanceController extends Controller
             ->whereDate('end_date', '>=', $leaveStartDate)
             ->pluck('employee_id');
 
-        $unavailableIds = $employeeUnavailableIds->merge($leaveRangeEmployeeIds)->uniqid()->values();
+        $unavailableIds = $employeeUnavailableIds->merge($leaveRangeEmployeeIds)->unique()->values();
 
         if ($unavailableIds->isNotEmpty()) {
             $names = Employee::query()
