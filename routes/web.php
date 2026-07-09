@@ -30,7 +30,7 @@ Route::get('/', function (Request $request) {
     }
 
     if ($request->user()->role === User::ROLE_OFFICE_STAFF) {
-        return redirect()->route('office-attendance.create');
+        return redirect()->route('office-attendance.staff.index');
     }
 
     return redirect()->route('dashboard');
@@ -40,6 +40,7 @@ Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verifi
 
 Route::get('attendance', AttendanceReportController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.index');
 Route::put('attendance/{attendanceRecord}', [AttendanceReportController::class, 'update'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.update');
+Route::delete('attendance/{attendanceRecord}', [AttendanceReportController::class, 'destroy'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.destroy');
 Route::get('attendance/timesheet', AttendanceTimesheetController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet');
 Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.export');
 Route::get('attendance/timesheet-print', [AttendanceTimesheetController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.print');
@@ -64,6 +65,10 @@ Route::middleware(['attendance.access'])->group(function () {
         ->defaults('type', 'rope_access')
         ->name('public-attendance.rope-access.store');
 });
+
+Route::get('office-attendance/staff', [OfficeAttendanceController::class, 'index'])->name('office-attendance.staff.index');
+Route::get('office-attendance/mark/{officeStaff}', [OfficeAttendanceController::class, 'create'])->name('office-attendance.staff.create');
+Route::post('office-attendance/mark/{officeStaff}', [OfficeAttendanceController::class, 'store'])->name('office-attendance.staff.store');
 
 Route::middleware(['auth', 'role:office_staff'])->group(function () {
     Route::get('office-attendance/mark', [OfficeAttendanceController::class, 'create'])->name('office-attendance.create');
@@ -107,6 +112,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('office-attendance/report', [OfficeAttendanceReportController::class, 'index'])->name('office-attendance.report');
     Route::get('office-attendance/report/{officeStaff}/details', [OfficeAttendanceReportController::class, 'details'])->name('office-attendance.details');
     Route::put('office-attendance/report/{officeAttendance}', [OfficeAttendanceReportController::class, 'update'])->name('office-attendance.update');
+    Route::post('office-attendance/rules', [OfficeAttendanceReportController::class, 'updateRules'])->name('office-attendance.rules.update');
     Route::get('office-attendance/report-print', [OfficeAttendanceReportController::class, 'print'])->name('office-attendance.report.print');
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::get('payroll/report', [PayrollController::class, 'report'])->name('payroll.report');

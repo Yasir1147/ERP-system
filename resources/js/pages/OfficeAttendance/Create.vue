@@ -3,17 +3,19 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { CheckCircle2 } from 'lucide-vue-next';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { ArrowLeft, CheckCircle2 } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const props = defineProps<{
     staff: {
+        id: number;
         code: string;
         name: string;
         designation: string | null;
         staffTypeLabel: string;
         status: string;
+        photoUrl: string | null;
     };
     workModes: Record<string, string>;
     today: string;
@@ -29,6 +31,8 @@ const props = defineProps<{
         note: string | null;
         submittedAt: string | null;
     } | null;
+    submitUrl: string;
+    backUrl: string | null;
 }>();
 
 const page = usePage();
@@ -54,7 +58,7 @@ const checkInButtonLabel = computed(() => (hasAnySession.value ? 'Check In Again
 
 const submitAttendance = (action: 'save' | 'check_in' | 'check_out' = 'save') => {
     form.attendance_action = action;
-    form.post('/office-attendance/mark', {
+    form.post(props.submitUrl, {
         preserveScroll: true,
     });
 };
@@ -66,10 +70,19 @@ const submitAttendance = (action: 'save' | 'check_in' | 'check_out' = 'save') =>
     <main class="min-h-svh bg-background px-4 py-10">
         <div class="mx-auto max-w-xl">
             <div class="mb-8 text-center">
-                <AppLogoIcon class="mx-auto size-24" />
+                <img v-if="staff.photoUrl" :src="staff.photoUrl" :alt="staff.name" class="mx-auto size-24 rounded-full border object-cover shadow-sm" />
+                <AppLogoIcon v-else class="mx-auto size-24" />
                 <h1 class="mt-3 text-2xl font-semibold tracking-normal">Office Attendance</h1>
                 <p class="mt-1 text-sm text-muted-foreground">{{ staff.code }} - {{ staff.name }}</p>
                 <p class="text-xs text-muted-foreground">{{ staff.designation || staff.staffTypeLabel }}</p>
+                <Link
+                    v-if="backUrl"
+                    :href="backUrl"
+                    class="mt-3 inline-flex items-center gap-2 text-sm font-medium text-foreground underline underline-offset-4"
+                >
+                    <ArrowLeft class="size-4" />
+                    Back to staff list
+                </Link>
             </div>
 
             <form class="rounded-lg border border-sidebar-border/70 bg-card p-5 shadow-sm" @submit.prevent="submitAttendance('save')">

@@ -8,6 +8,7 @@ use App\Models\OfficeStaffAttendanceSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -15,12 +16,28 @@ use Inertia\Response;
 
 class OfficeAttendanceController extends Controller
 {
-    public function create(Request $request): Response
+    public function index(): Response
     {
-        $staff = OfficeStaff::query()
-            ->where('user_id', $request->user()->id)
-            ->where('status', OfficeStaff::STATUS_ACTIVE)
-            ->firstOrFail();
+        $todayRecords = OfficeStaffAttendance::query()
+            ->with(['sessions' => fn ($query) => $query->orderBy('check_in_time')->orderBy('id')])
+            ->whereDate('attendance_date', today())
+            ->get()
+            ->keyBy('office_staff_id');
+
+        return Inertia::render('OfficeAttendance/StaffList', [
+            'staffMembers' => OfficeStaff::query()
+                ->with('user:id,username')
+                ->where('status', OfficeStaff::STATUS_ACTIVE)
+                ->orderByRaw('cast(code as unsigned), code')
+                ->get()
+                ->map(fn (OfficeStaff $staff) => $this->staffListPayload($staff, $todayRecords->get($staff->id))),
+            'today' => today()->toDateString(),
+        ]);
+    }
+
+    public function create(Request $request, ?OfficeStaff $officeStaff = null): Response
+    {
+        $staff = $this->resolveStaff($request, $officeStaff);
 
         $todayRecord = OfficeStaffAttendance::query()
             ->with(['sessions' => fn ($query) => $query->orderBy('check_in_time')->orderBy('id')])
@@ -28,50 +45,27 @@ class OfficeAttendanceController extends Controller
             ->whereDate('attendance_date', today())
             ->first();
 
-        $sessions = $todayRecord?->sessions ?? collect();
-        $openSession = $sessions->firstWhere('check_out_time', null);
-        $lastSession = $sessions->last();
-        $sessionCount = $sessions->count();
-
-        $checkInTime = $sessions->first()?->check_in_time
-            ? substr((string) $sessions->first()->check_in_time, 0, 5)
-            : ($todayRecord?->check_in_time ? substr((string) $todayRecord->check_in_time, 0, 5) : null);
-
-        $checkOutTime = $lastSession?->check_out_time
-            ? substr((string) $lastSession->check_out_time, 0, 5)
-            : ($todayRecord?->check_out_time ? substr((string) $todayRecord->check_out_time, 0, 5) : null);
-
         return Inertia::render('OfficeAttendance/Create', [
             'staff' => [
+                'id' => $staff->id,
                 'code' => $staff->code,
                 'name' => $staff->name,
                 'designation' => $staff->designation,
                 'staffTypeLabel' => OfficeStaff::TYPES[$staff->staff_type] ?? $staff->staff_type,
                 'status' => $staff->status,
+                'photoUrl' => $this->photoUrl($staff),
             ],
             'workModes' => OfficeStaffAttendance::MODES,
             'today' => today()->toDateString(),
-            'existingRecord' => $todayRecord ? [
-                'workMode' => $todayRecord->work_mode,
-                'workModeLabel' => OfficeStaffAttendance::MODES[$todayRecord->work_mode] ?? $todayRecord->work_mode,
-                'checkInTime' => $checkInTime,
-                'checkOutTime' => $checkOutTime,
-                'hasOpenSession' => (bool) $openSession,
-                'sessionCount' => $sessionCount,
-                'latestCheckInTime' => $lastSession?->check_in_time ? substr((string) $lastSession->check_in_time, 0, 5) : null,
-                'latestCheckOutTime' => $lastSession?->check_out_time ? substr((string) $lastSession->check_out_time, 0, 5) : null,
-                'note' => $todayRecord->note,
-                'submittedAt' => $todayRecord->updated_at?->format('d/m/Y h:i A'),
-            ] : null,
+            'existingRecord' => $this->todayRecordPayload($todayRecord),
+            'submitUrl' => $officeStaff ? route('office-attendance.staff.store', $staff, false) : route('office-attendance.store', absolute: false),
+            'backUrl' => $officeStaff ? route('office-attendance.staff.index', absolute: false) : null,
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ?OfficeStaff $officeStaff = null): RedirectResponse
     {
-        $staff = OfficeStaff::query()
-            ->where('user_id', $request->user()->id)
-            ->where('status', OfficeStaff::STATUS_ACTIVE)
-            ->firstOrFail();
+        $staff = $this->resolveStaff($request, $officeStaff);
 
         $data = $request->validate([
             'work_mode' => ['required', Rule::in(array_keys(OfficeStaffAttendance::MODES))],
@@ -107,8 +101,16 @@ class OfficeAttendanceController extends Controller
             }
         }
 
+        $submitterId = $officeStaff ? $staff->user_id : $request->user()?->id;
+
+        if (! $submitterId) {
+            throw ValidationException::withMessages([
+                'staff' => 'This staff profile has no login user assigned.',
+            ]);
+        }
+
         $values = [
-            'submitted_by' => $request->user()->id,
+            'submitted_by' => $submitterId,
             'work_mode' => $data['work_mode'],
             'note' => $data['note'] ?? null,
         ];
@@ -156,6 +158,85 @@ class OfficeAttendanceController extends Controller
             default => 'Office attendance submitted.',
         };
 
-        return to_route('office-attendance.create')->with('success', $message);
+        return $officeStaff
+            ? to_route('office-attendance.staff.index')->with('success', $message)
+            : to_route('office-attendance.create')->with('success', $message);
+    }
+
+    private function resolveStaff(Request $request, ?OfficeStaff $officeStaff = null): OfficeStaff
+    {
+        if ($officeStaff) {
+            abort_unless($officeStaff->status === OfficeStaff::STATUS_ACTIVE, 404);
+
+            return $officeStaff;
+        }
+
+        $user = $request->user();
+        abort_unless($user, 403);
+
+        return OfficeStaff::query()
+            ->where('user_id', $user->id)
+            ->where('status', OfficeStaff::STATUS_ACTIVE)
+            ->firstOrFail();
+    }
+
+    private function todayRecordPayload(?OfficeStaffAttendance $todayRecord): ?array
+    {
+        if (! $todayRecord) {
+            return null;
+        }
+
+        $sessions = $todayRecord->sessions ?? collect();
+        $openSession = $sessions->firstWhere('check_out_time', null);
+        $lastSession = $sessions->last();
+
+        $checkInTime = $sessions->first()?->check_in_time
+            ? substr((string) $sessions->first()->check_in_time, 0, 5)
+            : ($todayRecord->check_in_time ? substr((string) $todayRecord->check_in_time, 0, 5) : null);
+
+        $checkOutTime = $lastSession?->check_out_time
+            ? substr((string) $lastSession->check_out_time, 0, 5)
+            : ($todayRecord->check_out_time ? substr((string) $todayRecord->check_out_time, 0, 5) : null);
+
+        return [
+            'workMode' => $todayRecord->work_mode,
+            'workModeLabel' => OfficeStaffAttendance::MODES[$todayRecord->work_mode] ?? $todayRecord->work_mode,
+            'checkInTime' => $checkInTime,
+            'checkOutTime' => $checkOutTime,
+            'hasOpenSession' => (bool) $openSession,
+            'sessionCount' => $sessions->count(),
+            'latestCheckInTime' => $lastSession?->check_in_time ? substr((string) $lastSession->check_in_time, 0, 5) : null,
+            'latestCheckOutTime' => $lastSession?->check_out_time ? substr((string) $lastSession->check_out_time, 0, 5) : null,
+            'note' => $todayRecord->note,
+            'submittedAt' => $todayRecord->updated_at?->format('d/m/Y h:i A'),
+        ];
+    }
+
+    private function staffListPayload(OfficeStaff $staff, ?OfficeStaffAttendance $todayRecord): array
+    {
+        $record = $this->todayRecordPayload($todayRecord);
+        $status = ! $record ? 'not_marked' : ($record['hasOpenSession'] ? 'checked_in' : 'checked_out');
+
+        return [
+            'id' => $staff->id,
+            'code' => $staff->code,
+            'name' => $staff->name,
+            'designation' => $staff->designation,
+            'staffTypeLabel' => OfficeStaff::TYPES[$staff->staff_type] ?? $staff->staff_type,
+            'photoUrl' => $this->photoUrl($staff),
+            'markUrl' => route('office-attendance.staff.create', $staff, false),
+            'status' => $status,
+            'statusLabel' => match ($status) {
+                'checked_in' => 'Checked In',
+                'checked_out' => 'Checked Out',
+                default => 'Not Marked',
+            },
+            'todayRecord' => $record,
+        ];
+    }
+
+    private function photoUrl(OfficeStaff $staff): ?string
+    {
+        return $staff->photo_path ? Storage::disk('public')->url($staff->photo_path) : null;
     }
 }

@@ -3,7 +3,7 @@ import SortableHeader from '@/components/SortableHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { BriefcaseBusiness, CalendarCheck, Clock3, ClipboardX, Pencil, Plane, Search, X } from 'lucide-vue-next';
+import { BriefcaseBusiness, CalendarCheck, Clock3, ClipboardX, Pencil, Plane, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Employee {
@@ -303,6 +303,31 @@ const updateAttendance = () => {
         onSuccess: closeEdit,
     });
 };
+
+const deleteAttendance = (record: AttendanceRecord) => {
+    const id = actualAttendanceId(record);
+
+    if (!id) {
+        return;
+    }
+
+    const confirmed = window.confirm(`Delete attendance for ${employeeDisplayName(record)} on ${record.date}?`);
+
+    if (!confirmed) {
+        return;
+    }
+
+    const query = new URLSearchParams({
+        filter_type: filterType.value,
+        filter_employee_id: filterEmployeeId.value,
+        filter_start_date: startDate.value,
+        filter_end_date: endDate.value,
+    });
+
+    router.delete(`/attendance/${id}?${query.toString()}`, {
+        preserveScroll: true,
+    });
+};
 </script>
 
 <template>
@@ -467,7 +492,7 @@ const updateAttendance = () => {
                 </div>
 
                 <div v-if="filteredRecords.length" class="mt-4 overflow-hidden rounded-md border">
-                    <div class="grid min-w-[1080px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_90px] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+                    <div class="grid min-w-[1120px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_120px] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
                         <SortableHeader label="Date" column="date" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
                         <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
                         <SortableHeader label="Type" column="type" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
@@ -481,7 +506,7 @@ const updateAttendance = () => {
                         <div
                             v-for="record in filteredRecords"
                             :key="record.id"
-                            class="grid min-w-[1080px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_90px] items-center gap-3 border-b px-3 py-3 text-sm last:border-b-0"
+                            class="grid min-w-[1120px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_120px] items-center gap-3 border-b px-3 py-3 text-sm last:border-b-0"
                         >
                             <span class="text-muted-foreground">{{ record.date }}</span>
                             <div class="min-w-0">
@@ -499,7 +524,7 @@ const updateAttendance = () => {
                                 }}
                             </span>
                             <span class="truncate text-muted-foreground">{{ submittedByLabel(record) }}</span>
-                            <span class="text-right">
+                            <span class="flex justify-end gap-2 text-right">
                                 <button
                                     v-if="actualAttendanceId(record)"
                                     type="button"
@@ -508,6 +533,15 @@ const updateAttendance = () => {
                                     @click="startEditing(record)"
                                 >
                                     <Pencil class="size-4" />
+                                </button>
+                                <button
+                                    v-if="actualAttendanceId(record)"
+                                    type="button"
+                                    class="inline-flex size-9 items-center justify-center rounded-md border border-red-600/30 text-red-600 hover:bg-red-600/10"
+                                    title="Delete attendance"
+                                    @click="deleteAttendance(record)"
+                                >
+                                    <Trash2 class="size-4" />
                                 </button>
                             </span>
                         </div>

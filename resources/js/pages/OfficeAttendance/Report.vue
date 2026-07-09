@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { BookOpen, LoaderCircle, Printer, Search } from 'lucide-vue-next';
+import { BookOpen, LoaderCircle, Printer, Save, Search } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface StaffOption {
@@ -39,8 +39,26 @@ interface AttendanceRow {
     checkOutTime: string | null;
     sessionCount: number;
     sessionSummary: string;
+    workHoursLabel: string;
+    overtimeMinutes: number;
+    overtimeLabel: string;
+    lateMinutes: number;
+    lateLabel: string;
+    isLate: boolean;
     note: string | null;
     submittedBy: string | null;
+}
+
+interface OfficeRules {
+    office_start_time: string;
+    office_end_time: string;
+    break_start_time: string | null;
+    break_end_time: string | null;
+    break_included: boolean;
+    late_grace_minutes: number;
+    overtime_enabled: boolean;
+    scheduled_label: string;
+    late_after_time: string;
 }
 
 const props = defineProps<{
@@ -55,6 +73,7 @@ const props = defineProps<{
         perPage: number;
     };
     summaryRows: SummaryRow[];
+    officeRules: OfficeRules;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -77,6 +96,16 @@ const detailFrom = ref(props.filters.from);
 const detailTo = ref(props.filters.to);
 const detailWorkMode = ref(props.filters.workMode);
 const detailSearch = ref('');
+const savingRules = ref(false);
+const ruleForm = ref({
+    office_start_time: props.officeRules.office_start_time,
+    office_end_time: props.officeRules.office_end_time,
+    break_start_time: props.officeRules.break_start_time ?? '',
+    break_end_time: props.officeRules.break_end_time ?? '',
+    break_included: props.officeRules.break_included,
+    late_grace_minutes: props.officeRules.late_grace_minutes,
+    overtime_enabled: props.officeRules.overtime_enabled,
+});
 
 const totals = computed(() =>
     props.summaryRows.reduce(
@@ -110,6 +139,18 @@ const reloadReport = (pageNumber = 1) => {
             replace: true,
         },
     );
+};
+
+const saveRules = () => {
+    router.post('/office-attendance/rules', ruleForm.value, {
+        preserveScroll: true,
+        onStart: () => {
+            savingRules.value = true;
+        },
+        onFinish: () => {
+            savingRules.value = false;
+        },
+    });
 };
 
 watch(search, () => {
@@ -205,6 +246,40 @@ const updateAttendance = (row: AttendanceRow) => {
         onSuccess: () => fetchStaffDetails(),
     });
 };
+
+const formatDisplayTime = (time?: string | null) => {
+    if (!time) {
+        return '-';
+    }
+
+    const match = time.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) {
+        return time;
+    }
+
+    const hour = Number(match[1]);
+    const minute = match[2];
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+
+    return `${displayHour}:${minute} ${period}`;
+};
+
+const sessionSegments = (summary?: string | null) => {
+    if (!summary) {
+        return [];
+    }
+
+    return summary
+        .split(',')
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+        .map((segment) => {
+            const [start, end] = segment.split(/\s*-\s*/);
+
+            return `${formatDisplayTime(start)} - ${end?.toLowerCase() === 'open' ? 'Open' : formatDisplayTime(end)}`;
+        });
+};
 </script>
 
 <template>
@@ -241,6 +316,52 @@ const updateAttendance = (row: AttendanceRow) => {
                 <div class="rounded-lg border bg-card p-4">
                     <p class="text-sm text-muted-foreground">Total Records</p>
                     <p class="mt-2 text-2xl font-semibold">{{ totals.total }}</p>
+                </div>
+            </div>
+
+            <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                    <div>
+                        <h2 class="text-base font-medium">Office Attendance Rules</h2>
+                        <p class="text-sm text-muted-foreground">
+                            Scheduled duty: {{ officeRules.scheduled_label }}. Late after {{ formatDisplayTime(officeRules.late_after_time) }}.
+                        </p>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:flex xl:items-end">
+                        <div class="grid gap-2">
+                            <Label for="office-rule-start">Office Start</Label>
+                            <Input id="office-rule-start" v-model="ruleForm.office_start_time" type="time" class="w-full xl:w-32" />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="office-rule-end">Office End</Label>
+                            <Input id="office-rule-end" v-model="ruleForm.office_end_time" type="time" class="w-full xl:w-32" />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="office-break-start">Break Start</Label>
+                            <Input id="office-break-start" v-model="ruleForm.break_start_time" type="time" class="w-full xl:w-32" />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="office-break-end">Break End</Label>
+                            <Input id="office-break-end" v-model="ruleForm.break_end_time" type="time" class="w-full xl:w-32" />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="office-late-grace">Grace Minutes</Label>
+                            <Input id="office-late-grace" v-model.number="ruleForm.late_grace_minutes" type="number" min="0" max="240" class="w-full xl:w-32" />
+                        </div>
+                        <label class="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
+                            <input v-model="ruleForm.break_included" type="checkbox" class="size-4" />
+                            Break included
+                        </label>
+                        <label class="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
+                            <input v-model="ruleForm.overtime_enabled" type="checkbox" class="size-4" />
+                            Overtime
+                        </label>
+                        <Button type="button" :disabled="savingRules" @click="saveRules">
+                            <LoaderCircle v-if="savingRules" class="size-4 animate-spin" />
+                            <Save v-else class="size-4" />
+                            Save Rules
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -387,7 +508,7 @@ const updateAttendance = (row: AttendanceRow) => {
                             No attendance records found for this staff member.
                         </div>
                         <div v-else class="max-h-[55vh] overflow-auto">
-                            <table class="w-full min-w-[1260px] table-fixed text-sm">
+                            <table class="w-full min-w-[1600px] table-fixed text-sm">
                                 <thead class="sticky top-0 border-b bg-muted/90 text-left text-muted-foreground">
                                     <tr>
                                         <th class="w-[120px] px-4 py-3 font-medium">Date</th>
@@ -395,7 +516,10 @@ const updateAttendance = (row: AttendanceRow) => {
                                         <th class="w-[160px] px-4 py-3 font-medium">Check In</th>
                                         <th class="w-[160px] px-4 py-3 font-medium">Check Out</th>
                                         <th class="w-[210px] px-4 py-3 font-medium">Sessions</th>
-                                        <th class="w-[240px] px-4 py-3 font-medium">Note</th>
+                                        <th class="w-[110px] px-4 py-3 font-medium">Work Hrs</th>
+                                        <th class="w-[110px] px-4 py-3 font-medium">OT</th>
+                                        <th class="w-[120px] px-4 py-3 font-medium">Late</th>
+                                        <th class="w-[230px] px-4 py-3 font-medium">Note</th>
                                         <th class="w-[140px] px-4 py-3 font-medium">Submitted By</th>
                                         <th class="w-[100px] px-4 py-3 text-right font-medium">Actions</th>
                                     </tr>
@@ -419,7 +543,37 @@ const updateAttendance = (row: AttendanceRow) => {
                                         </td>
                                         <td class="px-4 py-3">
                                             <p class="text-xs font-medium">{{ row.sessionCount || 0 }} session{{ row.sessionCount === 1 ? '' : 's' }}</p>
-                                            <p class="truncate text-xs text-muted-foreground" :title="row.sessionSummary">{{ row.sessionSummary || '-' }}</p>
+                                            <div v-if="sessionSegments(row.sessionSummary).length" class="mt-1 flex flex-wrap gap-1.5" :title="row.sessionSummary">
+                                                <span
+                                                    v-for="session in sessionSegments(row.sessionSummary)"
+                                                    :key="session"
+                                                    class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+                                                >
+                                                    {{ session }}
+                                                </span>
+                                            </div>
+                                            <p v-else class="mt-1 text-xs text-muted-foreground">-</p>
+                                        </td>
+                                        <td class="px-4 py-3 font-medium">{{ row.workHoursLabel }}</td>
+                                        <td class="px-4 py-3">
+                                            <span
+                                                :class="[
+                                                    'rounded-full px-2 py-1 text-xs font-semibold',
+                                                    row.overtimeMinutes > 0 ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' : 'bg-muted text-muted-foreground',
+                                                ]"
+                                            >
+                                                {{ row.overtimeLabel }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span
+                                                :class="[
+                                                    'rounded-full px-2 py-1 text-xs font-semibold',
+                                                    row.isLate ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+                                                ]"
+                                            >
+                                                {{ row.lateLabel }}
+                                            </span>
                                         </td>
                                         <td class="px-4 py-3">
                                             <Input v-model="editRow(row).note" class="h-9 text-xs" placeholder="Optional note" />

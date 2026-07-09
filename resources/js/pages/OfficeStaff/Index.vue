@@ -15,6 +15,7 @@ interface StaffMember {
     code: string;
     name: string;
     designation: string | null;
+    photoUrl: string | null;
     staffType: string;
     staffTypeLabel: string;
     status: string;
@@ -41,6 +42,7 @@ const createForm = useForm({
     code: props.nextCode,
     name: '',
     designation: '',
+    photo: null as File | null,
     staff_type: 'on_site',
     status: 'active',
 });
@@ -50,6 +52,8 @@ const editForm = useForm({
     name: '',
     username: '',
     designation: '',
+    photo: null as File | null,
+    _method: 'put',
     staff_type: 'on_site',
     status: 'active',
 });
@@ -103,11 +107,20 @@ const sortStaff = (key: string) => {
 const createStaff = () => {
     createForm.post('/office-staff', {
         preserveScroll: true,
+        forceFormData: true,
         onSuccess: (page) => {
-            createForm.reset('name', 'designation');
+            createForm.reset('name', 'designation', 'photo');
             createForm.code = String(page.props.nextCode ?? props.nextCode);
         },
     });
+};
+
+const setCreatePhoto = (event: Event) => {
+    createForm.photo = (event.target as HTMLInputElement).files?.[0] ?? null;
+};
+
+const setEditPhoto = (event: Event) => {
+    editForm.photo = (event.target as HTMLInputElement).files?.[0] ?? null;
 };
 
 const startEditing = (member: StaffMember) => {
@@ -117,6 +130,7 @@ const startEditing = (member: StaffMember) => {
     editForm.name = member.name;
     editForm.username = member.username ?? '';
     editForm.designation = member.designation ?? '';
+    editForm.photo = null;
     editForm.staff_type = member.staffType;
     editForm.status = member.status;
 };
@@ -128,8 +142,9 @@ const cancelEditing = () => {
 };
 
 const updateStaff = (member: StaffMember) => {
-    editForm.put(`/office-staff/${member.id}`, {
+    editForm.post(`/office-staff/${member.id}`, {
         preserveScroll: true,
+        forceFormData: true,
         onSuccess: cancelEditing,
     });
 };
@@ -154,7 +169,7 @@ const deleteStaff = (member: StaffMember) => {
             </div>
 
             <form class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border" @submit.prevent="createStaff">
-                <div class="grid gap-4 xl:grid-cols-[130px_minmax(0,1fr)_minmax(0,1fr)_180px_150px_auto] xl:items-start">
+                <div class="grid gap-4 xl:grid-cols-[110px_minmax(0,1fr)_minmax(0,1fr)_180px_180px_140px_auto] xl:items-start">
                     <div class="grid min-w-0 gap-2">
                         <Label for="staff-code">Code</Label>
                         <Input id="staff-code" v-model="createForm.code" type="text" inputmode="numeric" placeholder="101" />
@@ -169,6 +184,11 @@ const deleteStaff = (member: StaffMember) => {
                         <Label for="staff-designation">Designation</Label>
                         <Input id="staff-designation" v-model="createForm.designation" type="text" placeholder="Accountant, HR, etc." />
                         <InputError :message="createForm.errors.designation" />
+                    </div>
+                    <div class="grid min-w-0 gap-2">
+                        <Label for="staff-photo">Photo</Label>
+                        <Input id="staff-photo" type="file" accept="image/*" @change="setCreatePhoto" />
+                        <InputError :message="createForm.errors.photo" />
                     </div>
                     <div class="grid min-w-0 gap-2">
                         <Label for="staff-type">Staff Type</Label>
@@ -215,25 +235,26 @@ const deleteStaff = (member: StaffMember) => {
                 <div v-else-if="filteredStaff.length === 0" class="flex min-h-56 items-center justify-center text-sm text-muted-foreground">No staff match your search.</div>
 
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full min-w-[1100px] table-fixed text-sm">
+                    <table class="w-full min-w-[1220px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[10%] px-4 py-3 font-medium">
+                                <th class="w-[9%] px-4 py-3 font-medium">
                                     <SortableHeader label="Code" column="code" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
                                 </th>
                                 <th class="w-[22%] px-4 py-3 font-medium">
                                     <SortableHeader label="Name" column="name" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
                                 </th>
-                                <th class="w-[20%] px-4 py-3 font-medium">
+                                <th class="w-[16%] px-4 py-3 font-medium">Photo</th>
+                                <th class="w-[18%] px-4 py-3 font-medium">
                                     <SortableHeader label="Username" column="username" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
                                 </th>
-                                <th class="w-[20%] px-4 py-3 font-medium">
+                                <th class="w-[18%] px-4 py-3 font-medium">
                                     <SortableHeader label="Designation" column="designation" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
                                 </th>
-                                <th class="w-[14%] px-4 py-3 font-medium">
+                                <th class="w-[12%] px-4 py-3 font-medium">
                                     <SortableHeader label="Type" column="staffType" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
                                 </th>
-                                <th class="w-[12%] px-4 py-3 font-medium">
+                                <th class="w-[11%] px-4 py-3 font-medium">
                                     <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
                                 </th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
@@ -250,6 +271,29 @@ const deleteStaff = (member: StaffMember) => {
                                     <Input v-if="editingId === member.id" v-model="editForm.name" type="text" />
                                     <span v-else class="block truncate font-medium">{{ member.code }} - {{ member.name }}</span>
                                     <InputError v-if="editingId === member.id" :message="editForm.errors.name" class="mt-2" />
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div v-if="editingId === member.id" class="grid gap-2">
+                                        <div class="flex items-center gap-2">
+                                            <img
+                                                v-if="member.photoUrl"
+                                                :src="member.photoUrl"
+                                                :alt="member.name"
+                                                class="size-10 rounded-md border object-cover"
+                                            />
+                                            <Input type="file" accept="image/*" @change="setEditPhoto" />
+                                        </div>
+                                        <InputError :message="editForm.errors.photo" />
+                                    </div>
+                                    <div v-else class="flex items-center gap-2">
+                                        <img v-if="member.photoUrl" :src="member.photoUrl" :alt="member.name" class="size-10 rounded-md border object-cover" />
+                                        <span
+                                            v-else
+                                            class="flex size-10 items-center justify-center rounded-md border bg-muted text-xs font-semibold text-muted-foreground"
+                                        >
+                                            {{ member.name.slice(0, 2).toUpperCase() }}
+                                        </span>
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3">
                                     <Input v-if="editingId === member.id" v-model="editForm.username" type="text" />

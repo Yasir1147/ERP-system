@@ -50,6 +50,7 @@ class PublicAttendanceController extends Controller
             'attendanceDateMin' => $dateRange['min'],
             'attendanceDateMax' => $dateRange['max'],
             'attendanceDateHelp' => $dateRange['message'],
+            'todayRecords' => $this->todaySubmittedRecords($type, request()->user()->id),
         ]);
     }
 
@@ -229,5 +230,41 @@ class PublicAttendanceController extends Controller
         }
 
         return $rules;
+    }
+
+    private function todaySubmittedRecords(string $type, int $userId): array
+    {
+        return AttendanceRecord::query()
+            ->leftJoin('employees', 'attendance_records.employee_id', '=', 'employees.id')
+            ->leftJoin('projects', 'attendance_records.project_id', '=', 'projects.id')
+            ->leftJoin('projects as overtime_projects', 'attendance_records.overtime_project_id', '=', 'overtime_projects.id')
+            ->where('attendance_records.submitted_by', $userId)
+            ->where('employees.type', $type)
+            ->whereDate('attendance_records.attendance_date', now()->toDateString())
+            ->orderByDesc('attendance_records.id')
+            ->get([
+                'attendance_records.id',
+                'attendance_records.status',
+                'attendance_records.attendance_date',
+                'attendance_records.leave_reason',
+                'attendance_records.overtime_hours',
+                'employees.code as employee_code',
+                'employees.name as employee_name',
+                'employees.profession as employee_profession',
+                'projects.name as project_name',
+                'overtime_projects.name as overtime_project_name',
+            ])
+            ->map(fn ($record) => [
+                'id' => $record->id,
+                'employeeCode' => $record->employee_code,
+                'employeeName' => $record->employee_name,
+                'employeeProfession' => $record->employee_profession,
+                'status' => $record->status,
+                'projectName' => $record->project_name,
+                'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
+                'reason' => $record->leave_reason,
+                'overtimeHours' => $record->overtime_hours,
+            ])
+            ->all();
     }
 }

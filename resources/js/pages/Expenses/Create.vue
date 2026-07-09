@@ -4,7 +4,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { CheckCircle2, ImagePlus } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -24,6 +24,7 @@ const isReadingReceipt = ref(false);
 const today = new Date().toISOString().slice(0, 10);
 
 const successMessage = computed(() => page.props.flash?.success as string | undefined);
+const attendanceHomeUrl = computed(() => (props.employeeType === 'rope_access' ? '/mark-attendance/rope-access' : '/mark-attendance'));
 
 const form = useForm({
     type: props.employeeType,
@@ -393,6 +394,9 @@ const submitExpense = () => {
                 <AppLogoIcon class="mx-auto size-24" />
                 <h1 class="mt-3 text-2xl font-semibold tracking-normal">Daily Expense Bill</h1>
                 <p class="mt-1 text-sm text-muted-foreground">Submit a {{ employeeTypeLabel }} daily expense for admin review.</p>
+                <Link :href="attendanceHomeUrl" class="mt-3 inline-flex text-sm font-medium text-primary underline underline-offset-4">
+                    Back to Mark Attendance
+                </Link>
             </div>
 
             <form class="min-w-0 overflow-hidden rounded-lg border border-sidebar-border/70 bg-card p-5 shadow-sm" @submit.prevent="submitExpense">

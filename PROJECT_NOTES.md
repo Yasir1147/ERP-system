@@ -1,18 +1,16 @@
-﻿# Al Mohafiz ERP / Attendance System - Project Notes
+# Al Mohafiz ERP / Attendance System
 
-This file documents the local setup, business rules, and development workflow for the project.
+Project notes for setup, deployment, business rules, and module behavior.
 
-## Project Location
+## Project
 
-Local project folder:
+Local path:
 
 ```powershell
 D:\projects\attendance-system
 ```
 
-## Git Repository
-
-Remote repository:
+Repository:
 
 ```text
 https://github.com/Yasir1147/ERP-system.git
@@ -24,57 +22,27 @@ Default branch:
 main
 ```
 
-Before making new changes, always check:
-
-```powershell
-git status --short
-git log --oneline -5
-```
-
-Recommended workflow:
-
-```powershell
-git add .
-git commit -m "Clear description of the change"
-git push origin main
-```
-
-Do not commit `.env`, database dumps, or private passwords.
-
-## Tech Stack
+Tech stack:
 
 - Laravel 12
 - PHP 8.2
+- MySQL / MariaDB
 - Inertia.js
 - Vue 3
 - Vite
-- MySQL / MariaDB through XAMPP
 - Tailwind-based UI components
 
-## Local Run Steps
+## Local Setup
 
-1. Start XAMPP.
-2. Start Apache.
-3. Start MySQL.
-4. Open terminal in the project folder:
+Start XAMPP Apache and MySQL, then run:
 
 ```powershell
 cd D:\projects\attendance-system
-```
-
-5. Clear cached Laravel files if needed:
-
-```powershell
 php artisan optimize:clear
-```
-
-6. Start Laravel:
-
-```powershell
 php artisan serve --host=127.0.0.1 --port=8000
 ```
 
-7. In a second terminal, start Vite:
+In a second terminal:
 
 ```powershell
 npm run dev
@@ -86,7 +54,9 @@ Open:
 http://127.0.0.1:8000
 ```
 
-For production/build verification:
+Use `127.0.0.1` consistently during local development. Switching between `localhost` and `127.0.0.1` can create session or CSRF confusion.
+
+Production build check:
 
 ```powershell
 npm run build
@@ -94,39 +64,82 @@ npm run build
 
 ## Database
 
-The app uses MySQL through XAMPP. Check `.env` locally for the database name and credentials. Do not push `.env` to GitHub.
+The local app uses MySQL through XAMPP. Database credentials are stored in `.env`; do not commit `.env`.
 
-Common Laravel database commands:
+Common commands:
 
 ```powershell
 php artisan migrate
 php artisan db:seed
+php artisan optimize:clear
+```
+
+Only run this when deleting all current local data is acceptable:
+
+```powershell
 php artisan migrate:fresh --seed
 ```
 
-Only run `migrate:fresh --seed` when it is safe to delete all current local data.
-
-## Database Backup
-
-Create a backup folder outside the project, for example:
-
-```text
-D:\backups\attendance-system
-```
-
-Backup command example:
+Backup example:
 
 ```powershell
 D:\xampp\mysql\bin\mysqldump.exe -uroot attendance-system > D:\backups\attendance-system\attendance-system-YYYY-MM-DD.sql
 ```
 
-Restore command example:
+Restore example:
 
 ```powershell
 D:\xampp\mysql\bin\mysql.exe -uroot attendance-system < D:\backups\attendance-system\attendance-system-YYYY-MM-DD.sql
 ```
 
-Replace `attendance-system` with the actual database name from `.env` if different.
+Replace `attendance-system` if the actual database name is different.
+
+## Git Workflow
+
+Before starting changes:
+
+```powershell
+git status --short
+git log --oneline -5
+```
+
+Typical commit flow:
+
+```powershell
+git add .
+git commit -m "Clear description of the change"
+git push origin main
+```
+
+Do not commit:
+
+- `.env`
+- database dumps
+- private passwords
+- temporary zip files
+- local backups
+
+## Server Deployment Notes
+
+Live domain currently uses a Laravel app folder and a public web folder. The public web folder must point to the Laravel app through `index.php`.
+
+After pulling/uploading code on server:
+
+```bash
+/opt/cpanel/ea-php82/root/usr/bin/php artisan migrate
+/opt/cpanel/ea-php82/root/usr/bin/php artisan optimize:clear
+/opt/cpanel/ea-php82/root/usr/bin/php artisan storage:link
+```
+
+If frontend assets changed, build locally and upload/copy `public/build` to the server public folder.
+
+Server `.env` must include:
+
+```text
+APP_TIMEZONE=Asia/Dubai
+```
+
+Clear config cache after changing `.env`.
 
 ## Important URLs
 
@@ -137,294 +150,454 @@ Authentication:
 /dashboard
 ```
 
-The login page uses a two-column desktop layout with a rope-access/construction collage image background, light overlay, prominent white feature cards, brand/system overview panel, and focused login form. Mobile keeps a single-column login form.
-
-/fines is the admin employee fine module. Allowed attendance users can submit fine tickets from /fines/create or the Mark Attendance page link; the Mark Attendance link passes the current employee type so Rope Access pages only list Rope Access employees and Contracting pages only list Contracting employees. Admin users review pending fines, waive them, or apply them to a selected payroll month. Applying a fine increases that employee's payroll deduction and appends a "Fine: reason - amount" remark on the payroll adjustment.
-
-`/expenses` is the admin daily expense module for Rope Access bills. Attendance users with Rope Access access can submit expense bills from `/expenses/create?type=rope_access` or the Rope Access Mark Attendance page link. The form stores expense date, purpose, amount, optional note, and receipt image. The receipt file input uses mobile camera capture hints, so phones can take a receipt photo directly from the upload control. Selected receipt photos are compressed in the browser before upload to avoid large mobile-camera files being rejected, while the server allows receipt images up to 10 MB. Client-side OCR reads the selected receipt image and suggests purpose and total amount, including common receipt and invoice labels like grand total, net total, total amount, and cash withdrawal, but users must verify/edit those fields before submitting because receipt quality can vary. Receipt images are stored on the Laravel public disk under `expense-receipts`, so `php artisan storage:link` must exist on the server. Admin users can filter by date range/status/search, see totals, open receipt images, approve/reject submitted expense bills, and delete expense bills; deleting also removes the stored receipt image.
-
-Attendance users can be restricted to All Employee Types, Rope Access only, or Contracting only from the Users page. This restriction is independent from backdate access and applies to Mark Attendance routes and fine ticket creation routes, so a Rope Access-only user cannot open Contracting attendance or Contracting fine ticket links.
-
-When an already-authenticated attendance user hits a restricted employee-type route, the Access Denied page should offer a logout action. Do not send authenticated users directly to /login from that state, because /login is a guest route and will not switch accounts cleanly.
-
-Fine ticket email notifications are controlled from Settings > Mail. SMTP settings are stored in the database, with the SMTP password encrypted. Admin users have a "Receive fine ticket emails" checkbox on the Users page; only checked admin users receive the new fine ticket email. If SMTP is disabled or fails, the fine ticket is still saved and the mail failure is logged.
-
-When applying a pending fine to payroll, admin can reduce the deduction amount before applying it. The original fine amount remains on the fine ticket, while the reduced applied amount is used for payroll deduction and noted in payroll remarks.
-
-The admin fine list uses server-side pagination with 5/10/15/25 per-page options, backend search, search-aware counts, and previous/next controls so page load does not grow with fine record count.
-
-Fine list backend search must qualify `employee_fines` columns when joins are present. In particular, use `employee_fines.status` rather than plain `status`, otherwise MySQL can throw an ambiguous column error when searching fines.
-
-Attendance marking pages:
+Attendance:
 
 ```text
 /mark-attendance
 /mark-attendance/contracting
 /mark-attendance/rope-access
-```
-
-Dashboard and admin modules:
-
-```text
-/dashboard
 /attendance
 /attendance/timesheet
+/attendance/timesheet-print
+```
+
+Admin modules:
+
+```text
 /employees/rope_access
 /employees/contracting
-/projects/overview
-/projects/rope_access
-/projects/contracting
 /employee-leaves
+/fines
 /expenses
 /payroll
 /payroll/report
+/projects/overview
+/projects/rope_access
+/projects/contracting
+/office-staff
+/office-attendance/report
 /users
 ```
 
+## UI Rules
+
+All application UI text, validation messages, alerts, and exported labels must be English only.
+
+Do not add Urdu or Roman Urdu text in code, Vue pages, Blade views, controllers, validation messages, PDFs, or CSV exports.
+
+The default appearance is Light. Users may switch to Dark or System from Settings > Appearance.
+
+Browser favicons must use Al Mohafiz assets only. Use `public/favicon-32x32.png` or `public/favicon.ico` with cache-busting where needed.
+
+The login page uses a two-column desktop layout with a rope-access/construction collage background and a focused login form. Mobile keeps a single-column login form.
+
+Public self-registration is disabled. The login page must not show a sign-up link.
+
 ## User Roles
 
-Current role concept:
+Current roles:
 
 - `admin`: full backend/admin access.
-- `attendance_user`: can access attendance marking pages only.
+- `attendance_user`: can access attendance marking and allowed employee-type routes.
+- `office_staff`: can access office attendance marking only.
 
-Normal attendance users can log in with username-only according to the current business requirement. Admin users still use password login.
+Attendance users can log in with username only. Admin users use password login.
 
-Public self-registration is disabled. New users must be created by an admin from the Users page, and the login page must not show a sign-up link.
+Attendance users can be restricted to:
 
-Admin can temporarily allow an attendance user to enter older missing attendance from the Users page. The access is controlled per user with:
+- All Employee Types
+- Rope Access only
+- Contracting only
+
+This restriction applies to Mark Attendance and fine ticket creation links. A Rope Access-only user must not open Contracting attendance or Contracting fine ticket links.
+
+When an authenticated attendance user opens a restricted employee-type route, show the Access Denied page with a logout action. Do not redirect them directly to `/login`, because `/login` is a guest route and will not switch accounts cleanly.
+
+Admin can temporarily allow an attendance user to enter older attendance from the Users page using:
 
 - `attendance_backdate_enabled`
 - `attendance_backdate_from`
 - `attendance_backdate_to`
 
-When enabled, the attendance user can only submit dates inside that range, and future dates are still blocked. When disabled, the user goes back to the default attendance date rule.
+Future dates remain blocked for Present and Absent.
 
-## Core Business Rules
+## Employees
 
-### Employees
-
-Employees are split into two categories:
+Employee categories:
 
 - Rope Access Employee
 - Contracting Employee
 
-Employee records should stay in admin even if the employee leaves the job. Employees marked as left should not appear in the attendance marking selector.
+Employee records should remain in admin history even after an employee leaves. Employees marked as left should not appear in public attendance selectors.
 
-### Projects
+Employee-facing admin/report lists should show employee code with employee name where available. Search should include employee code.
 
-Projects are split into two categories:
+## Projects
+
+Project categories:
 
 - Rope Access Projects
 - Contracting Projects
 
-The Projects Overview page calculates project labor cost from attendance records and salary settings.
+Projects Overview calculates labor cost from attendance records and payroll settings.
 
-If an attendance record has a separate overtime project, project reports split the cost: basic salary/day count belongs to the main attendance project, while overtime hours and overtime cost belong to the overtime project.
+If an attendance record has a separate overtime project:
 
-### Attendance
+- basic salary/day count belongs to the main attendance project
+- overtime hours and overtime cost belong to the overtime project
 
-Attendance supports these statuses:
+Projects Overview should show:
+
+- project days
+- attendance entries
+- unique labor count
+- overtime hours
+- basic labor cost
+- overtime cost
+- total labor cost
+
+Project employee history is available from each project row. The current desired modal focuses on Employee Summary, not detailed attendance rows.
+
+## Attendance
+
+Statuses:
 
 - Present
 - Absent
 - Leave
 
-Present requires employee, project, date, and optional overtime hours.
-
-When overtime is applied, the attendance form also supports an optional overtime project. If the overtime project is left blank, the system uses the main selected project for overtime. If a different overtime project is selected, normal attendance/day cost remains on the main project and overtime hours/cost are assigned to the selected overtime project.
+Present requires employee, date, project, and optional overtime.
 
 Absent requires employee and date.
 
 Leave requires employee, date, and leave reason.
 
-Normal attendance users can only select today or the previous two dates by default. Future dates are disabled.
+Normal attendance users can select today or the previous two dates by default. Future dates are disabled except when status is Leave.
 
-Admins can grant a temporary backdate date range from the Users section for attendance users who forgot to mark attendance. This must be validated in both the frontend date picker and the backend controller.
+Leave submissions can use a start/end date range and are stored for admin review instead of creating daily attendance rows for every leave day.
 
-Duplicate attendance should not be allowed for the same employee and same date.
+Duplicate attendance is blocked for the same employee and same date.
 
 Attendance records track who submitted the record.
 
-The public attendance form supports selecting one or more employees before submitting. A bulk submission creates one attendance record per selected employee using the same selected status, date, project, and overtime values. Backend validation blocks duplicate attendance and employees who are on leave.
+The public attendance form supports one or more selected employees. Bulk submit creates one attendance record per selected employee using the same status, date, project, and overtime values.
 
-After a successful attendance submission, the public attendance form clears the selected employee, overtime fields, and leave reason, but keeps the selected status, date, and main project. This supports entering multiple employees on the same project with fewer repeated selections.
+After a successful attendance submit:
 
-Public attendance custom dropdowns should close when the user clicks outside the open dropdown.
+- selected employee is cleared
+- overtime fields are cleared
+- leave reason is cleared
+- selected status, date, and main project stay selected
 
-The public attendance employee search text should reset whenever the employee dropdown closes, including outside clicks and button-toggle close. Selected employees must remain selected while only the search filter is cleared.
+This makes repeated entries for the same project faster.
 
-The app appearance defaults to Light, not System, so desktop and mobile users see the white theme unless they explicitly choose Dark or System from Settings > Appearance. Theme initialization should run before the Vue app mounts to avoid a dark first paint on mobile browsers.
+Public attendance custom dropdowns close on outside click. When the employee dropdown closes, the search text is cleared but selected employees remain selected.
 
-Monthly attendance timesheet is available at:
+Admins can correct existing daily attendance records from Attendance > Overview. Edit updates the existing record and supports status, employee/date, project, overtime, and leave reason changes. This is the correct workflow if a user marks Absent instead of Present.
+
+Admins can delete real daily attendance records from Attendance > Overview. Delete removes the selected attendance row and its embedded attendance details, including status, project, overtime, and leave reason. Synthetic leave-range rows are not deleted from this report.
+
+The public Mark Attendance page shows a read-only "Today's Submitted Attendance" panel. It lists only records submitted today by the logged-in attendance user for the current employee type, so the user can review the day before leaving the page.
+
+The same-day submitted attendance review list is capped with an internal scroll so the Mark Attendance page does not become too long when many employees are submitted together.
+
+Employees on active leave should not be selectable for attendance marking.
+
+## Timesheet
+
+Monthly attendance timesheet:
 
 ```text
 /attendance/timesheet
 ```
 
-Timesheet supports employee type and month filters, sticky employee rows, row highlighting on click, and a print/PDF view. The legacy CSV route still exists for internal use:
+Features:
 
-```text
-/attendance/timesheet-export
-```
+- employee type filter
+- month filter
+- sticky employee column
+- row highlight on click
+- search by code/name/profession
+- print/PDF view
+- A3 landscape and A4 landscape options
 
-Timesheet also supports a print/PDF view with A3 landscape and A4 landscape page-size options:
+Print route:
 
 ```text
 /attendance/timesheet-print
 ```
 
-### Leaves
+Legacy CSV route remains for internal use:
 
-There are two leave types in the UI:
+```text
+/attendance/timesheet-export
+```
 
-- Daily leave submitted through the attendance page.
-- Long leave created from the Leaves admin page.
+## Leaves
 
-Long leave is considered more than 3 days.
+Leave UI contains:
 
-Admins can edit and delete both daily leave attendance records and long leave range records from the Leaves page. Daily leave remains a single-day attendance record, so its end date is not separately editable. Daily absent attendance records are also shown on the Leaves page as read-only records so admin can review leave/absent activity from one place.
+- Daily leave submitted from attendance page
+- Long leave created from Leaves admin page
+- Daily absent records shown for review
 
-Leave payroll decisions are admin controlled. A leave record is not converted into an attendance absent record. Instead, admin can apply part or all of a leave as payroll absent days by setting `Deduct Days`, `Payroll Month`, and an optional note on the Leaves page. Payroll then adds those approved leave deduction days to the existing Absent count for that selected month, and the payroll remarks include the leave reason. Admin can also waive a leave deduction.
+Long leave means more than 3 days.
 
-Attendance users may submit future dates only when the selected status is Leave. Present and Absent remain limited to the configured attendance date range and cannot be marked for future dates. Leave submissions support a start/end date range; the system creates leave range records for admin review instead of creating daily attendance rows for every leave day.
+Admin can edit and delete daily leave records and long leave range records from the Leaves page. Daily leave remains a single-day attendance record.
 
-Admins can correct existing daily attendance records from Attendance > Overview. The edit action updates the existing record instead of creating a duplicate, and supports status, employee/date, project, overtime, and leave reason changes. This is the correct workflow when an allowed user accidentally marks Absent instead of Present.
+Leave payroll decisions are admin controlled. A leave is not converted into an attendance absent record. Admin can apply part or all of a leave as payroll absent days by setting:
 
-Employees on active leave should not be selectable for attendance marking.
+- Deduct Days
+- Payroll Month
+- optional note
+
+Payroll adds approved leave deduction days into the existing Absent count for that month. Payroll remarks include the leave reason. Admin can also waive a leave deduction.
+
+Dashboard monthly leave summary counts leave records/events, not leave days. One 20-day long leave counts as 1 leave record. Separate daily leave and long leave records count separately.
 
 Dashboard should show a notification when a long leave has completed and needs admin review/status update.
 
-Dashboard monthly leave summary counts leave records/events, not leave days. One 20-day long leave counts as 1 leave record. If the same employee has a separate daily leave and a long leave in the same month, those count as separate leave records.
+## Payroll
 
-### Payroll
+Payroll calculates salary from attendance, leave deduction decisions, fines, and payroll settings.
 
-Payroll calculates monthly salary from attendance and salary settings.
+Supported concepts:
 
-Supported payroll concepts:
+- per-day salary
+- exact monthly salary for Fixed 30 Days employees
+- Fixed 30 Days rule
+- Present Days rule
+- overtime hours
+- overtime salary
+- absent days
+- leave days applied as absent
+- automatic absent deduction
+- bonus / extra
+- previous balance
+- manual previous balance override
+- total balance
+- deduction
+- paid cash
+- final balance
+- remarks
 
-- Per-day salary
-- Exact monthly salary for Fixed 30 Days employees
-- Fixed 30 days rule
-- Present-days rule
-- Overtime hours
-- Overtime salary
-- Absent days
-- Leave days applied as absent
-- Automatic absent deduction
-- Bonus / extra
-- Previous balance
-- Manual previous balance override
-- Total balance
-- Deduction
-- Paid cash
-- Final balance
-- Remarks
+Fixed 30 Days employees use `Monthly Salary` as exact base salary. Daily and hourly basis are derived from:
+
+```text
+monthly salary / 30
+```
+
+This avoids rounded daily salary issues such as `56.65 * 30 = 1699.50` when the intended salary is `1700.00`.
+
+Present Days employees use per-day salary only.
+
+Payroll > Absence Deduction Rule applies to Fixed 30 Days employees only. When enabled, payroll subtracts:
+
+```text
+absent days * fixed daily basis
+```
+
+Present Days employees already receive pay only for attended days, so absent deduction remains 0 for them.
+
+Fixed 30 Days payroll caps payable/present-day payroll count at 30 days. In 31-day months, extra attendance remains visible in attendance reports but payroll does not pay or deduct beyond the 30-day salary basis.
 
 Previous balance carries forward month-to-month. Admin can manually override previous balance when needed.
 
-Payroll settings support an exact `Monthly Salary` for Fixed 30 Days employees. Payroll uses that monthly value as the fixed base salary, then derives the daily and hourly basis from `monthly salary / 30` for absent deduction and overtime. This avoids rounded daily salary issues such as `56.65 * 30 = 1699.50` when the intended monthly salary is `1700.00`. Present-days employees continue to use per-day salary only.
-
-Payroll > Absence Deduction Rule controls absent salary deduction. The current recommended rule is a global on/off setting that applies to Fixed 30 Days employees only. When enabled, fixed-salary employees keep their fixed 30-day basic salary, but payroll subtracts `absent days * fixed daily basis` as a separate Absent Deduction before manual deduction and paid cash. Present-days employees are already paid only for attended days, so absent deduction remains 0 for them.
-
-Leaves approved for payroll deduction are included inside the existing Absent count instead of adding a separate payroll column. For example, if admin applies 2 days from a 3-day leave as absent, payroll shows those 2 days inside Absent and the Absent Deduction follows the active absence deduction rule. Remarks show the leave deduction reason.
-
-Fixed 30 Days payroll caps payable/present-day payroll count at 30 days. In 31-day months, extra attendance records remain visible in attendance reports, but payroll present days and fixed-salary absent deduction are capped so fixed employees are not paid or deducted beyond the 30-day salary basis.
-
 Payroll report supports:
 
-- Filtering by employee type, employee, and month
-- Showing present days, absent days, and absent deduction
-- Editing payroll adjustments
-- Saving one row
-- Saving selected rows in bulk
-- Applying one remark to selected employees
-- Employee ledger modal
-- Payslip PDF/print
-- Payslip CSV/Excel export
-- Merged selected payslips PDF/print
-- Payroll report PDF/print
+- employee type, employee, and month filters
+- present days, absent days, and absent deduction
+- row save and selected row bulk save
+- one remark applied to selected employees
+- employee ledger modal
+- payslip PDF/print
+- merged selected payslips PDF/print
+- payroll report PDF/print
 
-Payroll salary settings list shows employee codes with names and supports searching by code, name, profession, and employee type. The salary settings table can also be sorted ascending or descending by employee, daily salary, salary rule, hours per day, and overtime status.
+Payroll salary settings list supports:
 
-Employee-facing admin/report lists should show employee code with the employee name when available. Search should include employee code on payroll report, attendance report, dashboard daily attendance, leave list, and fine list.
+- employee code/name display
+- search by code, name, profession, and type
+- sorting by employee, daily salary, monthly salary, salary rule, hours/day, and overtime
 
-Core admin/reporting lists use clickable sortable headers with ascending/descending direction indicators. Sorting is available on employee lists, project lists, attendance detail, leaves, fines, payroll salary settings, payroll report, and projects overview. Fines sorting is handled through server-side query sorting so pagination remains accurate.
+Payslip print pages must keep:
 
-Leave list rows are converted to base collections before merging long leave, daily leave, and absent records. This avoids Laravel Eloquent collection merge errors when the rows are already mapped to arrays.
+- visible page border
+- full grid borders
+- strong inner summary borders
+- high-contrast text
 
-Payroll print pages use `public/al-mohafiz-logo.png` for both the document logo and browser tab favicon.
+## Fines
 
-Browser favicons should use Al Mohafiz assets only. The main Inertia layout and print pages should point to `public/favicon-32x32.png` or `public/favicon.ico` with an `al-mohafiz` cache-busting query so old browser icons do not remain visible.
+Admin fine module:
 
-Payslip print pages use visible page borders, full grid borders on salary tables, stronger inner summary borders, and high-contrast text so printed salary details remain readable.
+```text
+/fines
+```
 
-Payroll save actions handle expired CSRF/session tokens by showing a clear message and refreshing the page so a new token is loaded. To avoid repeated CSRF issues during local development, keep using `http://127.0.0.1:8000` instead of switching between `localhost` and `127.0.0.1`.
+Attendance users can submit fine tickets from:
 
-## Project Overview
+```text
+/fines/create
+```
 
-The Projects Overview page should help answer:
+The Mark Attendance page link passes the current employee type so Rope Access pages list Rope Access employees and Contracting pages list Contracting employees.
 
-- How many days since the project started?
-- How many attendance entries exist for the project?
-- How many unique employees worked on the project?
-- How many overtime hours were used?
-- What is the basic labor cost?
-- What is the overtime cost?
-- What is the total labor cost?
+Fine ticket create pages include a Back to Mark Attendance link that returns to the current employee-type attendance page.
 
-Project employee history is available from the project row action. The current desired modal is focused on Employee Summary only, not detailed attendance records.
+Admin can:
 
-The Projects Overview table uses compact column widths so the History action remains visible at normal browser zoom on common desktop screens.
+- review pending fines
+- waive fines
+- apply fines to a payroll month
+- reduce deduction amount before applying
 
-Employee Summary should show:
+Applying a fine increases payroll deduction and appends a payroll remark in this format:
 
-- Employee
-- Profession
-- Entries
-- Worked days
-- Overtime hours
-- Basic cost
-- Overtime cost
-- Total cost
-- Submitted by
+```text
+Fine: reason - amount
+```
 
-## UI Language Rule
+The original fine amount remains on the fine ticket. The reduced applied amount is used for payroll deduction.
 
-All application UI text, validation messages, alerts, and exports should be in English only.
+Fine ticket email notifications are controlled from Settings > Mail. SMTP settings are stored in the database and SMTP password is encrypted.
 
-Do not add Urdu or Roman Urdu text in code, Vue pages, Blade views, controllers, validation messages, or exported PDF/CSV labels.
+Admin users have a "Receive fine ticket emails" checkbox on the Users page. Only checked admin users receive fine ticket email notifications.
 
-## Office Staff Attendance Module
+If SMTP is disabled or fails, the fine ticket is still saved and mail failure is logged.
 
-Office staff are managed separately from regular attendance users. Admin creates staff from `Office Staff > Staff List`; the system creates a linked `office_staff` user automatically with username-only login. Admin can edit the staff username from the Office Staff list; this updates the linked login user and must remain unique.
+Fine list uses server-side pagination, backend search, search-aware counts, and previous/next controls.
 
-The application timezone is `Asia/Dubai` through `APP_TIMEZONE`. Check-in/check-out times use Laravel `now()`, so server `.env` must include `APP_TIMEZONE=Asia/Dubai` and config cache must be cleared after changing it.
+Fine search must qualify joined columns. Use `employee_fines.status`, not plain `status`, when joins exist.
 
-Office staff can mark only their own daily office attendance from `/office-attendance/mark`.
-Office staff login must always redirect to `/office-attendance/mark`, even if the browser previously opened an admin-only page. Do not use Laravel's intended URL redirect for office staff or attendance users because it can send them back to a forbidden admin route and show a 403.
+## Expenses
+
+Admin expense module:
+
+```text
+/expenses
+```
+
+Rope Access attendance users can submit expense bills from:
+
+```text
+/expenses/create?type=rope_access
+```
+
+The Rope Access Mark Attendance page also has a Create Expense Bill link.
+
+Expense bill create pages include a Back to Mark Attendance link that returns to the current employee-type attendance page.
+
+Expense form stores:
+
+- expense date
+- purpose
+- amount
+- optional note
+- receipt image
+
+The file input uses mobile camera capture hints, so phones can take a receipt photo directly from the upload control.
+
+Selected receipt photos are compressed in the browser before upload. The server allows receipt images up to 10 MB.
+
+Client-side OCR reads selected receipt images and suggests purpose and total amount. Users must verify/edit the fields before submitting because receipt quality varies.
+
+Receipt images are stored on the Laravel public disk under:
+
+```text
+expense-receipts
+```
+
+Server must have:
+
+```bash
+php artisan storage:link
+```
+
+Admin can:
+
+- filter by date range, status, and search
+- see totals
+- open receipt images
+- approve expense bills
+- reject expense bills
+- delete expense bills
+
+Deleting an expense also removes the stored receipt image.
+
+## Office Staff Attendance
+
+Office staff are managed separately from regular attendance users.
+
+Admin creates staff from:
+
+```text
+Office Staff > Staff List
+```
+
+The system creates a linked `office_staff` user automatically with username-only login.
+
+Admin can edit staff username from the Office Staff list. This updates the linked login user and must remain unique.
+
+Office staff users are hidden from the normal Users admin page. Manage them only from the Office Staff module.
+
+Office staff can mark only their own daily office attendance from:
+
+```text
+/office-attendance/mark
+```
+
+Office staff login must always redirect to `/office-attendance/mark`, even if the browser previously opened an admin-only page.
 
 Work modes:
 
 - Office Work
 - Remote Work
 
-Office attendance also tracks optional check-in and check-out times:
+Office attendance supports:
 
-- Staff can save current server time using Check In and Check Out buttons on `/office-attendance/mark`.
-- Office attendance supports multiple check-in/check-out sessions in the same day. Check In is available when there is no open session. After check-in, Check In is disabled and Check Out remains available until checkout is saved. After checkout, Check In becomes available again as "Check In Again". Checkout before check-in and duplicate checkout attempts are blocked by the controller.
-- Staff can still update work mode and note for the current day.
-- Admin can edit work mode, first check-in time, last check-out time, and note from `Office Staff > Attendance Report`. The details popup and print report show the session count and session summary for repeated same-day check-ins.
-- Existing attendance records can remain without check-in/check-out times because both fields are nullable.
+- current server-time Check In
+- current server-time Check Out
+- multiple check-in/check-out sessions in the same day
+- daily note
+- configurable office duty timing
+- configurable break timing
+- configurable late grace minutes
+- office overtime summary
 
-Admin can review office staff attendance from `Office Staff > Attendance Report`. The report supports:
+Check In is available when there is no open session. After check-in, Check In is disabled and Check Out remains available. After checkout, Check In becomes available again as "Check In Again".
 
-- Date range filter, including multi-month ranges such as January to July.
-- All staff or single staff filter.
-- Remote/office work mode filter.
-- Search by code, name, designation, or note.
-- Staff summary rows with a Details action. The Details popup uses a wide desktop dialog and shows that staff member's attendance rows, date/mode/search filters, inline admin edits, and a selected-staff PDF link. Its detail table keeps check-in, check-out, and session columns wide enough for time picker controls and repeated session text.
-- Browser print/PDF report from `/office-attendance/report-print`, including check-in and check-out time columns.
+Checkout before check-in and duplicate checkout attempts are blocked by the controller.
+
+Office attendance rules are managed from Office Staff > Attendance Report. Defaults are:
+
+- Office time: 09:00 to 19:00
+- Break time: 13:00 to 15:00
+- Break included in duty time
+- Late grace: 30 minutes
+- Overtime enabled
+
+Late is calculated from the first check-in after office start plus grace time. Overtime is calculated from the last checkout after office end. Work hours are calculated from check-in/check-out sessions. If break is set as deducted, overlapping break time is removed from work hours.
+
+Admin report:
+
+```text
+/office-attendance/report
+```
+
+Report supports:
+
+- date range filter, including multi-month ranges
+- all staff or single staff filter
+- remote/office mode filter
+- search by code, name, designation, or note
+- staff summary rows
+- Details popup per staff member
+- inline admin edits
+- selected-staff PDF link
+- print/PDF report from `/office-attendance/report-print`
+- work hours, overtime, and late summaries
+- same rule summary in browser report and print/PDF report
 
 Database tables:
 
@@ -432,57 +605,106 @@ Database tables:
 - `office_staff_attendances`
 - `office_staff_attendance_sessions`
 
-Office staff users are intentionally hidden from the normal `Users` admin page. Manage them from the Office Staff module to avoid mixing admin/attendance-user permissions with staff attendance logins.
+## Sorting And Search
 
-## Safety Checklist Before Major Changes
+Core admin/report tables should use clickable sortable headers with ascending/descending indicators.
 
-1. Run `git status --short`.
-2. Commit or push a checkpoint if the current work is stable.
-3. Backup the database before schema changes.
-4. Run migrations carefully.
-5. Run `php artisan optimize:clear` after route/controller/view changes.
-6. Run `npm run build` after frontend changes.
-7. Check important pages in the browser.
-8. Do not delete XAMPP MySQL data folders without a backup.
+Sorting is available on:
 
-## XAMPP MySQL Recovery Note
+- employee lists
+- project lists
+- attendance detail
+- leaves
+- fines
+- payroll salary settings
+- payroll report
+- projects overview
 
-MySQL previously crashed in XAMPP. A non-destructive recovery was done by restoring XAMPP MySQL `data` from backup and copying user databases plus original InnoDB files from old data.
+Fines sorting is handled through server-side query sorting so pagination remains accurate.
 
-Do not delete these folders unless a full backup exists:
+Search should include employee code wherever employee names are searchable.
+
+## Known Technical Notes
+
+Leave list rows are converted to base collections before merging long leave, daily leave, and absent records. This avoids Laravel Eloquent collection merge errors when rows are mapped to arrays.
+
+Payroll save actions handle expired CSRF/session tokens by showing a clear message and refreshing the page so a new token is loaded.
+
+MySQL previously crashed in XAMPP. Do not delete these folders unless a full backup exists:
 
 ```text
 D:\xampp\mysql\data-old
 D:\xampp\mysql\data-broken-*
 ```
 
-## Recommended Future Improvements
+## Safety Checklist
 
-- Add admin activity log for payroll, attendance, leave, and project changes.
-- Add database backup button or scheduled backup script.
-- Add export PDF/Excel for Project Employee History.
-- Add stricter role middleware and route permission checks.
-- Add tests for payroll carry-forward balance logic.
-- Add tests for duplicate attendance prevention.
-- Add tests for date restrictions on attendance forms.
-- Add audit columns like `created_by`, `updated_by`, and `deleted_by` where needed.
+Before major changes:
+
+1. Run `git status --short`.
+2. Commit or push a checkpoint if current work is stable.
+3. Backup database before schema changes.
+4. Run migrations carefully.
+5. Run `php artisan optimize:clear` after route/controller/view changes.
+6. Run `npm run build` after frontend changes.
+7. Check important pages in the browser.
+8. Do not delete XAMPP MySQL data folders without a backup.
 
 ## Development Checklist
 
 When continuing this project:
 
 1. Work only in `D:\projects\attendance-system`.
-2. Read `routes/web.php` first to understand available pages.
-3. Read these controllers next:
+2. Read `routes/web.php` first.
+3. Read these controllers:
    - `app/Http/Controllers/DashboardController.php`
    - `app/Http/Controllers/PublicAttendanceController.php`
    - `app/Http/Controllers/PayrollController.php`
    - `app/Http/Controllers/ProjectController.php`
-4. Read these frontend pages next:
+   - `app/Http/Controllers/EmployeeExpenseController.php`
+   - `app/Http/Controllers/OfficeStaffController.php`
+   - `app/Http/Controllers/OfficeAttendanceController.php`
+   - `app/Http/Controllers/OfficeAttendanceReportController.php`
+4. Read these frontend pages:
+   - `resources/js/pages/Public/MarkAttendance.vue`
+   - `resources/js/pages/Payroll/Index.vue`
    - `resources/js/pages/Payroll/Report.vue`
    - `resources/js/pages/Projects/Overview.vue`
    - `resources/js/pages/Attendance/Timesheet.vue`
+   - `resources/js/pages/Expenses/Create.vue`
+   - `resources/js/pages/Expenses/Index.vue`
+   - `resources/js/pages/OfficeAttendance/Mark.vue`
+   - `resources/js/pages/OfficeAttendance/Report.vue`
+   - `resources/js/pages/OfficeStaff/Index.vue`
    - `resources/js/components/AppSidebar.vue`
 5. Keep UI text English only.
-6. Do not assume the database is disposable.
+6. Do not assume database data is disposable.
 7. Ask before destructive commands.
+
+## Recommended Future Improvements
+
+- Add admin activity log for payroll, attendance, leave, fine, expense, and project changes.
+- Add database backup button or scheduled backup script.
+- Add export PDF/Excel for Project Employee History.
+- Add stricter role middleware and route permission checks.
+- Add tests for payroll carry-forward balance logic.
+- Add tests for duplicate attendance prevention.
+- Add tests for attendance date restrictions.
+- Add tests for office staff check-in/check-out sessions.
+- Add audit columns like `created_by`, `updated_by`, and `deleted_by` where needed.
+
+## Latest Change Notes
+
+- Office staff attendance now has a reception/tablet staff list at `/office-attendance/staff`.
+- Office staff users are redirected to the staff list after login, and each active staff card opens that staff member's attendance form.
+- Office attendance submissions from the staff list store the selected staff member's linked user as `submitted_by`.
+- Office staff records now support an optional profile photo uploaded from the Office Staff admin page.
+- Staff cards show photo or initials, designation, today's status, work mode, check-in time, and check-out time.
+- The office staff attendance list uses a profile-card layout with photo/avatar, live status dot, work mode, session count, and check-in/check-out summary for reception/tablet use.
+- Office staff cards display latest check-in/check-out in 12-hour AM/PM format; open sessions show `Open`. Report detail session summaries are highlighted as readable time chips.
+- Office attendance print/PDF reports use the same readable 12-hour AM/PM time format and show repeated same-day sessions as highlighted session chips.
+- Office attendance print/PDF reports include a cleaner summary-card header and improved table styling so browser print/download keeps the same layout.
+- Office attendance report now has admin-configurable office start/end time, break time, break inclusion, late grace minutes, and overtime setting. Reports show work hours, overtime, and late status from the configured rules.
+- Office staff attendance board `/office-attendance/staff` and staff profile attendance links are public for reception/tablet use. When a profile submits attendance, `submitted_by` is saved as that staff member's linked user, not the currently logged-in admin or another user.
+- Office staff type display now uses `Remote` and `Office Work`; the existing database value for office staff remains `on_site` for compatibility.
+- Office staff attendance board cards now use a profile-card design with a large rounded photo area, soft shadow, status badge, verified-style indicator, compact work/session stats, and a pill-style attendance action.

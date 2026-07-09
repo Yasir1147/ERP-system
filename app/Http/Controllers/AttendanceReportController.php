@@ -208,6 +208,18 @@ class AttendanceReportController extends Controller
         ])->with('success', 'Attendance record updated.');
     }
 
+    public function destroy(Request $request, AttendanceRecord $attendanceRecord): RedirectResponse
+    {
+        $attendanceRecord->delete();
+
+        return to_route('attendance.index', [
+            'type' => $request->query('filter_type', 'all'),
+            'employee_id' => $request->query('filter_employee_id', 'all'),
+            'start_date' => $request->query('filter_start_date'),
+            'end_date' => $request->query('filter_end_date'),
+        ])->with('success', 'Attendance record deleted.');
+    }
+
     private function attendanceRecords(string $startDate, string $endDate, ?string $type, ?int $employeeId): Collection
     {
         return AttendanceRecord::query()

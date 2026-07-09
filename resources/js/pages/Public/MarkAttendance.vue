@@ -30,6 +30,18 @@ interface EmployeeLeave {
     reason: string | null;
 }
 
+interface TodayRecord {
+    id: number;
+    employeeCode: string | null;
+    employeeName: string;
+    employeeProfession: string | null;
+    status: string;
+    projectName: string | null;
+    overtimeProjectName: string | null;
+    reason: string | null;
+    overtimeHours: number | null;
+}
+
 const props = defineProps<{
     projects: Project[];
     employees: Employee[];
@@ -41,6 +53,7 @@ const props = defineProps<{
     attendanceDateMin: string | null;
     attendanceDateMax: string;
     attendanceDateHelp: string;
+    todayRecords: TodayRecord[];
 }>();
 
 const today = props.attendanceDateMax;
@@ -146,6 +159,28 @@ const employeeLeaveLabel = (employee: Employee) => {
 };
 
 const isEmployeeDisabled = (employee: Employee) => Boolean(leaveForEmployee(employee));
+
+const statusLabel = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
+
+const statusClass = (status: string) => {
+    if (status === 'present') return 'border-green-600/30 bg-green-600/10 text-green-700';
+    if (status === 'absent') return 'border-red-600/30 bg-red-600/10 text-red-700';
+
+    return 'border-amber-600/30 bg-amber-600/10 text-amber-700';
+};
+
+const todayRecordDetail = (record: TodayRecord) => {
+    if (record.status === 'present') {
+        const overtime =
+            record.overtimeHours && Number(record.overtimeHours) > 0
+                ? `, OT ${record.overtimeHours}h${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
+                : '';
+
+        return `${record.projectName || 'Project not selected'}${overtime}`;
+    }
+
+    return record.reason || statusLabel(record.status);
+};
 
 const selectProject = (project: Project) => {
     form.project_id = String(project.id);
@@ -568,6 +603,38 @@ const submit = () => {
                     </div>
                 </div>
             </form>
+
+            <section class="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-base font-medium">Today's Submitted Attendance</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">{{ todayRecords.length }} records submitted by you today.</p>
+                    </div>
+                </div>
+
+                <div v-if="todayRecords.length" class="mt-4 grid max-h-80 gap-2 overflow-y-auto pr-1">
+                    <div
+                        v-for="record in todayRecords"
+                        :key="record.id"
+                        class="grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center"
+                    >
+                        <div class="min-w-0">
+                            <p class="truncate font-medium">
+                                {{ record.employeeCode ? `${record.employeeCode} - ${record.employeeName}` : record.employeeName }}
+                            </p>
+                            <p class="truncate text-xs text-muted-foreground">{{ record.employeeProfession || '-' }}</p>
+                            <p class="mt-1 truncate text-xs text-muted-foreground">{{ todayRecordDetail(record) }}</p>
+                        </div>
+                        <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">
+                            {{ statusLabel(record.status) }}
+                        </span>
+                    </div>
+                </div>
+
+                <div v-else class="mt-4 rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
+                    No attendance submitted by you today.
+                </div>
+            </section>
         </div>
     </main>
 </template>

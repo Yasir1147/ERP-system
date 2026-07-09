@@ -41,7 +41,7 @@ class AuthenticatedSessionController extends Controller
         }
 
         if ($request->user()->role === User::ROLE_OFFICE_STAFF) {
-            return redirect()->route('office-attendance.create');
+            return redirect()->route('office-attendance.staff.index');
         }
 
         return redirect()->intended(route('dashboard', absolute: false));

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { CheckCircle2, ChevronDown, Search } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -32,6 +32,17 @@ const employeeOpen = ref(false);
 const employeeDropdownRef = ref<HTMLElement | null>(null);
 
 const successMessage = computed(() => page.props.flash?.success as string | undefined);
+const attendanceHomeUrl = computed(() => {
+    if (props.selectedType === 'rope_access') {
+        return '/mark-attendance/rope-access';
+    }
+
+    if (props.selectedType === 'contracting') {
+        return '/mark-attendance/contracting';
+    }
+
+    return '/mark-attendance';
+});
 
 const form = useForm({
     employee_id: '',
@@ -108,6 +119,9 @@ const submitFine = () => {
                 <AppLogoIcon class="mx-auto size-24" />
                 <h1 class="mt-3 text-2xl font-semibold tracking-normal">Create Fine Ticket</h1>
                 <p class="mt-1 text-sm text-muted-foreground">Submit a {{ employeeTypeLabel }} fine for admin review.</p>
+                <Link :href="attendanceHomeUrl" class="mt-3 inline-flex text-sm font-medium text-primary underline underline-offset-4">
+                    Back to Mark Attendance
+                </Link>
             </div>
 
             <form class="min-w-0 overflow-hidden rounded-lg border border-sidebar-border/70 bg-card p-5 shadow-sm" @submit.prevent="submitFine">

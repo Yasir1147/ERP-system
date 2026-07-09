@@ -18,7 +18,7 @@ class OfficeStaff extends Model
 
     public const TYPES = [
         self::TYPE_REMOTE => 'Remote',
-        self::TYPE_ON_SITE => 'On Site',
+        self::TYPE_ON_SITE => 'Office Work',
     ];
 
     public const STATUSES = [
@@ -33,6 +33,7 @@ class OfficeStaff extends Model
         'code',
         'name',
         'designation',
+        'photo_path',
         'staff_type',
         'status',
     ];

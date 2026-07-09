@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -27,6 +28,7 @@ class OfficeStaffController extends Controller
                     'code' => $staff->code,
                     'name' => $staff->name,
                     'designation' => $staff->designation,
+                    'photoUrl' => $staff->photo_path ? Storage::disk('public')->url($staff->photo_path) : null,
                     'staffType' => $staff->staff_type,
                     'staffTypeLabel' => OfficeStaff::TYPES[$staff->staff_type] ?? $staff->staff_type,
                     'status' => $staff->status,
@@ -45,11 +47,14 @@ class OfficeStaffController extends Controller
             'code' => ['required', 'string', 'max:50', 'unique:office_staff,code'],
             'name' => ['required', 'string', 'max:255'],
             'designation' => ['nullable', 'string', 'max:255'],
+            'photo' => ['nullable', 'image', 'max:5120'],
             'staff_type' => ['required', Rule::in(array_keys(OfficeStaff::TYPES))],
             'status' => ['required', Rule::in(array_keys(OfficeStaff::STATUSES))],
         ]);
 
-        DB::transaction(function () use ($data) {
+        $photoPath = $request->file('photo')?->store('office-staff', 'public');
+
+        DB::transaction(function () use ($data, $photoPath) {
             $username = $this->uniqueUsername($data['name'], $data['code']);
 
             $user = User::create([
@@ -62,8 +67,13 @@ class OfficeStaffController extends Controller
             ]);
 
             OfficeStaff::create([
-                ...$data,
                 'user_id' => $user->id,
+                'code' => $data['code'],
+                'name' => $data['name'],
+                'designation' => $data['designation'],
+                'photo_path' => $photoPath,
+                'staff_type' => $data['staff_type'],
+                'status' => $data['status'],
             ]);
         });
 
@@ -77,15 +87,27 @@ class OfficeStaffController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($officeStaff->user_id)],
             'designation' => ['nullable', 'string', 'max:255'],
+            'photo' => ['nullable', 'image', 'max:5120'],
             'staff_type' => ['required', Rule::in(array_keys(OfficeStaff::TYPES))],
             'status' => ['required', Rule::in(array_keys(OfficeStaff::STATUSES))],
         ]);
 
-        DB::transaction(function () use ($officeStaff, $data) {
+        $photoPath = $officeStaff->photo_path;
+
+        if ($request->hasFile('photo')) {
+            if ($photoPath) {
+                Storage::disk('public')->delete($photoPath);
+            }
+
+            $photoPath = $request->file('photo')->store('office-staff', 'public');
+        }
+
+        DB::transaction(function () use ($officeStaff, $data, $photoPath) {
             $officeStaff->update([
                 'code' => $data['code'],
                 'name' => $data['name'],
                 'designation' => $data['designation'],
+                'photo_path' => $photoPath,
                 'staff_type' => $data['staff_type'],
                 'status' => $data['status'],
             ]);
@@ -102,6 +124,9 @@ class OfficeStaffController extends Controller
     {
         DB::transaction(function () use ($officeStaff) {
             $user = $officeStaff->user;
+            if ($officeStaff->photo_path) {
+                Storage::disk('public')->delete($officeStaff->photo_path);
+            }
             $officeStaff->delete();
             $user?->delete();
         });
