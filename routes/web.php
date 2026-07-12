@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AttendanceTimesheetController;
+use App\Http\Controllers\ContractingDutyPlanController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeExpenseController;
@@ -46,6 +47,27 @@ Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class,
 Route::get('attendance/timesheet-print', [AttendanceTimesheetController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.print');
 
 Route::middleware(['attendance.access'])->group(function () {
+    Route::get('contracting-duty-plans', [ContractingDutyPlanController::class, 'index'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.index');
+    Route::post('contracting-duty-plans/assignments', [ContractingDutyPlanController::class, 'storeAssignments'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.assignments.store');
+    Route::put('contracting-duty-assignments/{assignment}', [ContractingDutyPlanController::class, 'updateAssignment'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.assignments.update');
+    Route::delete('contracting-duty-assignments/{assignment}', [ContractingDutyPlanController::class, 'destroyAssignment'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.assignments.destroy');
+    Route::post('contracting-duty-plans/{plan}/mark-present', [ContractingDutyPlanController::class, 'markPlannedPresent'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.mark-present');
+    Route::post('contracting-duty-plans/{plan}/publish', [ContractingDutyPlanController::class, 'publish'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.publish');
+    Route::post('contracting-duty-plans/{plan}/finalize', [ContractingDutyPlanController::class, 'finalize'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.finalize');
     Route::get('expenses/create', [EmployeeExpenseController::class, 'create'])->name('expenses.create');
     Route::post('expenses', [EmployeeExpenseController::class, 'store'])->name('expenses.store');
     Route::get('fines/create', [EmployeeFineController::class, 'create'])->name('fines.create');

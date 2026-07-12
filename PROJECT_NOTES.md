@@ -159,7 +159,20 @@ Attendance:
 /attendance
 /attendance/timesheet
 /attendance/timesheet-print
+/contracting-duty-plans
 ```
+
+## Contracting Duty Planning
+
+Contracting duty plans are operational schedules and remain separate from attendance until final review.
+
+- Allowed Contracting users can prepare a dated duty plan and assign employees to project-based Duty Plan accordions.
+- New assignments default to Present. Field users only change exceptions to Absent, Leave, or Removed and add overtime when required.
+- A newer dated duty may be prepared while an older duty is pending, but attendance must be submitted in date order.
+- Removed employees create no attendance record. Absent and Leave create their matching attendance status.
+- Present employees may have overtime hours and an optional different overtime project. The main project is used when no overtime project is selected.
+- Submit Attendance uses one database transaction and stops on duplicate attendance rather than saving a partial result.
+- Submitted plans are locked. Admin corrections continue through the Attendance Report.
 
 Admin modules:
 
@@ -694,6 +707,9 @@ When continuing this project:
 - Add audit columns like `created_by`, `updated_by`, and `deleted_by` where needed.
 
 ## Latest Change Notes
+
+- Contracting duty workflow is simplified for field users: new duty employees default to Present, Planned/Mark Planned Present/Publish controls are hidden, and one Submit Attendance action performs the protected final submission. Legacy Planned assignments are treated as Present when submitted.
+- Contracting duty assignments are now displayed as project-wise Duty Plan accordions. A date can contain multiple project duties, each accordion contains only that project's employees, and users can copy all duties as project-grouped text for WhatsApp sharing.
 
 - Office staff attendance now has a reception/tablet staff list at `/office-attendance/staff`.
 - Office staff users are redirected to the staff list after login, and each active staff card opens that staff member's attendance form.

@@ -46,6 +46,7 @@ class PublicAttendanceController extends Controller
             'employeeType' => $type,
             'employeeTypeLabel' => Employee::TYPES[$type],
             'submitUrl' => $this->submitUrl($type),
+            'dutyPlanUrl' => $type === 'contracting' ? '/contracting-duty-plans' : null,
             'expenseCreateUrl' => $type === 'rope_access' ? '/expenses/create?type=rope_access' : null,
             'attendanceDateMin' => $dateRange['min'],
             'attendanceDateMax' => $dateRange['max'],

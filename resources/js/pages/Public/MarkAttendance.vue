@@ -49,6 +49,7 @@ const props = defineProps<{
     employeeType: string;
     employeeTypeLabel: string;
     submitUrl: string;
+    dutyPlanUrl: string | null;
     expenseCreateUrl: string | null;
     attendanceDateMin: string | null;
     attendanceDateMax: string;
@@ -345,6 +346,9 @@ const submit = () => {
                 </div>
                 <Link :href="`/fines/create?type=${encodeURIComponent(employeeType)}`" class="text-sm font-medium text-primary underline underline-offset-4">
                     Create Fine Ticket
+                </Link>
+                <Link v-if="dutyPlanUrl" :href="dutyPlanUrl" class="text-sm font-medium text-primary underline underline-offset-4">
+                    Contracting Duty Planning
                 </Link>
                 <Link v-if="expenseCreateUrl" :href="expenseCreateUrl" class="text-sm font-medium text-primary underline underline-offset-4">
                     Create Expense Bill
