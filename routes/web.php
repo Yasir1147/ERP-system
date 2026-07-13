@@ -68,6 +68,9 @@ Route::middleware(['attendance.access'])->group(function () {
     Route::post('contracting-duty-plans/{plan}/finalize', [ContractingDutyPlanController::class, 'finalize'])
         ->defaults('type', 'contracting')
         ->name('contracting-duties.finalize');
+    Route::delete('contracting-duty-plans/{plan}', [ContractingDutyPlanController::class, 'destroy'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.destroy');
     Route::get('expenses/create', [EmployeeExpenseController::class, 'create'])->name('expenses.create');
     Route::post('expenses', [EmployeeExpenseController::class, 'store'])->name('expenses.store');
     Route::get('fines/create', [EmployeeFineController::class, 'create'])->name('fines.create');

@@ -222,6 +222,15 @@ class ContractingDutyPlanController extends Controller
         return back()->with('success', 'Employee removed from the duty plan.');
     }
 
+    public function destroy(Request $request, ContractingDutyPlan $plan): RedirectResponse
+    {
+        $this->ensureContractingAccess($request);
+        $this->ensureEditable($plan);
+        $plan->delete();
+
+        return back()->with('success', 'Duty plan deleted.');
+    }
+
     public function markPlannedPresent(Request $request, ContractingDutyPlan $plan): RedirectResponse
     {
         $this->ensureContractingAccess($request);

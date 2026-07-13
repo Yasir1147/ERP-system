@@ -277,6 +277,11 @@ const removeAssignment = (assignment: Assignment) => {
     router.delete(`/contracting-duty-assignments/${assignment.id}`, { preserveScroll: true });
 };
 
+const deleteRecentPlan = (recent: RecentPlan) => {
+    if (recent.status === 'finalized' || !window.confirm(`Delete the duty plan for ${formatDate(recent.date)}? This will remove all of its assignments.`)) return;
+    router.delete(`/contracting-duty-plans/${recent.id}`, { preserveScroll: true });
+};
+
 const finalizePlan = () => {
     if (!props.plan || !window.confirm('Submit this duty plan as attendance? Please confirm employee status and overtime before continuing.')) return;
     router.post(`/contracting-duty-plans/${props.plan.id}/finalize`, {}, { preserveScroll: true });
@@ -314,7 +319,7 @@ const finalizePlan = () => {
                 The {{ formatDate(pendingOlderPlan.date) }} duty plan is still {{ pendingOlderPlan.status }}. You can prepare this draft, but publish it only after completing the older plan.
             </div>
 
-            <section class="grid gap-4 rounded-lg border bg-card p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:p-5">
+            <section class="grid gap-4 rounded-lg border bg-card p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5">
                 <div class="grid gap-2">
                     <Label for="duty-date">Duty Date</Label>
                     <Input id="duty-date" v-model="selectedDate" type="date" :min="dateMin || undefined" :max="dateMax" />
@@ -414,8 +419,8 @@ const finalizePlan = () => {
 
                         <div v-if="openDutyGroups[String(group.projectId)]" class="grid gap-3 border-t bg-muted/10 p-3 sm:p-4">
                     <div v-for="assignment in group.assignments" :key="assignment.id" class="rounded-md border bg-card p-3 sm:p-4">
-                        <div class="grid gap-4 xl:grid-cols-[minmax(180px,1fr)_minmax(170px,0.8fr)_140px_minmax(270px,1.3fr)_minmax(150px,0.7fr)_auto] xl:items-end">
-                            <div class="min-w-0 xl:self-center">
+                        <div class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.75fr)_minmax(0,1.25fr)_minmax(0,1fr)_auto] lg:items-end lg:gap-2">
+                            <div class="min-w-0 lg:self-center">
                                 <p class="truncate font-medium">{{ assignment.employeeCode ? `${assignment.employeeCode} - ` : '' }}{{ assignment.employeeName }}</p>
                                 <p class="truncate text-xs text-muted-foreground">{{ assignment.profession || '-' }}</p>
                                 <span v-if="isFinalized" class="mt-2 inline-flex rounded-full border px-2 py-1 text-xs" :class="statusClass(assignment.status)">{{ statusLabel(assignment.status) }}</span>
@@ -440,7 +445,7 @@ const finalizePlan = () => {
                                     <input v-model="assignmentForms[assignment.id].has_overtime" type="checkbox" :disabled="isFinalized || assignmentForms[assignment.id].status !== 'present'" />
                                     Overtime applied
                                 </label>
-                                <div v-if="assignmentForms[assignment.id].has_overtime && assignmentForms[assignment.id].status === 'present'" class="grid grid-cols-[90px_1fr] gap-2">
+                                <div v-if="assignmentForms[assignment.id].has_overtime && assignmentForms[assignment.id].status === 'present'" class="grid grid-cols-[90px_1fr] gap-2 lg:grid-cols-2">
                                     <select v-model="assignmentForms[assignment.id].overtime_hours" :disabled="isFinalized" class="h-9 rounded-md border border-input bg-background px-2 text-sm">
                                         <option value="">Hours</option>
                                         <option v-for="hour in 10" :key="hour" :value="String(hour)">{{ hour }}h</option>
@@ -476,13 +481,26 @@ const finalizePlan = () => {
             <section v-if="recentPlans.length" class="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
                 <div class="mb-3 flex items-center gap-2"><Clock3 class="size-4" /><h2 class="font-medium">Recent Duty Plans</h2></div>
                 <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                    <Link v-for="recent in recentPlans" :key="recent.id" :href="`/contracting-duty-plans?date=${recent.date}`" class="rounded-md border p-3 transition-colors hover:bg-accent">
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="text-sm font-medium">{{ formatDate(recent.date) }}</span>
-                            <span class="rounded-full border px-2 py-0.5 text-[11px]" :class="statusClass(recent.status)">{{ statusLabel(recent.status) }}</span>
-                        </div>
-                        <p class="mt-2 text-xs text-muted-foreground">{{ recent.assignmentCount }} employees</p>
-                    </Link>
+                    <div v-for="recent in recentPlans" :key="recent.id" class="flex items-center rounded-md border transition-colors hover:bg-accent">
+                        <Link :href="`/contracting-duty-plans?date=${recent.date}`" class="min-w-0 flex-1 p-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-sm font-medium">{{ formatDate(recent.date) }}</span>
+                                <span class="rounded-full border px-2 py-0.5 text-[11px]" :class="statusClass(recent.status)">{{ statusLabel(recent.status) }}</span>
+                            </div>
+                            <p class="mt-2 text-xs text-muted-foreground">{{ recent.assignmentCount }} employees</p>
+                        </Link>
+                        <Button
+                            v-if="recent.status !== 'finalized'"
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            class="mr-2 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            title="Delete duty plan"
+                            @click="deleteRecentPlan(recent)"
+                        >
+                            <Trash2 class="size-4" />
+                        </Button>
+                    </div>
                 </div>
             </section>
         </div>
