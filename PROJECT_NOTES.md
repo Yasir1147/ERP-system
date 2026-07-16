@@ -706,6 +706,59 @@ When continuing this project:
 - Add tests for office staff check-in/check-out sessions.
 - Add audit columns like `created_by`, `updated_by`, and `deleted_by` where needed.
 
+## Cheque Format Management
+
+Admin users can manage reusable cheque layouts from:
+
+```text
+/cheque-formats
+```
+
+The module includes:
+
+- a reusable bank master created from the cheque format form
+- searchable and bank-filtered cheque format listing
+- create, edit, duplicate, and delete actions
+- ten stable cheque field keys with individual positioning and formatting
+- native mouse and touch dragging inside a bounded cheque preview
+- synchronized manual coordinates and directional movement controls
+- unsaved-change and concurrent-update protection
+- optional cheque template images used only in designer and preparation previews
+- a separate printable company logo with configurable position, size, and visibility
+- Party Master with contact details and inline party creation
+- cheque preparation with format and party selection
+- each cheque format has an admin-controlled next cheque number; cheque preparation allocates it transactionally and advances the sequence without allowing manual skips
+- Add Party and Add Bank use modal dialogs instead of expanding the page inline
+- automatic English amount-in-words generation
+- UAE fractional amounts use Fils instead of Cents; each cheque can optionally force Fils onto the second amount-in-words line
+- optional payment voucher details with cheque-derived number, dates, amount, words, and beneficiary
+- separate cheque and A4 payment-voucher print pages; either page can be saved as PDF from the browser print dialog
+- prepared cheque history with edit, print, and delete actions
+- immutable format snapshots saved with prepared cheques
+
+Cheque dimensions, field positions, and optional field sizes are stored in millimetres. Font sizes are stored in points. Preview zoom changes only the screen representation and never changes saved measurements.
+
+Coordinate inputs support 0.01 mm precision so dragged and manually entered values use the same validation step.
+
+The designer canvas, uploaded template image, and field guides are alignment aids only. Cheque printing outputs positioned text and the optional company logo onto a physical pre-printed cheque leaf supplied by the user. The print page does not receive or render the cheque template image, canvas outline, bank artwork, application layout, or designer guides. Browser printing should use 100% / Actual Size with headers and footers disabled. Printer-specific X/Y calibration remains a recommended future improvement.
+
+Cheque workflow URLs:
+
+```text
+/cheques
+/cheques/create
+/cheque-parties
+/cheque-formats
+```
+
+Database tables:
+
+- `banks`
+- `cheque_formats`
+- `cheque_format_fields`
+- `cheque_parties`
+- `cheques`
+
 ## Latest Change Notes
 
 - Contracting duty workflow is simplified for field users: new duty employees default to Present, Planned/Mark Planned Present/Publish controls are hidden, and one Submit Attendance action performs the protected final submission. Legacy Planned assignments are treated as Present when submitted.

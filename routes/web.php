@@ -2,6 +2,10 @@
 
 use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AttendanceTimesheetController;
+use App\Http\Controllers\BankController;
+use App\Http\Controllers\ChequeFormatController;
+use App\Http\Controllers\ChequeController;
+use App\Http\Controllers\ChequePartyController;
 use App\Http\Controllers\ContractingDutyPlanController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
@@ -101,6 +105,19 @@ Route::middleware(['auth', 'role:office_staff'])->group(function () {
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+    Route::post('banks', [BankController::class, 'store'])->name('banks.store');
+    Route::post('cheque-formats/{chequeFormat}/background', [ChequeFormatController::class, 'storeBackground'])->name('cheque-formats.background.store');
+    Route::delete('cheque-formats/{chequeFormat}/background', [ChequeFormatController::class, 'destroyBackground'])->name('cheque-formats.background.destroy');
+    Route::post('cheque-formats/{chequeFormat}/logo', [ChequeFormatController::class, 'storeLogo'])->name('cheque-formats.logo.store');
+    Route::delete('cheque-formats/{chequeFormat}/logo', [ChequeFormatController::class, 'destroyLogo'])->name('cheque-formats.logo.destroy');
+    Route::post('cheque-formats/{chequeFormat}/cheque-sequence', [ChequeFormatController::class, 'storeChequeSequence'])->name('cheque-formats.cheque-sequence.store');
+    Route::post('cheque-formats/{chequeFormat}/duplicate', [ChequeFormatController::class, 'duplicate'])->name('cheque-formats.duplicate');
+    Route::resource('cheque-formats', ChequeFormatController::class)->except('show');
+    Route::resource('cheque-parties', ChequePartyController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::get('cheques/{cheque}/print', [ChequeController::class, 'print'])->name('cheques.print');
+    Route::get('cheques/{cheque}/voucher', [ChequeController::class, 'voucher'])->name('cheques.voucher');
+    Route::post('cheques/{cheque}/mark-printed', [ChequeController::class, 'markPrinted'])->name('cheques.mark-printed');
+    Route::resource('cheques', ChequeController::class)->except('show');
     Route::get('employees/{type}', [EmployeeController::class, 'index'])
         ->whereIn('type', ['rope_access', 'contracting'])
         ->name('employees.type.index');

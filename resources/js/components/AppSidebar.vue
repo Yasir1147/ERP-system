@@ -4,7 +4,19 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { Banknote, BriefcaseBusiness, Building2, CalendarCheck, CircleDollarSign, LayoutGrid, Plane, ReceiptText, UserCog, Users } from 'lucide-vue-next';
+import {
+    Banknote,
+    BriefcaseBusiness,
+    Building2,
+    CalendarCheck,
+    CircleDollarSign,
+    FileCheck2,
+    LayoutGrid,
+    Plane,
+    ReceiptText,
+    UserCog,
+    Users,
+} from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -97,6 +109,29 @@ const mainNavItems: NavItem[] = [
         ],
     },
     {
+        title: 'Cheques',
+        href: '/cheques',
+        icon: FileCheck2,
+        items: [
+            {
+                title: 'Cheque List',
+                href: '/cheques',
+            },
+            {
+                title: 'Prepare Cheque',
+                href: '/cheques/create',
+            },
+            {
+                title: 'Party Master',
+                href: '/cheque-parties',
+            },
+            {
+                title: 'Cheque Formats',
+                href: '/cheque-formats',
+            },
+        ],
+    },
+    {
         title: 'Projects',
         href: '/projects',
         icon: BriefcaseBusiness,
@@ -147,4 +182,3 @@ const mainNavItems: NavItem[] = [
     </Sidebar>
     <slot />
 </template>
-
