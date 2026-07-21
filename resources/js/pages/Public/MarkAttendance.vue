@@ -4,8 +4,8 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { CalendarDays, CheckCircle2, ChevronDown, Search, X } from 'lucide-vue-next';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, Search, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 interface Project {
@@ -30,8 +30,8 @@ interface EmployeeLeave {
     reason: string | null;
 }
 
-interface TodayRecord {
-    id: number;
+interface SubmittedRecord {
+    id: string;
     employeeCode: string | null;
     employeeName: string;
     employeeProfession: string | null;
@@ -40,6 +40,8 @@ interface TodayRecord {
     overtimeProjectName: string | null;
     reason: string | null;
     overtimeHours: number | null;
+    submittedAt: string;
+    submittedTime: string;
 }
 
 const props = defineProps<{
@@ -54,7 +56,10 @@ const props = defineProps<{
     attendanceDateMin: string | null;
     attendanceDateMax: string;
     attendanceDateHelp: string;
-    todayRecords: TodayRecord[];
+    todayRecords: SubmittedRecord[];
+    historyEnabled: boolean;
+    historyDate: string;
+    historyRecords: SubmittedRecord[];
 }>();
 
 const today = props.attendanceDateMax;
@@ -64,6 +69,12 @@ const statusOptions = [
     { value: 'absent', label: 'Absent' },
     { value: 'leave', label: 'Leave' },
 ];
+const historyFilterOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'present', label: 'Present' },
+    { value: 'absent', label: 'Absent' },
+    { value: 'leave', label: 'Leave' },
+] as const;
 const projectSearch = ref('');
 const overtimeProjectSearch = ref('');
 const employeeSearch = ref('');
@@ -73,6 +84,9 @@ const employeeOpen = ref(false);
 const employeeDropdownRef = ref<HTMLElement | null>(null);
 const projectDropdownRef = ref<HTMLElement | null>(null);
 const overtimeProjectDropdownRef = ref<HTMLElement | null>(null);
+const reviewDate = ref(props.historyDate);
+const historyStatus = ref('all');
+const historyLoading = ref(false);
 
 const form = useForm({
     project_id: '',
@@ -170,7 +184,7 @@ const statusClass = (status: string) => {
     return 'border-amber-600/30 bg-amber-600/10 text-amber-700';
 };
 
-const todayRecordDetail = (record: TodayRecord) => {
+const submittedRecordDetail = (record: SubmittedRecord) => {
     if (record.status === 'present') {
         const overtime =
             record.overtimeHours && Number(record.overtimeHours) > 0
@@ -181,6 +195,57 @@ const todayRecordDetail = (record: TodayRecord) => {
     }
 
     return record.reason || statusLabel(record.status);
+};
+
+const submittedRecords = computed(() => (props.historyEnabled ? props.historyRecords : props.todayRecords));
+const filteredSubmittedRecords = computed(() => {
+    if (!props.historyEnabled || historyStatus.value === 'all') {
+        return submittedRecords.value;
+    }
+
+    return submittedRecords.value.filter((record) => record.status === historyStatus.value);
+});
+const historySummary = computed(() => ({
+    all: props.historyRecords.length,
+    present: props.historyRecords.filter((record) => record.status === 'present').length,
+    absent: props.historyRecords.filter((record) => record.status === 'absent').length,
+    leave: props.historyRecords.filter((record) => record.status === 'leave').length,
+}));
+const historyCount = (status: keyof typeof historySummary.value) => historySummary.value[status];
+const isLatestHistoryDate = computed(() => reviewDate.value >= today);
+
+const loadHistory = (date: string) => {
+    if (!props.historyEnabled || !date || date > today) {
+        reviewDate.value = props.historyDate;
+        return;
+    }
+
+    router.get(
+        props.submitUrl,
+        { history_date: date },
+        {
+            only: ['historyDate', 'historyRecords'],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onStart: () => (historyLoading.value = true),
+            onFinish: () => (historyLoading.value = false),
+        },
+    );
+};
+
+const shiftHistoryDate = (days: number) => {
+    const date = new Date(`${reviewDate.value}T12:00:00`);
+    date.setDate(date.getDate() + days);
+
+    const nextDate = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+
+    if (nextDate > today) {
+        return;
+    }
+
+    reviewDate.value = nextDate;
+    loadHistory(nextDate);
 };
 
 const selectProject = (project: Project) => {
@@ -256,6 +321,13 @@ onMounted(() => {
 onBeforeUnmount(() => {
     document.removeEventListener('click', closeDropdownsOnOutsideClick);
 });
+
+watch(
+    () => props.historyDate,
+    (date) => {
+        reviewDate.value = date;
+    },
+);
 
 watch(
     () => form.status,
@@ -611,14 +683,72 @@ const submit = () => {
             <section class="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
                 <div class="flex items-start justify-between gap-3">
                     <div>
-                        <h2 class="text-base font-medium">Today's Submitted Attendance</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">{{ todayRecords.length }} records submitted by you today.</p>
+                        <h2 class="text-base font-medium">{{ historyEnabled ? 'Submitted Attendance History' : "Today's Submitted Attendance" }}</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            {{ submittedRecords.length }} {{ submittedRecords.length === 1 ? 'record' : 'records' }} submitted by you{{
+                                historyEnabled ? ' on the selected date' : ' today'
+                            }}.
+                        </p>
                     </div>
+                    <LoaderCircle v-if="historyLoading" class="mt-1 size-4 animate-spin text-muted-foreground" />
                 </div>
 
-                <div v-if="todayRecords.length" class="mt-4 grid max-h-80 gap-2 overflow-y-auto pr-1">
+                <template v-if="historyEnabled">
+                    <div class="mt-4 grid grid-cols-[2.75rem_1fr_2.75rem] gap-2">
+                        <button
+                            type="button"
+                            class="flex h-11 items-center justify-center rounded-md border border-input bg-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label="Previous review date"
+                            :disabled="historyLoading"
+                            @click="shiftHistoryDate(-1)"
+                        >
+                            <ChevronLeft class="size-4" />
+                        </button>
+                        <div class="relative">
+                            <CalendarDays class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                v-model="reviewDate"
+                                type="date"
+                                :max="today"
+                                class="h-11 pl-9"
+                                aria-label="Review attendance date"
+                                @change="loadHistory(reviewDate)"
+                                @click="openNativePicker"
+                                @focus="openNativePicker"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            class="flex h-11 items-center justify-center rounded-md border border-input bg-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label="Next review date"
+                            :disabled="historyLoading || isLatestHistoryDate"
+                            @click="shiftHistoryDate(1)"
+                        >
+                            <ChevronRight class="size-4" />
+                        </button>
+                    </div>
+
+                    <div class="mt-3 grid grid-cols-4 gap-1.5">
+                        <button
+                            v-for="option in historyFilterOptions"
+                            :key="option.value"
+                            type="button"
+                            class="rounded-md border px-2 py-2 text-xs font-medium transition"
+                            :class="
+                                historyStatus === option.value
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'border-input bg-background hover:bg-accent'
+                            "
+                            @click="historyStatus = option.value"
+                        >
+                            {{ option.label }} {{ historyCount(option.value) }}
+                        </button>
+                    </div>
+                </template>
+
+                <div v-if="filteredSubmittedRecords.length" class="mt-4 grid max-h-80 gap-2 overflow-y-auto pr-1">
                     <div
-                        v-for="record in todayRecords"
+                        v-for="record in filteredSubmittedRecords"
                         :key="record.id"
                         class="grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center"
                     >
@@ -627,7 +757,8 @@ const submit = () => {
                                 {{ record.employeeCode ? `${record.employeeCode} - ${record.employeeName}` : record.employeeName }}
                             </p>
                             <p class="truncate text-xs text-muted-foreground">{{ record.employeeProfession || '-' }}</p>
-                            <p class="mt-1 truncate text-xs text-muted-foreground">{{ todayRecordDetail(record) }}</p>
+                            <p class="mt-1 truncate text-xs text-muted-foreground">{{ submittedRecordDetail(record) }}</p>
+                            <p class="mt-1 text-[11px] text-muted-foreground">Submitted at {{ record.submittedTime }}</p>
                         </div>
                         <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">
                             {{ statusLabel(record.status) }}
@@ -636,7 +767,7 @@ const submit = () => {
                 </div>
 
                 <div v-else class="mt-4 rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
-                    No attendance submitted by you today.
+                    {{ historyEnabled ? 'No matching attendance submitted by you on this date.' : 'No attendance submitted by you today.' }}
                 </div>
             </section>
         </div>

@@ -8,6 +8,7 @@ use App\Models\EmployeeLeave;
 use App\Models\Project;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,20 @@ class PublicAttendanceController extends Controller
         $type = $this->normalizeType($type);
         $dateRange = request()->user()->attendanceDateRange();
         $leaveLookupMin = $dateRange['min'] ?? $dateRange['max'];
+        $today = now()->toDateString();
+        $historyEnabled = $type === 'rope_access';
+        $historyDate = $today;
+
+        if ($historyEnabled) {
+            $historyDate = request()->validate([
+                'history_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
+            ])['history_date'] ?? $today;
+        }
+
+        $todayRecords = $this->submittedRecordsForDate($type, request()->user()->id, $today);
+        $historyRecords = $historyDate === $today
+            ? $todayRecords
+            : $this->submittedRecordsForDate($type, request()->user()->id, $historyDate);
 
         return Inertia::render('Public/MarkAttendance', [
             'projects' => Project::query()
@@ -51,7 +66,10 @@ class PublicAttendanceController extends Controller
             'attendanceDateMin' => $dateRange['min'],
             'attendanceDateMax' => $dateRange['max'],
             'attendanceDateHelp' => $dateRange['message'],
-            'todayRecords' => $this->todaySubmittedRecords($type, request()->user()->id),
+            'todayRecords' => $todayRecords,
+            'historyEnabled' => $historyEnabled,
+            'historyDate' => $historyDate,
+            'historyRecords' => $historyEnabled ? $historyRecords : [],
         ]);
     }
 
@@ -233,15 +251,15 @@ class PublicAttendanceController extends Controller
         return $rules;
     }
 
-    private function todaySubmittedRecords(string $type, int $userId): array
+    private function submittedRecordsForDate(string $type, int $userId, string $date): array
     {
-        return AttendanceRecord::query()
+        $attendanceRecords = AttendanceRecord::query()
             ->leftJoin('employees', 'attendance_records.employee_id', '=', 'employees.id')
             ->leftJoin('projects', 'attendance_records.project_id', '=', 'projects.id')
             ->leftJoin('projects as overtime_projects', 'attendance_records.overtime_project_id', '=', 'overtime_projects.id')
             ->where('attendance_records.submitted_by', $userId)
             ->where('employees.type', $type)
-            ->whereDate('attendance_records.attendance_date', now()->toDateString())
+            ->whereDate('attendance_records.attendance_date', $date)
             ->orderByDesc('attendance_records.id')
             ->get([
                 'attendance_records.id',
@@ -249,6 +267,7 @@ class PublicAttendanceController extends Controller
                 'attendance_records.attendance_date',
                 'attendance_records.leave_reason',
                 'attendance_records.overtime_hours',
+                'attendance_records.created_at as submitted_at',
                 'employees.code as employee_code',
                 'employees.name as employee_name',
                 'employees.profession as employee_profession',
@@ -256,7 +275,7 @@ class PublicAttendanceController extends Controller
                 'overtime_projects.name as overtime_project_name',
             ])
             ->map(fn ($record) => [
-                'id' => $record->id,
+                'id' => 'attendance-'.$record->id,
                 'employeeCode' => $record->employee_code,
                 'employeeName' => $record->employee_name,
                 'employeeProfession' => $record->employee_profession,
@@ -265,7 +284,43 @@ class PublicAttendanceController extends Controller
                 'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
                 'reason' => $record->leave_reason,
                 'overtimeHours' => $record->overtime_hours,
+                'submittedAt' => $record->submitted_at,
+                'submittedTime' => Carbon::parse($record->submitted_at)->format('h:i A'),
+            ]);
+
+        $leaveRecords = EmployeeLeave::query()
+            ->join('employees', 'employee_leaves.employee_id', '=', 'employees.id')
+            ->where('employee_leaves.created_by', $userId)
+            ->where('employees.type', $type)
+            ->whereDate('employee_leaves.start_date', '<=', $date)
+            ->whereDate('employee_leaves.end_date', '>=', $date)
+            ->orderByDesc('employee_leaves.id')
+            ->get([
+                'employee_leaves.id',
+                'employee_leaves.reason',
+                'employee_leaves.created_at as submitted_at',
+                'employees.code as employee_code',
+                'employees.name as employee_name',
+                'employees.profession as employee_profession',
             ])
+            ->map(fn ($leave) => [
+                'id' => 'leave-'.$leave->id,
+                'employeeCode' => $leave->employee_code,
+                'employeeName' => $leave->employee_name,
+                'employeeProfession' => $leave->employee_profession,
+                'status' => AttendanceRecord::STATUS_LEAVE,
+                'projectName' => null,
+                'overtimeProjectName' => null,
+                'reason' => $leave->reason,
+                'overtimeHours' => null,
+                'submittedAt' => $leave->submitted_at,
+                'submittedTime' => Carbon::parse($leave->submitted_at)->format('h:i A'),
+            ]);
+
+        return $attendanceRecords
+            ->concat($leaveRecords)
+            ->sortByDesc('submittedAt')
+            ->values()
             ->all();
     }
 }
