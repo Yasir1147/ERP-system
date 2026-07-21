@@ -108,29 +108,29 @@ const mainNavItems: NavItem[] = [
             },
         ],
     },
-    // {
-    //     title: 'Cheques',
-    //     href: '/cheques',
-    //     icon: FileCheck2,
-    //     items: [
-    //         {
-    //             title: 'Cheque List',
-    //             href: '/cheques',
-    //         },
-    //         {
-    //             title: 'Prepare Cheque',
-    //             href: '/cheques/create',
-    //         },
-    //         {
-    //             title: 'Party Master',
-    //             href: '/cheque-parties',
-    //         },
-    //         {
-    //             title: 'Cheque Formats',
-    //             href: '/cheque-formats',
-    //         },
-    //     ],
-    // },
+    {
+        title: 'Cheques',
+        href: '/cheques',
+        icon: FileCheck2,
+        items: [
+            {
+                title: 'Cheque List',
+                href: '/cheques',
+            },
+            {
+                title: 'Prepare Cheque',
+                href: '/cheques/create',
+            },
+            {
+                title: 'Party Master',
+                href: '/cheque-parties',
+            },
+            {
+                title: 'Cheque Formats',
+                href: '/cheque-formats',
+            },
+        ],
+    },
     {
         title: 'Projects',
         href: '/projects',
