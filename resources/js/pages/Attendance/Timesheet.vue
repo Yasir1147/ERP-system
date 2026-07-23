@@ -28,6 +28,7 @@ interface TimesheetEmployee {
     name: string;
     profession: string;
     status: string;
+    presentDays: number;
     days: TimesheetDay[];
 }
 
@@ -185,7 +186,7 @@ const selectEmployeeRow = (employeeId: number) => {
                 </div>
 
                 <div v-else class="max-h-[calc(100vh-260px)] overflow-auto">
-                    <table class="border-collapse text-sm" :style="{ minWidth: `${260 + dates.length * 92}px` }">
+                    <table class="border-collapse text-sm" :style="{ minWidth: `${356 + dates.length * 92}px` }">
                         <thead class="sticky top-0 z-20 bg-card">
                             <tr>
                                 <th class="sticky left-0 z-30 w-[260px] min-w-[260px] border-b border-r bg-card px-3 py-3 text-left font-medium">
@@ -199,6 +200,9 @@ const selectEmployeeRow = (employeeId: number) => {
                                 >
                                     <div>{{ date.day }}</div>
                                     <div class="mt-0.5 text-[11px] font-normal text-muted-foreground">{{ date.weekday }}</div>
+                                </th>
+                                <th class="sticky right-0 z-30 w-24 min-w-24 border-b border-l bg-indigo-50 px-2 py-2 text-center font-semibold text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100">
+                                    Present<br />Days
                                 </th>
                             </tr>
                         </thead>
@@ -236,6 +240,9 @@ const selectEmployeeRow = (employeeId: number) => {
                                             {{ day.leaveReason }}
                                         </p>
                                     </div>
+                                </td>
+                                <td class="sticky right-0 z-10 w-24 min-w-24 border-b border-l bg-indigo-50 px-2 text-center align-middle text-base font-semibold text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100">
+                                    {{ employee.presentDays }}
                                 </td>
                             </tr>
                         </tbody>

@@ -150,6 +150,16 @@
             overflow: hidden;
         }
 
+        .total-head,
+        .total-cell {
+            width: 12mm;
+            background: #e0e7ff;
+            color: #1e1b4b;
+            text-align: center;
+            vertical-align: middle;
+            font-weight: 800;
+        }
+
         .employee-code {
             color: #000;
             font-weight: 800;
@@ -247,6 +257,7 @@
                             <span class="weekday">{{ $date['weekday'] }}</span>
                         </th>
                     @endforeach
+                    <th class="total-head">Present<br>Days</th>
                 </tr>
             </thead>
             <tbody>
@@ -279,6 +290,7 @@
                                 @endif
                             </td>
                         @endforeach
+                        <td class="total-cell">{{ $employee['presentDays'] }}</td>
                     </tr>
                 @endforeach
             </tbody>

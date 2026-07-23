@@ -14,6 +14,7 @@ import {
     LayoutGrid,
     Plane,
     ReceiptText,
+    ShoppingCart,
     UserCog,
     Users,
 } from 'lucide-vue-next';
@@ -114,7 +115,7 @@ const mainNavItems: NavItem[] = [
         icon: FileCheck2,
         items: [
             {
-                title: 'Cheque List',
+                title: 'Cheque Books & List',
                 href: '/cheques',
             },
             {
@@ -151,11 +152,60 @@ const mainNavItems: NavItem[] = [
         ],
     },
     {
+        title: 'Procurement',
+        href: '/suppliers',
+        icon: ShoppingCart,
+        items: [
+            {
+                title: 'Suppliers',
+                href: '/suppliers',
+            },
+            {
+                title: 'Purchase Bills',
+                href: '/purchase-bills',
+            },
+            {
+                title: 'Equipment Register',
+                href: '/equipment',
+            },
+        ],
+    },
+    {
         title: 'Users',
         href: '/users',
         icon: UserCog,
     },
 ];
+
+const navGroups = [
+    {
+        label: 'Overview',
+        titles: ['Dashboard'],
+    },
+    {
+        label: 'Attendance & Workforce',
+        titles: ['Attendance', 'Employees', 'Leaves'],
+    },
+    {
+        label: 'Operations',
+        titles: ['Projects', 'Procurement'],
+    },
+    {
+        label: 'Finance',
+        titles: ['Payroll', 'Fines', 'Expenses', 'Cheques'],
+    },
+    {
+        label: 'Office Management',
+        titles: ['Office Staff'],
+    },
+    {
+        label: 'Administration',
+        titles: ['Users'],
+    },
+].map((group) => ({
+    label: group.label,
+    items: group.titles.map((title) => mainNavItems.find((item) => item.title === title)).filter((item): item is NavItem => Boolean(item)),
+}));
 </script>
 
 <template>
@@ -173,7 +223,7 @@ const mainNavItems: NavItem[] = [
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMain :items="mainNavItems" />
+            <NavMain v-for="group in navGroups" :key="group.label" :label="group.label" :items="group.items" />
         </SidebarContent>
 
         <SidebarFooter>

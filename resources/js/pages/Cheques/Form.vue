@@ -12,11 +12,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { amountToWords, splitPreviewText } from './amountToWords';
 import ChequePreview from './components/ChequePreview.vue';
 import VoucherPreview from './components/VoucherPreview.vue';
-import type { ChequeFormatOption, ChequePartyOption } from './types';
+import type { ChequeBookOption, ChequeFormatOption, ChequePartyOption } from './types';
 
 interface StoredCheque {
     id: number;
     cheque_format_id: string;
+    cheque_book_id: string;
     cheque_party_id: string;
     cheque_number: string | null;
     cheque_date: string;
@@ -42,6 +43,7 @@ interface StoredCheque {
 const props = defineProps<{
     cheque: StoredCheque | null;
     formats: ChequeFormatOption[];
+    books: ChequeBookOption[];
     parties: ChequePartyOption[];
     defaultPreparedBy: string | null;
     defaultIssuedDate: string;
@@ -50,9 +52,22 @@ const source = props.cheque;
 const editing = computed(() => Boolean(source));
 const showPartyForm = ref(props.parties.length === 0);
 const allowNavigation = ref(false);
+const submitting = ref(false);
+
+const newSubmissionToken = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+        const random = Math.floor(Math.random() * 16);
+        const value = character === 'x' ? random : (random & 0x3) | 0x8;
+        return value.toString(16);
+    });
+};
 
 const form = useForm({
     cheque_format_id: source?.cheque_format_id ?? '',
+    cheque_book_id: source?.cheque_book_id ?? '',
+    submission_token: source ? '' : newSubmissionToken(),
     cheque_party_id: source?.cheque_party_id ?? '',
     cheque_number: source?.cheque_number ?? '',
     cheque_date: source?.cheque_date ?? new Date().toISOString().slice(0, 10),
@@ -93,6 +108,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const selectedFormat = computed(() => props.formats.find((format) => String(format.id) === form.cheque_format_id) ?? null);
+const selectedBook = computed(() => props.books.find((book) => String(book.id) === form.cheque_book_id) ?? null);
 const selectedParty = computed(() => props.parties.find((party) => String(party.id) === form.cheque_party_id) ?? null);
 const words = computed(() => amountToWords(Number(form.amount) || 0));
 
@@ -141,11 +157,23 @@ const previewValues = computed<Record<string, string>>(() => {
 });
 
 watch(
+    () => form.cheque_book_id,
+    (value) => {
+        const book = props.books.find((item) => String(item.id) === value);
+
+        if (!book || source) return;
+
+        form.cheque_format_id = String(book.formatId);
+        form.cheque_number = book.nextChequeNumber === null ? '' : String(book.nextChequeNumber);
+    },
+    { immediate: true },
+);
+
+watch(
     () => form.cheque_format_id,
     (value, oldValue) => {
         const format = props.formats.find((item) => String(item.id) === value);
         if (!format || (source && oldValue === undefined)) return;
-        if (!source) form.cheque_number = format.nextChequeNumber === null ? '' : String(format.nextChequeNumber);
         form.account_payee = true;
         form.signature_text = format.signatureText ?? '';
         form.label_1_text = format.label1Text ?? '';
@@ -181,11 +209,18 @@ const addParty = () => {
 };
 
 const submit = () => {
+    if (submitting.value || form.processing) return;
+
+    submitting.value = true;
     allowNavigation.value = true;
     const options = {
         preserveScroll: true,
         onError: () => {
             allowNavigation.value = false;
+            submitting.value = false;
+        },
+        onFinish: () => {
+            if (form.hasErrors) submitting.value = false;
         },
     };
     if (source) form.put(`/cheques/${source.id}`, options);
@@ -228,8 +263,8 @@ onBeforeUnmount(() => {
                         ><a :href="`/cheques/${source.id}/print`" target="_blank"><Printer class="size-4" />Cheque Print / PDF</a></Button
                     ><Button v-if="source" as-child type="button" variant="outline"
                         ><a :href="`/cheques/${source.id}/voucher`" target="_blank"><Printer class="size-4" />Voucher Print / PDF</a></Button
-                    ><Button type="submit" :disabled="form.processing"
-                        ><Save class="size-4" />{{ form.processing ? 'Saving...' : 'Save Cheque' }}</Button
+                    ><Button type="submit" :disabled="submitting || form.processing"
+                        ><Save class="size-4" />{{ submitting || form.processing ? 'Saving...' : 'Save Cheque' }}</Button
                     >
                 </div>
             </div>
@@ -245,11 +280,29 @@ onBeforeUnmount(() => {
                 <div class="border-b p-4"><h2 class="font-medium">Cheque Information</h2></div>
                 <div class="grid gap-4 p-4 lg:grid-cols-3">
                     <div class="grid gap-1.5">
+                        <Label for="cheque-book">Cheque Book *</Label>
+                        <select
+                            id="cheque-book"
+                            v-model="form.cheque_book_id"
+                            :disabled="editing"
+                            class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            <option value="">Select active cheque book</option>
+                            <option v-for="book in books" :key="book.id" :value="String(book.id)">
+                                {{ book.bankName ? `${book.bankName} - ` : '' }}{{ book.reference }} (Next {{ book.nextChequeNumber ?? '-' }})
+                            </option>
+                        </select>
+                        <InputError :message="form.errors.cheque_book_id" />
+                        <p v-if="!editing && !books.length" class="text-xs text-destructive">
+                            Create an active cheque book from the Cheque List before preparing a cheque.
+                        </p>
+                    </div>
+                    <div class="grid gap-1.5">
                         <Label for="cheque-format">Cheque Template *</Label
                         ><select
                             id="cheque-format"
                             v-model="form.cheque_format_id"
-                            :disabled="editing"
+                            disabled
                             class="h-10 rounded-md border border-input bg-background px-3 text-sm"
                         >
                             <option value="">Select cheque format</option>
@@ -281,8 +334,8 @@ onBeforeUnmount(() => {
                     <div class="grid gap-1.5">
                         <Label>Cheque #</Label>
                         <Input :model-value="form.cheque_number" readonly class="bg-muted/30 font-medium tabular-nums" />
-                        <p v-if="selectedFormat && selectedFormat.nextChequeNumber === null && !editing" class="text-xs text-destructive">
-                            Configure the starting cheque number in Cheque Formats.
+                        <p v-if="selectedBook && selectedBook.nextChequeNumber === null && !editing" class="text-xs text-destructive">
+                            The selected cheque book has no available leaves.
                         </p>
                     </div>
                     <div class="grid gap-1.5">
@@ -379,8 +432,8 @@ onBeforeUnmount(() => {
             />
 
             <div class="sticky bottom-3 z-20 flex justify-end rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur">
-                <Button type="submit" size="lg" :disabled="form.processing"
-                    ><Save class="size-4" />{{ form.processing ? 'Saving...' : 'Save Cheque' }}</Button
+                <Button type="submit" size="lg" :disabled="submitting || form.processing"
+                    ><Save class="size-4" />{{ submitting || form.processing ? 'Saving...' : 'Save Cheque' }}</Button
                 >
             </div>
         </form>

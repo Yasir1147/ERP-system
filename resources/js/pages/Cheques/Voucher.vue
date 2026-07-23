@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Head } from '@inertiajs/vue3';
 import { ArrowLeft, Printer } from 'lucide-vue-next';
 import type { ChequeFieldForm } from '../ChequeFormats/types';
+import { ref } from 'vue';
 
 const props = defineProps<{
     cheque: {
@@ -29,7 +30,10 @@ const props = defineProps<{
         checkedBy: string | null;
         approvedBy: string | null;
     };
+    includeCheque: boolean;
 }>();
+
+const includeChequeCopy = ref(props.includeCheque);
 
 const chequeStyle = { width: `${props.cheque.widthMm}mm`, height: `${props.cheque.heightMm}mm` };
 const fieldStyle = (field: ChequeFieldForm) => ({
@@ -49,19 +53,23 @@ const fieldStyle = (field: ChequeFieldForm) => ({
 <template>
     <Head title="Cheque Payment Voucher" />
     <main class="voucher-print-page min-h-screen bg-slate-200 p-4 text-slate-950">
-        <div class="voucher-print-controls mx-auto mb-4 flex max-w-4xl items-center justify-between rounded-lg bg-white p-4 shadow">
+        <div class="voucher-print-controls mx-auto mb-4 flex max-w-4xl flex-col gap-3 rounded-lg bg-white p-4 shadow sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h1 class="font-semibold">Cheque Payment Voucher</h1>
                 <p class="mt-1 text-xs text-slate-500">Use Print to print this A4 page or choose Save as PDF.</p>
             </div>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+                <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                    <input v-model="includeChequeCopy" type="checkbox" class="size-4 rounded border-slate-300" />
+                    Include cheque copy at top
+                </label>
                 <Button type="button" variant="outline" @click="window.close()"><ArrowLeft class="size-4" />Close</Button>
                 <Button type="button" @click="window.print()"><Printer class="size-4" />Print / Save PDF</Button>
             </div>
         </div>
 
         <article class="voucher-sheet mx-auto min-h-[297mm] w-[210mm] bg-white p-[5mm] shadow-xl">
-            <section class="mb-[6mm]">
+            <section v-if="includeChequeCopy" class="mb-[6mm]">
                 <div class="mb-1 text-center text-[9pt] font-semibold uppercase tracking-wide">Cheque Copy</div>
                 <div class="relative mx-auto overflow-hidden border border-slate-300 bg-white" :style="chequeStyle">
                     <div

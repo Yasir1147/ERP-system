@@ -71,6 +71,11 @@ class ChequeFormat extends Model
         return $this->hasMany(Cheque::class);
     }
 
+    public function chequeBooks(): HasMany
+    {
+        return $this->hasMany(ChequeBook::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

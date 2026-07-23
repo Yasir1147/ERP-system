@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cheque;
+use App\Models\ChequeBook;
+use App\Models\ChequeBookLeaf;
 use App\Models\ChequeFormat;
 use App\Models\ChequeFormatField;
 use App\Models\ChequeParty;
@@ -12,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -22,50 +25,92 @@ class ChequeController extends Controller
     public function index(Request $request): Response
     {
         $search = trim((string) $request->query('search', ''));
-        $formatId = $request->integer('format_id') ?: null;
-        $partyId = $request->integer('party_id') ?: null;
+        $status = (string) $request->query('status', '');
         $perPage = (int) $request->query('per_page', 10);
         $perPage = in_array($perPage, [10, 15, 25, 50], true) ? $perPage : 10;
 
-        $cheques = Cheque::query()
-            ->with(['format:id,name', 'party:id,name', 'creator:id,name'])
-            ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
-                ->where('cheque_number', 'like', '%'.$search.'%')
-                ->orWhere('voucher_number', 'like', '%'.$search.'%')
-                ->orWhere('payee_name', 'like', '%'.$search.'%')))
-            ->when($formatId, fn ($query) => $query->where('cheque_format_id', $formatId))
-            ->when($partyId, fn ($query) => $query->where('cheque_party_id', $partyId))
-            ->orderByDesc('cheque_date')
+        $books = ChequeBook::query()
+            ->with(['format:id,bank_id,name', 'format.bank:id,name'])
+            ->withCount([
+                'leaves as total_leaves_count',
+                'leaves as available_leaves_count' => fn ($query) => $query->where('status', ChequeBookLeaf::STATUS_AVAILABLE),
+                'leaves as issued_leaves_count' => fn ($query) => $query->where('status', ChequeBookLeaf::STATUS_ISSUED),
+                'leaves as void_leaves_count' => fn ($query) => $query->where('status', ChequeBookLeaf::STATUS_VOID),
+            ])
+            ->orderByRaw("case when status = 'active' then 0 when status = 'exhausted' then 1 else 2 end")
             ->orderByDesc('id')
-            ->paginate($perPage)
-            ->withQueryString()
-            ->through(fn (Cheque $cheque) => [
-                'id' => $cheque->id,
-                'chequeNumber' => $cheque->cheque_number,
-                'date' => $cheque->cheque_date?->format('d/m/Y'),
-                'partyName' => $cheque->party?->name,
-                'payeeName' => $cheque->payee_name,
-                'formatName' => $cheque->format?->name,
-                'amount' => (float) $cheque->amount,
-                'voucherNumber' => $cheque->voucher_number,
-                'status' => $cheque->status,
-                'statusLabel' => Cheque::STATUSES[$cheque->status] ?? $cheque->status,
-                'createdBy' => $cheque->creator?->name,
-            ]);
+            ->get();
+
+        $requestedBook = (int) $request->query('book_id', 0);
+        $selectedBook = $books->firstWhere('id', $requestedBook)
+            ?? $books->firstWhere('status', ChequeBook::STATUS_ACTIVE)
+            ?? $books->first();
+
+        if ($selectedBook) {
+            $rows = ChequeBookLeaf::query()
+                ->where('cheque_book_id', $selectedBook->id)
+                ->with(['cheque.party:id,name', 'cheque.format:id,name', 'cheque.creator:id,name'])
+                ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
+                    ->where('cheque_number', 'like', '%'.$search.'%')
+                    ->when(ctype_digit($search), fn ($query) => $query->orWhere('cheque_number', (int) $search))
+                    ->orWhereHas('cheque', fn ($query) => $query
+                        ->where('payee_name', 'like', '%'.$search.'%')
+                        ->orWhere('remarks', 'like', '%'.$search.'%')
+                        ->orWhere('voucher_number', 'like', '%'.$search.'%'))))
+                ->when($status !== '', function ($query) use ($status) {
+                    if (in_array($status, [ChequeBookLeaf::STATUS_AVAILABLE, ChequeBookLeaf::STATUS_VOID], true)) {
+                        $query->where('status', $status);
+                    } else {
+                        $query->whereHas('cheque', fn ($query) => $query->where('status', $status));
+                    }
+                })
+                ->orderBy('cheque_number')
+                ->paginate($perPage)
+                ->withQueryString()
+                ->through(fn (ChequeBookLeaf $leaf) => $leaf->cheque
+                    ? $this->chequeRow($leaf->cheque, $leaf->status, $selectedBook)
+                    : $this->availableLeafRow($leaf, $selectedBook));
+        } else {
+            $rows = ChequeBookLeaf::query()
+                ->whereRaw('1 = 0')
+                ->paginate($perPage)
+                ->withQueryString();
+        }
 
         return Inertia::render('Cheques/Index', [
-            'cheques' => $cheques->items(),
+            'cheques' => $rows->items(),
             'pagination' => [
-                'currentPage' => $cheques->currentPage(), 'lastPage' => $cheques->lastPage(),
-                'perPage' => $cheques->perPage(), 'total' => $cheques->total(),
-                'from' => $cheques->firstItem(), 'to' => $cheques->lastItem(),
+                'currentPage' => $rows->currentPage(), 'lastPage' => $rows->lastPage(),
+                'perPage' => $rows->perPage(), 'total' => $rows->total(),
+                'from' => $rows->firstItem(), 'to' => $rows->lastItem(),
             ],
             'filters' => [
-                'search' => $search, 'formatId' => $formatId ? (string) $formatId : '',
-                'partyId' => $partyId ? (string) $partyId : '', 'perPage' => $perPage,
+                'search' => $search,
+                'bookId' => $selectedBook ? (string) $selectedBook->id : '',
+                'status' => $status,
+                'perPage' => $perPage,
             ],
-            'formats' => $this->simpleFormats(),
-            'parties' => $this->partyOptions(),
+            'books' => $books->map(fn (ChequeBook $book) => [
+                'id' => $book->id,
+                'reference' => $book->reference,
+                'bankName' => $book->format?->bank?->name,
+                'formatName' => $book->format?->name,
+                'startNumber' => $book->formatNumber($book->start_number),
+                'endNumber' => $book->formatNumber($book->end_number),
+                'nextNumber' => $book->formatNumber($book->next_number),
+                'status' => $book->status,
+                'statusLabel' => ChequeBook::STATUSES[$book->status] ?? ucfirst($book->status),
+                'totalCount' => $book->total_leaves_count,
+                'availableCount' => $book->available_leaves_count,
+                'issuedCount' => $book->issued_leaves_count,
+                'voidCount' => $book->void_leaves_count,
+                'remarks' => $book->remarks,
+            ])->values(),
+            'bookFormats' => ChequeFormat::query()->with('bank:id,name')->orderBy('name')->get()->map(fn (ChequeFormat $format) => [
+                'id' => $format->id,
+                'name' => $format->name,
+                'bankName' => $format->bank?->name,
+            ]),
         ]);
     }
 
@@ -79,25 +124,52 @@ class ChequeController extends Controller
         $data = $this->validatedData($request);
 
         $cheque = DB::transaction(function () use ($data, $request) {
-            $format = ChequeFormat::query()->with('fields')->lockForUpdate()->findOrFail($data['cheque_format_id']);
+            $book = ChequeBook::query()->lockForUpdate()->findOrFail($data['cheque_book_id']);
+
+            $existingCheque = Cheque::query()
+                ->where('submission_token', $data['submission_token'])
+                ->first();
+
+            if ($existingCheque) {
+                return $existingCheque;
+            }
+
+            if ($book->status !== ChequeBook::STATUS_ACTIVE) {
+                throw ValidationException::withMessages(['cheque_book_id' => 'Select an active cheque book.']);
+            }
+
+            $format = ChequeFormat::query()->with('fields')->lockForUpdate()->findOrFail($book->cheque_format_id);
             $party = ChequeParty::query()->lockForUpdate()->findOrFail($data['cheque_party_id']);
+            $leaf = ChequeBookLeaf::query()
+                ->where('cheque_book_id', $book->id)
+                ->where('status', ChequeBookLeaf::STATUS_AVAILABLE)
+                ->orderBy('cheque_number')
+                ->lockForUpdate()
+                ->first();
 
-            if ($format->next_cheque_number === null) {
-                throw ValidationException::withMessages([
-                    'cheque_format_id' => 'Set the next cheque number in Cheque Formats before preparing a cheque.',
-                ]);
+            if (! $leaf) {
+                $book->update(['status' => ChequeBook::STATUS_EXHAUSTED, 'next_number' => null]);
+                throw ValidationException::withMessages(['cheque_book_id' => 'This cheque book has no available cheque leaves. Create a new cheque book.']);
             }
 
-            $data['cheque_number'] = (string) $format->next_cheque_number;
-
-            if (Cheque::query()->where('cheque_format_id', $format->id)->where('cheque_number', $data['cheque_number'])->exists()) {
-                throw ValidationException::withMessages([
-                    'cheque_format_id' => 'The configured cheque number has already been used. Update the sequence in Cheque Formats.',
-                ]);
-            }
+            $data['cheque_format_id'] = $format->id;
+            $data['cheque_number'] = $book->formatNumber($leaf->cheque_number);
+            $data['cheque_book_id'] = $book->id;
+            $data['cheque_book_leaf_id'] = $leaf->id;
 
             $cheque = Cheque::query()->create($this->attributes($data, $request, $format, $party));
-            $format->update(['next_cheque_number' => $format->next_cheque_number + 1]);
+            $leaf->update(['cheque_id' => $cheque->id, 'status' => ChequeBookLeaf::STATUS_ISSUED]);
+
+            $nextLeaf = ChequeBookLeaf::query()
+                ->where('cheque_book_id', $book->id)
+                ->where('status', ChequeBookLeaf::STATUS_AVAILABLE)
+                ->orderBy('cheque_number')
+                ->first();
+            $book->update([
+                'next_number' => $nextLeaf?->cheque_number,
+                'status' => $nextLeaf ? ChequeBook::STATUS_ACTIVE : ChequeBook::STATUS_EXHAUSTED,
+                'updated_by' => $request->user()->id,
+            ]);
 
             return $cheque;
         });
@@ -112,8 +184,16 @@ class ChequeController extends Controller
 
     public function update(Request $request, Cheque $cheque): RedirectResponse
     {
+        if ($cheque->status === Cheque::STATUS_VOID) {
+            throw ValidationException::withMessages([
+                'cheque' => 'A void cheque cannot be edited.',
+            ]);
+        }
+
         $data = $this->validatedData($request);
         $data['cheque_format_id'] = $cheque->cheque_format_id;
+        $data['cheque_book_id'] = $cheque->cheque_book_id;
+        $data['submission_token'] = $cheque->submission_token;
 
         DB::transaction(function () use ($data, $request, $cheque) {
             $format = ChequeFormat::query()->with('fields')->lockForUpdate()->findOrFail($data['cheque_format_id']);
@@ -127,6 +207,16 @@ class ChequeController extends Controller
 
     public function destroy(Cheque $cheque): RedirectResponse
     {
+        if ($cheque->cheque_book_leaf_id) {
+            DB::transaction(function () use ($cheque) {
+                $leaf = ChequeBookLeaf::query()->lockForUpdate()->findOrFail($cheque->cheque_book_leaf_id);
+                $cheque->update(['status' => Cheque::STATUS_VOID, 'updated_by' => auth()->id()]);
+                $leaf->update(['status' => ChequeBookLeaf::STATUS_VOID]);
+            });
+
+            return back()->with('success', 'Cheque marked void. Its number will not be reused.');
+        }
+
         $cheque->delete();
 
         return to_route('cheques.index')->with('success', 'Cheque deleted successfully.');
@@ -139,7 +229,7 @@ class ChequeController extends Controller
         ]);
     }
 
-    public function voucher(Cheque $cheque): Response
+    public function voucher(Request $request, Cheque $cheque): Response
     {
         return Inertia::render('Cheques/Voucher', [
             'cheque' => $this->printPayload($cheque),
@@ -158,11 +248,13 @@ class ChequeController extends Controller
                 'checkedBy' => $cheque->checked_by,
                 'approvedBy' => $cheque->approved_by,
             ],
+            'includeCheque' => $request->boolean('include_cheque', true),
         ]);
     }
 
     public function markPrinted(Cheque $cheque): RedirectResponse
     {
+        abort_if($cheque->status === Cheque::STATUS_VOID, 422, 'A void cheque cannot be printed.');
         $cheque->update(['status' => Cheque::STATUS_PRINTED, 'printed_at' => now()]);
 
         return back()->with('success', 'Cheque marked as printed.');
@@ -174,8 +266,9 @@ class ChequeController extends Controller
             'cheque' => $cheque ? [
                 'id' => $cheque->id,
                 'cheque_format_id' => (string) $cheque->cheque_format_id,
+                'cheque_book_id' => $cheque->cheque_book_id ? (string) $cheque->cheque_book_id : '',
                 'cheque_party_id' => (string) $cheque->cheque_party_id,
-                'cheque_number' => $cheque->cheque_number,
+                'cheque_number' => $this->displayChequeNumber($cheque),
                 'cheque_date' => $cheque->cheque_date?->toDateString(),
                 'issued_date' => $cheque->issued_date?->toDateString(),
                 'amount' => (float) $cheque->amount,
@@ -196,6 +289,7 @@ class ChequeController extends Controller
                 'approved_by' => $cheque->approved_by,
             ] : null,
             'formats' => $this->formatOptions(),
+            'books' => $this->bookOptions($cheque),
             'parties' => $this->partyOptions(true),
             'defaultPreparedBy' => auth()->user()?->name,
             'defaultIssuedDate' => now()->toDateString(),
@@ -204,8 +298,10 @@ class ChequeController extends Controller
 
     private function validatedData(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'cheque_format_id' => ['required', 'integer', Rule::exists('cheque_formats', 'id')],
+            'cheque_book_id' => [$request->isMethod('post') ? 'required' : 'nullable', 'integer', Rule::exists('cheque_books', 'id')],
+            'submission_token' => ['nullable', 'uuid'],
             'cheque_party_id' => ['required', 'integer', Rule::exists('cheque_parties', 'id')->where('is_active', true)],
             'cheque_number' => ['nullable', 'string', 'max:255'],
             'cheque_date' => ['required', 'date'],
@@ -227,6 +323,12 @@ class ChequeController extends Controller
             'checked_by' => ['nullable', 'string', 'max:255'],
             'approved_by' => ['nullable', 'string', 'max:255'],
         ]);
+
+        if ($request->isMethod('post') && blank($data['submission_token'] ?? null)) {
+            $data['submission_token'] = (string) Str::uuid();
+        }
+
+        return $data;
     }
 
     private function attributes(array $data, Request $request, ChequeFormat $format, ChequeParty $party, ?Cheque $cheque = null): array
@@ -236,6 +338,9 @@ class ChequeController extends Controller
 
         return [
             'cheque_format_id' => $format->id,
+            'cheque_book_id' => $data['cheque_book_id'] ?? $cheque?->cheque_book_id,
+            'cheque_book_leaf_id' => $data['cheque_book_leaf_id'] ?? $cheque?->cheque_book_leaf_id,
+            'submission_token' => $data['submission_token'] ?? $cheque?->submission_token,
             'cheque_party_id' => $party->id,
             'cheque_number' => $data['cheque_number'] ?? null,
             'cheque_date' => $data['cheque_date'],
@@ -271,9 +376,70 @@ class ChequeController extends Controller
             'name' => $format->name,
             'bankName' => $format->bank?->name,
             'backgroundImageUrl' => $format->background_image_path ? Storage::url($format->background_image_path) : null,
-            'nextChequeNumber' => $format->next_cheque_number,
             ...$this->formatSnapshot($format),
         ]);
+    }
+
+    private function bookOptions(?Cheque $cheque = null)
+    {
+        return ChequeBook::query()
+            ->with(['format.bank:id,name'])
+            ->where(fn ($query) => $query
+                ->where('status', ChequeBook::STATUS_ACTIVE)
+                ->when($cheque?->cheque_book_id, fn ($query, $bookId) => $query->orWhere('id', $bookId)))
+            ->orderBy('reference')
+            ->get()
+            ->map(fn (ChequeBook $book) => [
+                'id' => $book->id,
+                'reference' => $book->reference,
+                'formatId' => $book->cheque_format_id,
+                'formatName' => $book->format?->name,
+                'bankName' => $book->format?->bank?->name,
+                'nextChequeNumber' => $book->formatNumber($book->next_number),
+                'status' => $book->status,
+            ]);
+    }
+
+    private function chequeRow(Cheque $cheque, string $leafStatus, ?ChequeBook $book = null): array
+    {
+        return [
+            'id' => $cheque->id,
+            'chequeNumber' => $book?->formatNumber($cheque->cheque_number) ?? $this->displayChequeNumber($cheque),
+            'issueDate' => $cheque->issued_date?->format('d/m/Y'),
+            'chequeDate' => $cheque->cheque_date?->format('d/m/Y'),
+            'partyName' => $cheque->party?->name,
+            'payeeName' => $cheque->payee_name,
+            'formatName' => $cheque->format?->name,
+            'amount' => (float) $cheque->amount,
+            'voucherNumber' => $cheque->voucher_number,
+            'remarks' => $cheque->remarks,
+            'purpose' => $cheque->purpose,
+            'status' => $cheque->status,
+            'statusLabel' => Cheque::STATUSES[$cheque->status] ?? $cheque->status,
+            'leafStatus' => $leafStatus,
+            'createdBy' => $cheque->creator?->name,
+        ];
+    }
+
+    private function availableLeafRow(ChequeBookLeaf $leaf, ChequeBook $book): array
+    {
+        return [
+            'id' => null,
+            'chequeNumber' => $book->formatNumber($leaf->cheque_number),
+            'issueDate' => null,
+            'chequeDate' => null,
+            'partyName' => null,
+            'payeeName' => null,
+            'formatName' => null,
+            'amount' => null,
+            'voucherNumber' => null,
+            'remarks' => null,
+            'purpose' => null,
+            'status' => null,
+            'statusLabel' => null,
+            'leafStatus' => $leaf->status,
+            'createdBy' => null,
+        ];
     }
 
     private function formatSnapshot(ChequeFormat $format): array
@@ -312,6 +478,15 @@ class ChequeController extends Controller
         ];
     }
 
+    private function displayChequeNumber(Cheque $cheque): ?string
+    {
+        if ($cheque->cheque_number === null) {
+            return null;
+        }
+
+        return $cheque->book?->formatNumber($cheque->cheque_number) ?? $cheque->cheque_number;
+    }
+
     private function printPayload(Cheque $cheque): array
     {
         $snapshot = $cheque->format_snapshot;
@@ -347,7 +522,7 @@ class ChequeController extends Controller
             'fieldValues' => $this->fieldValues($cheque),
             'logoImageUrl' => $snapshot['logoImageUrl']
                 ?? ($format?->logo_image_path ? Storage::url($format->logo_image_path) : null),
-            'chequeNumber' => $cheque->cheque_number,
+            'chequeNumber' => $this->displayChequeNumber($cheque),
         ];
     }
 

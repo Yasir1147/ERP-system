@@ -6,7 +6,6 @@ export interface ChequeFormatOption {
     bankName: string | null;
     backgroundImageUrl: string | null;
     logoImageUrl: string | null;
-    nextChequeNumber: number | null;
     chequeWidthMm: number;
     chequeHeightMm: number;
     dateFormat: string;
@@ -35,4 +34,14 @@ export interface ChequePartyOption {
     fax?: string | null;
     address?: string | null;
     remarks?: string | null;
+}
+
+export interface ChequeBookOption {
+    id: number;
+    reference: string;
+    formatId: number;
+    formatName: string | null;
+    bankName: string | null;
+    nextChequeNumber: string | null;
+    status: string;
 }

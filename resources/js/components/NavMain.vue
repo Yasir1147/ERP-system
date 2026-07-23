@@ -14,9 +14,12 @@ import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import { ChevronRight } from 'lucide-vue-next';
 
-defineProps<{
+withDefaults(defineProps<{
     items: NavItem[];
-}>();
+    label?: string;
+}>(), {
+    label: 'Platform',
+});
 
 const page = usePage<SharedData>();
 
@@ -26,7 +29,7 @@ const isItemActive = (item: NavItem) => page.url.startsWith(item.href) || Boolea
 
 <template>
     <SidebarGroup class="px-2 py-0">
-        <SidebarGroupLabel>Platform</SidebarGroupLabel>
+        <SidebarGroupLabel class="uppercase tracking-wider">{{ label }}</SidebarGroupLabel>
         <SidebarMenu>
             <template v-for="item in items" :key="item.title">
                 <Collapsible v-if="item.items?.length" as-child :default-open="isItemActive(item)" class="group/collapsible">

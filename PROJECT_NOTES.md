@@ -200,6 +200,8 @@ Do not add Urdu or Roman Urdu text in code, Vue pages, Blade views, controllers,
 
 The default appearance is Light. Users may switch to Dark or System from Settings > Appearance.
 
+The admin sidebar uses non-clickable visual section headings to group related modules: Overview, Attendance & Workforce, Operations, Finance, Office Management, and Administration. Existing expandable module menus and route permissions remain unchanged.
+
 Browser favicons must use Al Mohafiz assets only. Use `public/favicon-32x32.png` or `public/favicon.ico` with cache-busting where needed.
 
 The login page uses a two-column desktop layout with a rope-access/construction collage background and a focused login form. Mobile keeps a single-column login form.
@@ -323,6 +325,10 @@ Monthly attendance timesheet:
 ```text
 /attendance/timesheet
 ```
+
+Timesheets combine daily attendance records with overlapping employee leave ranges. Every date covered by a leave range displays as yellow Leave with its reason when no daily attendance record exists. A real daily Present, Absent, or Leave record takes precedence over the synthetic leave-range cell.
+
+Each employee row ends with a Present Days total that counts only daily records with Present status. The same total is included in the browser timesheet, CSV export, and A3/A4 print/PDF views.
 
 Features:
 
@@ -727,7 +733,14 @@ The module includes:
 - a separate printable company logo with configurable position, size, and visibility
 - Party Master with contact details and inline party creation
 - cheque preparation with format and party selection
-- each cheque format has an admin-controlled next cheque number; cheque preparation allocates it transactionally and advances the sequence without allowing manual skips
+- physical cheque books are registered against a bank cheque format with a reference and fixed start/end leaf range
+- only one cheque book may remain active for a cheque format; a new book is created after the active book is exhausted or closed
+- cheque preparation allocates the next available book leaf transactionally and never permits a manual skip or number reuse
+- issued cheque leaves retain their issue date, cheque date, payee, amount, purpose/remarks, and print actions in the cheque-book history
+- book-backed cheques are voided instead of deleted so their physical leaf numbers remain auditable; older unassigned records remain untouched in the database but are not displayed in the cheque-book interface
+- cheque creation uses a unique submission token so repeated Save requests cannot allocate duplicate cheque leaves
+- cheque books preserve fixed-width physical serials, including leading zeros such as `00100` through `00300`, across preparation, history, preview, voucher, and print output
+- print choices include Cheque Only, Voucher Only, and Voucher with Cheque Copy
 - Add Party and Add Bank use modal dialogs instead of expanding the page inline
 - automatic English amount-in-words generation
 - UAE fractional amounts use Fils instead of Cents; each cheque can optionally force Fils onto the second amount-in-words line
@@ -757,6 +770,8 @@ Database tables:
 - `cheque_formats`
 - `cheque_format_fields`
 - `cheque_parties`
+- `cheque_books`
+- `cheque_book_leaves`
 - `cheques`
 
 ## Latest Change Notes
@@ -777,3 +792,12 @@ Database tables:
 - Office staff attendance board `/office-attendance/staff` and staff profile attendance links are public for reception/tablet use. When a profile submits attendance, `submitted_by` is saved as that staff member's linked user, not the currently logged-in admin or another user.
 - Office staff type display now uses `Remote` and `Office Work`; the existing database value for office staff remains `on_site` for compatibility.
 - Office staff attendance board cards now use a profile-card design with a large rounded photo area, soft shadow, status badge, verified-style indicator, compact work/session stats, and a pill-style attendance action.
+# Procurement Phase 1
+
+- Admin-only procurement pages are available at `/suppliers`, `/purchase-bills`, and `/equipment`.
+- Supplier outstanding balance is derived from opening balance plus purchase bills minus recorded supplier payments.
+- Purchase bills support multiple material/equipment lines, VAT, discount, optional project linkage, and JPG/PNG/WebP/PDF attachments.
+- Bill totals are recalculated by the backend. Supplier payments are transactional, may be partial, and cannot exceed the bill balance.
+- Equipment can optionally link to an equipment-type purchase bill line, a project, and an employee.
+- Suppliers and purchase bills with related financial/equipment records are protected from unsafe deletion.
+- Uploaded procurement documents use Laravel's `public` disk; production requires `php artisan storage:link`.

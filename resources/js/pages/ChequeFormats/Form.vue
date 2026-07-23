@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Building2, Hash, ImageIcon, Plus, Save, Trash2, Upload } from 'lucide-vue-next';
+import { ArrowLeft, Building2, ImageIcon, Plus, Save, Trash2, Upload } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import ChequeDesigner from './components/ChequeDesigner.vue';
 import FieldSettingsTable from './components/FieldSettingsTable.vue';
@@ -74,7 +74,6 @@ watch(
 const bankForm = useForm({ name: '' });
 const backgroundForm = useForm<{ background_image: File | null }>({ background_image: null });
 const logoForm = useForm<{ logo_image: File | null }>({ logo_image: null });
-const sequenceForm = useForm<{ next_cheque_number: number | string }>({ next_cheque_number: source?.next_cheque_number ?? '' });
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Cheque Formats', href: '/cheque-formats' },
@@ -189,15 +188,6 @@ const uploadLogo = () => {
 const removeLogo = () => {
     if (!source || !window.confirm('Remove the printable logo from this cheque format?')) return;
     router.delete(`/cheque-formats/${source.id}/logo`, { preserveScroll: true });
-};
-
-const saveChequeSequence = () => {
-    if (!source || sequenceForm.next_cheque_number === '') return;
-    sequenceForm.post(`/cheque-formats/${source.id}/cheque-sequence`, {
-        preserveScroll: true,
-        errorBag: 'sequence',
-        onSuccess: () => sequenceForm.defaults(),
-    });
 };
 
 const submit = () => {
@@ -346,42 +336,6 @@ onBeforeUnmount(() => {
                     <InputError :message="backgroundForm.errors.background_image" />
                     <InputError :message="logoForm.errors.logo_image" />
                 </div>
-            </section>
-
-            <section class="rounded-lg border bg-card px-3 py-2 shadow-sm">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <div class="flex shrink-0 items-center gap-2 self-center sm:self-auto sm:pb-2">
-                        <Hash class="size-4" />
-                        <span class="text-sm font-medium">Cheque Number Sequence</span>
-                    </div>
-                    <template v-if="source">
-                        <div class="grid min-w-0 flex-1 gap-1">
-                            <Label for="next-cheque-number" class="text-xs">Next Cheque Number</Label>
-                            <Input
-                                id="next-cheque-number"
-                                v-model="sequenceForm.next_cheque_number"
-                                type="number"
-                                min="1"
-                                step="1"
-                                class="h-9"
-                                placeholder="e.g. 10010"
-                            />
-                        </div>
-                        <Button
-                            type="button"
-                            size="sm"
-                            :disabled="sequenceForm.processing || sequenceForm.next_cheque_number === ''"
-                            @click="saveChequeSequence"
-                        >
-                            {{ sequenceForm.processing ? 'Saving...' : 'Set Next Number' }}
-                        </Button>
-                    </template>
-                    <span v-else class="pb-2 text-xs text-muted-foreground">Save the cheque format before setting its starting number.</span>
-                </div>
-                <InputError class="mt-1" :message="sequenceForm.errors.next_cheque_number" />
-                <p v-if="source" class="mt-1 text-[11px] text-muted-foreground">
-                    Prepare Cheque will issue this number and advance the sequence automatically. Issued numbers are never reused.
-                </p>
             </section>
 
             <div class="grid min-w-0 gap-4 xl:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.35fr)] xl:items-start">

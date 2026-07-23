@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
+use App\Models\EmployeeLeave;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -49,12 +50,14 @@ class AttendanceTimesheetController extends Controller
             [],
             collect(['Employee Code', 'Employee Name', 'Profession'])
                 ->merge($timesheet['dates']->map(fn (array $date) => $date['day'].' '.$date['weekday']))
+                ->push('Present Days')
                 ->all(),
         ];
 
         foreach ($timesheet['employees'] as $employee) {
             $rows[] = collect([$employee['code'], $employee['name'], $employee['profession']])
                 ->merge($employee['days']->map(fn (array $day) => $this->exportCell($day)))
+                ->push($employee['presentDays'])
                 ->all();
         }
 
@@ -125,9 +128,18 @@ class AttendanceTimesheetController extends Controller
             ])
             ->groupBy(fn ($record) => $record->employee_id.'|'.Carbon::parse($record->attendance_date)->toDateString());
 
+        $leaveRanges = EmployeeLeave::query()
+            ->whereDate('start_date', '<=', $endDate->toDateString())
+            ->whereDate('end_date', '>=', $startDate->toDateString())
+            ->whereHas('employee', fn ($query) => $query->where('type', $selectedType))
+            ->get(['employee_id', 'start_date', 'end_date', 'reason'])
+            ->groupBy('employee_id');
+
         $employeeIdsWithRecords = $records
             ->keys()
             ->map(fn (string $key) => (int) str($key)->before('|')->toString())
+            ->unique()
+            ->merge($leaveRanges->keys()->map(fn ($employeeId) => (int) $employeeId))
             ->unique()
             ->values();
 
@@ -143,36 +155,55 @@ class AttendanceTimesheetController extends Controller
             ->orderByRaw('CAST(code AS UNSIGNED) asc')
             ->orderBy('name')
             ->get(['id', 'code', 'name', 'profession', 'status'])
-            ->map(function (Employee $employee) use ($dates, $records) {
+            ->map(function (Employee $employee) use ($dates, $records, $leaveRanges) {
+                $days = $dates->map(function (array $date) use ($employee, $records, $leaveRanges) {
+                    $record = $records->get($employee->id.'|'.$date['date'])?->first();
+
+                    if (! $record) {
+                        $leave = $leaveRanges->get($employee->id)?->first(fn (EmployeeLeave $leave) =>
+                            $leave->start_date->toDateString() <= $date['date']
+                            && $leave->end_date->toDateString() >= $date['date']
+                        );
+
+                        if ($leave) {
+                            return [
+                                'date' => $date['date'],
+                                'status' => AttendanceRecord::STATUS_LEAVE,
+                                'projectName' => null,
+                                'overtimeProjectName' => null,
+                                'overtimeHours' => null,
+                                'leaveReason' => $leave->reason,
+                            ];
+                        }
+
+                        return [
+                            'date' => $date['date'],
+                            'status' => null,
+                            'projectName' => null,
+                            'overtimeProjectName' => null,
+                            'overtimeHours' => null,
+                            'leaveReason' => null,
+                        ];
+                    }
+
+                    return [
+                        'date' => $date['date'],
+                        'status' => $record->status,
+                        'projectName' => $record->project_name,
+                        'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
+                        'overtimeHours' => $record->overtime_hours,
+                        'leaveReason' => $record->leave_reason,
+                    ];
+                })->values();
+
                 return [
                     'id' => $employee->id,
                     'code' => $employee->code,
                     'name' => $employee->name,
                     'profession' => $employee->profession,
                     'status' => $employee->status,
-                    'days' => $dates->map(function (array $date) use ($employee, $records) {
-                        $record = $records->get($employee->id.'|'.$date['date'])?->first();
-
-                        if (! $record) {
-                            return [
-                                'date' => $date['date'],
-                                'status' => null,
-                                'projectName' => null,
-                                'overtimeProjectName' => null,
-                                'overtimeHours' => null,
-                                'leaveReason' => null,
-                            ];
-                        }
-
-                        return [
-                            'date' => $date['date'],
-                            'status' => $record->status,
-                            'projectName' => $record->project_name,
-                            'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
-                            'overtimeHours' => $record->overtime_hours,
-                            'leaveReason' => $record->leave_reason,
-                        ];
-                    })->values(),
+                    'presentDays' => $days->where('status', AttendanceRecord::STATUS_PRESENT)->count(),
+                    'days' => $days,
                 ];
             })
             ->values();

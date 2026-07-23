@@ -12,14 +12,19 @@ class Cheque extends Model
 
     public const STATUS_PREPARED = 'prepared';
     public const STATUS_PRINTED = 'printed';
+    public const STATUS_VOID = 'void';
 
     public const STATUSES = [
         self::STATUS_PREPARED => 'Prepared',
         self::STATUS_PRINTED => 'Printed',
+        self::STATUS_VOID => 'Void',
     ];
 
     protected $fillable = [
         'cheque_format_id',
+        'cheque_book_id',
+        'cheque_book_leaf_id',
+        'submission_token',
         'cheque_party_id',
         'cheque_number',
         'cheque_date',
@@ -68,6 +73,16 @@ class Cheque extends Model
     public function party(): BelongsTo
     {
         return $this->belongsTo(ChequeParty::class, 'cheque_party_id');
+    }
+
+    public function book(): BelongsTo
+    {
+        return $this->belongsTo(ChequeBook::class, 'cheque_book_id');
+    }
+
+    public function leaf(): BelongsTo
+    {
+        return $this->belongsTo(ChequeBookLeaf::class, 'cheque_book_leaf_id');
     }
 
     public function creator(): BelongsTo
