@@ -1,6 +1,0 @@
-import{d as n,o as s,a,j as i,f as l,t as c,z as t,u as o}from"./app-DHE8W4Hy.js";import{A as p,a as m}from"./arrow-up-NRFxMHDy.js";import{c as u}from"./utils-DhA6snTo.js";/**
- * @license lucide-vue-next v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const f=u("ArrowUpDownIcon",[["path",{d:"m21 16-4 4-4-4",key:"f6ql7i"}],["path",{d:"M17 20V4",key:"1ejh1v"}],["path",{d:"m3 8 4-4 4 4",key:"11wl7u"}],["path",{d:"M7 4v16",key:"1glfcx"}]]),y={class:"truncate"},D=n({__name:"SortableHeader",props:{label:{},column:{},sortKey:{},sortDirection:{},align:{}},emits:["sort"],setup(k){return(e,r)=>(s(),a("button",{type:"button",class:i(["inline-flex w-full items-center gap-1 hover:text-foreground",{"justify-end text-right":e.align==="right","justify-center text-center":e.align==="center","justify-start text-left":!e.align||e.align==="left"}]),onClick:r[0]||(r[0]=d=>e.$emit("sort",e.column))},[l("span",y,c(e.label),1),e.sortKey===e.column&&e.sortDirection==="asc"?(s(),t(o(p),{key:0,class:"size-3 shrink-0"})):e.sortKey===e.column&&e.sortDirection==="desc"?(s(),t(o(m),{key:1,class:"size-3 shrink-0"})):(s(),t(o(f),{key:2,class:"size-3 shrink-0 opacity-60"}))],2))}});export{D as _};
