@@ -151,25 +151,25 @@ const mainNavItems: NavItem[] = [
             },
         ],
     },
-    {
-        title: 'Procurement',
-        href: '/suppliers',
-        icon: ShoppingCart,
-        items: [
-            {
-                title: 'Suppliers',
-                href: '/suppliers',
-            },
-            {
-                title: 'Purchase Bills',
-                href: '/purchase-bills',
-            },
-            {
-                title: 'Equipment Register',
-                href: '/equipment',
-            },
-        ],
-    },
+    // {
+    //     title: 'Procurement',
+    //     href: '/suppliers',
+    //     icon: ShoppingCart,
+    //     items: [
+    //         {
+    //             title: 'Suppliers',
+    //             href: '/suppliers',
+    //         },
+    //         {
+    //             title: 'Purchase Bills',
+    //             href: '/purchase-bills',
+    //         },
+    //         {
+    //             title: 'Equipment Register',
+    //             href: '/equipment',
+    //         },
+    //     ],
+    // },
     {
         title: 'Users',
         href: '/users',
