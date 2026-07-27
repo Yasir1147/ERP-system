@@ -254,7 +254,15 @@ Project categories:
 - Rope Access Projects
 - Contracting Projects
 
-Projects Overview calculates labor cost from attendance records and payroll settings.
+Project records may also store optional planning information: project code, client, location, project manager, schedule, contract value, cost budget, progress percentage, and description. Existing projects remain valid when these fields are empty.
+
+Projects Overview calculates real-time actual cost from:
+
+- labor cost from attendance records and payroll settings
+- linked purchase bill totals
+- linked approved employee expenses
+
+Supplier payments are shown as paid/outstanding cash-flow information and do not reduce actual project cost. Assigned equipment is shown as an allocation count and is not counted again as project cost.
 
 If an attendance record has a separate overtime project:
 
@@ -270,6 +278,15 @@ Projects Overview should show:
 - basic labor cost
 - overtime cost
 - total labor cost
+- purchase cost
+- approved expense cost
+- total actual cost
+- budget remaining and expected profit when planning values are available
+- project progress and calculated health
+
+Project health is calculated as Completed, Delayed, Over Budget, At Risk, or On Track from status, schedule, progress, and budget usage.
+
+Projects with linked attendance, purchase bills, expenses, equipment, or contracting duty assignments cannot be deleted. Mark them completed instead.
 
 Project employee history is available from each project row. The current desired modal focuses on Employee Summary, not detailed attendance rows.
 

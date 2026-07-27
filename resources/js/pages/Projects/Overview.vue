@@ -4,11 +4,12 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { Banknote, BookOpen, BriefcaseBusiness, Clock3, LoaderCircle, Search, Users, X } from 'lucide-vue-next';
+import { Banknote, BookOpen, BriefcaseBusiness, LoaderCircle, Search, Users, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface ProjectOption {
     id: number;
+    projectCode: string | null;
     name: string;
     status: string;
     type: string;
@@ -17,10 +18,21 @@ interface ProjectOption {
 
 interface OverviewRow {
     id: number;
+    projectCode: string | null;
     name: string;
+    clientName: string | null;
+    location: string | null;
+    projectManager: string | null;
     status: string;
     type: string;
     typeLabel: string;
+    startDate: string | null;
+    expectedEndDate: string | null;
+    contractValue: number | null;
+    costBudget: number | null;
+    progressPercentage: number;
+    healthStatus: string;
+    healthLabel: string;
     firstWorkDate: string | null;
     lastWorkDate: string | null;
     daysSinceStart: number;
@@ -30,7 +42,20 @@ interface OverviewRow {
     overtimeHours: number;
     basicCost: number;
     overtimeCost: number;
+    labourCost: number;
+    purchaseCost: number;
+    purchaseVat: number;
+    supplierPaid: number;
+    supplierOutstanding: number;
+    expenseCost: number;
     totalCost: number;
+    budgetRemaining: number | null;
+    expectedProfit: number | null;
+    budgetUsedPercent: number | null;
+    profitMarginPercent: number | null;
+    purchaseBillCount: number;
+    approvedExpenseCount: number;
+    equipmentCount: number;
     missingPayrollSettings: string[];
 }
 
@@ -62,6 +87,21 @@ interface ProjectHistoryTotals {
     totalCost: number;
 }
 
+interface SelectedProjectDetails {
+    purchaseBills: Array<{
+        id: number;
+        billNumber: string;
+        supplierName: string | null;
+        date: string;
+        total: number;
+        paid: number;
+        balance: number;
+        status: string;
+    }>;
+    approvedExpenses: Array<{ id: number; date: string; purpose: string; amount: number; submittedBy: string | null }>;
+    equipment: Array<{ id: number; name: string; assetCode: string | null; status: string }>;
+}
+
 const props = defineProps<{
     projects: ProjectOption[];
     overviewRows: OverviewRow[];
@@ -71,7 +111,12 @@ const props = defineProps<{
         labourCount: number;
         workedDays: number;
         overtimeHours: number;
+        labourCost: number;
+        purchaseCost: number;
+        expenseCost: number;
         totalCost: number;
+        contractValue: number;
+        costBudget: number;
     };
     filters: {
         type: string;
@@ -80,6 +125,7 @@ const props = defineProps<{
     typeOptions: TypeOption[];
     projectTypes: Record<string, string>;
     statuses: string[];
+    selectedProjectDetails: SelectedProjectDetails | null;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -109,6 +155,8 @@ type SortKey =
     | 'ot_hours'
     | 'basic_cost'
     | 'ot_cost'
+    | 'purchase_cost'
+    | 'expense_cost'
     | 'total_cost';
 const sortKey = ref<SortKey>('project');
 const sortDirection = ref<'asc' | 'desc'>('asc');
@@ -128,6 +176,7 @@ const historyTotals = ref<ProjectHistoryTotals>({
     overtimeCost: 0,
     totalCost: 0,
 });
+const selectedProject = computed(() => (props.filters.projectId !== 'all' ? (props.overviewRows[0] ?? null) : null));
 
 const filteredProjectOptions = computed(() => props.projects.filter((project) => filterType.value === 'all' || project.type === filterType.value));
 
@@ -153,7 +202,7 @@ const filteredRows = computed(() => {
 
     const rows = query
         ? props.overviewRows.filter((row) =>
-              [row.name, row.typeLabel, row.status, statusLabels.value[row.status], row.firstWorkDate, row.lastWorkDate]
+              [row.projectCode, row.name, row.clientName, row.location, row.projectManager, row.typeLabel, row.status, statusLabels.value[row.status]]
                   .filter(Boolean)
                   .some((value) => String(value).toLowerCase().includes(query)),
           )
@@ -173,6 +222,8 @@ const filteredRows = computed(() => {
             if (sortKey.value === 'ot_hours') return row.overtimeHours;
             if (sortKey.value === 'basic_cost') return row.basicCost;
             if (sortKey.value === 'ot_cost') return row.overtimeCost;
+            if (sortKey.value === 'purchase_cost') return row.purchaseCost;
+            if (sortKey.value === 'expense_cost') return row.expenseCost;
             return row.totalCost;
         };
 
@@ -199,11 +250,13 @@ const sortRows = (key: string) => {
     sortDirection.value = ['first_work', 'last_work', 'total_cost'].includes(nextKey) ? 'desc' : 'asc';
 };
 
-const money = (value: number) =>
-    new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(value);
+const money = (value: number | null) =>
+    value === null
+        ? '-'
+        : new Intl.NumberFormat('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+          }).format(value);
 
 const applyFilters = () => {
     router.get(
@@ -223,6 +276,12 @@ const statusClass = (status: string) => {
     if (status === 'ongoing') return 'border-green-600/30 bg-green-600/10 text-green-700';
     if (status === 'completed') return 'border-sky-600/30 bg-sky-600/10 text-sky-700';
     return 'border-amber-600/30 bg-amber-600/10 text-amber-700';
+};
+
+const healthClass = (status: string) => {
+    if (status === 'on_track' || status === 'completed') return 'border-green-600/30 bg-green-600/10 text-green-700';
+    if (status === 'at_risk') return 'border-amber-600/30 bg-amber-600/10 text-amber-700';
+    return 'border-red-600/30 bg-red-600/10 text-red-700';
 };
 
 const loadProjectHistory = async (row?: OverviewRow) => {
@@ -289,7 +348,9 @@ const closeProjectHistory = () => {
             <div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                     <h1 class="text-2xl font-semibold tracking-normal">Projects Overview</h1>
-                    <p class="mt-1 text-sm text-muted-foreground">Project labour, overtime, and salary cost from attendance records.</p>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        Contract value, budget, labour, supplier purchases and approved project expenses.
+                    </p>
                 </div>
                 <div class="grid gap-2 lg:grid-cols-[220px_260px_auto]">
                     <select
@@ -313,7 +374,7 @@ const closeProjectHistory = () => {
                 </div>
             </div>
 
-            <div class="grid auto-rows-min gap-4 md:grid-cols-5">
+            <div class="grid auto-rows-min gap-4 sm:grid-cols-2 xl:grid-cols-6">
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <div class="flex items-center justify-between gap-3">
                         <div>
@@ -330,8 +391,8 @@ const closeProjectHistory = () => {
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <div class="flex items-center justify-between gap-3">
                         <div>
-                            <p class="text-sm text-muted-foreground">Labour Count</p>
-                            <p class="mt-2 text-3xl font-semibold">{{ summary.labourCount }}</p>
+                            <p class="text-sm text-muted-foreground">Labour Cost</p>
+                            <p class="mt-2 text-xl font-semibold">{{ money(summary.labourCost) }}</p>
                         </div>
                         <Users class="size-6 text-muted-foreground" />
                     </div>
@@ -339,22 +400,205 @@ const closeProjectHistory = () => {
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <div class="flex items-center justify-between gap-3">
                         <div>
-                            <p class="text-sm text-muted-foreground">OT Hours</p>
-                            <p class="mt-2 text-3xl font-semibold">{{ summary.overtimeHours }}</p>
+                            <p class="text-sm text-muted-foreground">Purchase Cost</p>
+                            <p class="mt-2 text-xl font-semibold">{{ money(summary.purchaseCost) }}</p>
                         </div>
-                        <Clock3 class="size-6 text-sky-600" />
+                        <Banknote class="size-6 text-sky-700" />
                     </div>
                 </div>
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <div class="flex items-center justify-between gap-3">
                         <div>
-                            <p class="text-sm text-muted-foreground">Total Labour Cost</p>
-                            <p class="mt-2 text-2xl font-semibold">{{ money(summary.totalCost) }}</p>
+                            <p class="text-sm text-muted-foreground">Approved Expenses</p>
+                            <p class="mt-2 text-xl font-semibold">{{ money(summary.expenseCost) }}</p>
+                        </div>
+                        <Banknote class="size-6 text-amber-700" />
+                    </div>
+                </div>
+                <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <p class="text-sm text-muted-foreground">Total Actual Cost</p>
+                            <p class="mt-2 text-xl font-semibold">{{ money(summary.totalCost) }}</p>
                         </div>
                         <Banknote class="size-6 text-green-700" />
                     </div>
                 </div>
             </div>
+
+            <section v-if="selectedProject" class="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)]">
+                <div class="rounded-xl border bg-card p-4 shadow-sm">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-muted-foreground">
+                                {{ selectedProject.projectCode || `Project ${selectedProject.id}` }}
+                            </p>
+                            <h2 class="mt-1 text-xl font-semibold">{{ selectedProject.name }}</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                {{ selectedProject.clientName || 'Client not set' }} · {{ selectedProject.location || 'Location not set' }}
+                            </p>
+                        </div>
+                        <span class="w-fit rounded-full border px-2 py-1 text-xs" :class="healthClass(selectedProject.healthStatus)">{{
+                            selectedProject.healthLabel
+                        }}</span>
+                    </div>
+                    <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                            <p class="text-xs text-muted-foreground">Contract Value</p>
+                            <p class="mt-1 font-semibold">{{ money(selectedProject.contractValue) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-muted-foreground">Cost Budget</p>
+                            <p class="mt-1 font-semibold">{{ money(selectedProject.costBudget) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-muted-foreground">Actual Cost</p>
+                            <p class="mt-1 font-semibold">{{ money(selectedProject.totalCost) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-muted-foreground">Expected Profit</p>
+                            <p
+                                class="mt-1 font-semibold"
+                                :class="
+                                    selectedProject.expectedProfit !== null && selectedProject.expectedProfit < 0 ? 'text-red-700' : 'text-green-700'
+                                "
+                            >
+                                {{ money(selectedProject.expectedProfit) }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-muted-foreground">Labour</p>
+                            <p class="mt-1 font-medium">{{ money(selectedProject.labourCost) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-muted-foreground">Supplier Bills</p>
+                            <p class="mt-1 font-medium">{{ money(selectedProject.purchaseCost) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-muted-foreground">Approved Expenses</p>
+                            <p class="mt-1 font-medium">{{ money(selectedProject.expenseCost) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-muted-foreground">Supplier Outstanding</p>
+                            <p class="mt-1 font-medium text-amber-700">{{ money(selectedProject.supplierOutstanding) }}</p>
+                        </div>
+                    </div>
+                    <div class="mt-5">
+                        <div class="flex justify-between text-sm">
+                            <span>Project Progress</span><strong>{{ selectedProject.progressPercentage }}%</strong>
+                        </div>
+                        <div class="mt-2 h-2.5 overflow-hidden rounded-full bg-muted">
+                            <div class="h-full rounded-full bg-blue-600" :style="{ width: `${selectedProject.progressPercentage}%` }" />
+                        </div>
+                    </div>
+                </div>
+                <div class="rounded-xl border bg-card p-4 shadow-sm">
+                    <h3 class="font-semibold">Cost Summary</h3>
+                    <div class="mt-4 grid gap-3 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Budget Used</span
+                            ><strong>{{ selectedProject.budgetUsedPercent === null ? '-' : `${selectedProject.budgetUsedPercent}%` }}</strong>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Budget Remaining</span
+                            ><strong :class="selectedProject.budgetRemaining !== null && selectedProject.budgetRemaining < 0 ? 'text-red-700' : ''">{{
+                                money(selectedProject.budgetRemaining)
+                            }}</strong>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Profit Margin</span
+                            ><strong>{{ selectedProject.profitMarginPercent === null ? '-' : `${selectedProject.profitMarginPercent}%` }}</strong>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Purchase Bills</span><strong>{{ selectedProject.purchaseBillCount }}</strong>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Approved Expenses</span><strong>{{ selectedProject.approvedExpenseCount }}</strong>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Assigned Equipment</span><strong>{{ selectedProject.equipmentCount }}</strong>
+                        </div>
+                        <div class="flex justify-between border-t pt-3">
+                            <span class="text-muted-foreground">Schedule</span
+                            ><strong>{{ selectedProject.startDate || '-' }} — {{ selectedProject.expectedEndDate || '-' }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section v-if="selectedProject && selectedProjectDetails" class="grid gap-4 xl:grid-cols-3">
+                <div class="overflow-hidden rounded-xl border bg-card shadow-sm">
+                    <div class="border-b px-4 py-3">
+                        <h3 class="font-semibold">Recent Purchase Bills</h3>
+                        <p class="text-xs text-muted-foreground">Supplier bills linked to this project.</p>
+                    </div>
+                    <div v-if="selectedProjectDetails.purchaseBills.length === 0" class="p-6 text-center text-sm text-muted-foreground">
+                        No linked purchase bills.
+                    </div>
+                    <div v-else class="divide-y">
+                        <div
+                            v-for="bill in selectedProjectDetails.purchaseBills"
+                            :key="bill.id"
+                            class="grid grid-cols-[1fr_auto] gap-3 px-4 py-3 text-sm"
+                        >
+                            <div class="min-w-0">
+                                <p class="truncate font-medium">{{ bill.supplierName || 'Supplier' }} / {{ bill.billNumber }}</p>
+                                <p class="text-xs text-muted-foreground">{{ bill.date }} / {{ bill.status }}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-medium">{{ money(bill.total) }}</p>
+                                <p v-if="bill.balance > 0" class="text-xs text-amber-700">Due {{ money(bill.balance) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-hidden rounded-xl border bg-card shadow-sm">
+                    <div class="border-b px-4 py-3">
+                        <h3 class="font-semibold">Approved Expenses</h3>
+                        <p class="text-xs text-muted-foreground">Only approved expenses count toward actual cost.</p>
+                    </div>
+                    <div v-if="selectedProjectDetails.approvedExpenses.length === 0" class="p-6 text-center text-sm text-muted-foreground">
+                        No approved project expenses.
+                    </div>
+                    <div v-else class="divide-y">
+                        <div
+                            v-for="expense in selectedProjectDetails.approvedExpenses"
+                            :key="expense.id"
+                            class="grid grid-cols-[1fr_auto] gap-3 px-4 py-3 text-sm"
+                        >
+                            <div class="min-w-0">
+                                <p class="truncate font-medium">{{ expense.purpose }}</p>
+                                <p class="text-xs text-muted-foreground">{{ expense.date }} / {{ expense.submittedBy || 'Unknown user' }}</p>
+                            </div>
+                            <p class="font-medium">{{ money(expense.amount) }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-hidden rounded-xl border bg-card shadow-sm">
+                    <div class="border-b px-4 py-3">
+                        <h3 class="font-semibold">Assigned Equipment</h3>
+                        <p class="text-xs text-muted-foreground">Project allocation only; equipment is not counted twice as cost.</p>
+                    </div>
+                    <div v-if="selectedProjectDetails.equipment.length === 0" class="p-6 text-center text-sm text-muted-foreground">
+                        No equipment assigned.
+                    </div>
+                    <div v-else class="divide-y">
+                        <div
+                            v-for="item in selectedProjectDetails.equipment"
+                            :key="item.id"
+                            class="grid grid-cols-[1fr_auto] gap-3 px-4 py-3 text-sm"
+                        >
+                            <div class="min-w-0">
+                                <p class="truncate font-medium">{{ item.name }}</p>
+                                <p class="text-xs text-muted-foreground">{{ item.assetCode || 'No asset code' }}</p>
+                            </div>
+                            <span class="h-fit rounded-full border px-2 py-1 text-xs capitalize">{{ item.status }}</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <div class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-card dark:border-sidebar-border">
                 <div class="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">
@@ -372,60 +616,100 @@ const closeProjectHistory = () => {
                     No projects found for the selected filters.
                 </div>
 
-                <div v-else-if="filteredRows.length === 0" class="flex min-h-56 items-center justify-center border-dashed text-sm text-muted-foreground">
+                <div
+                    v-else-if="filteredRows.length === 0"
+                    class="flex min-h-56 items-center justify-center border-dashed text-sm text-muted-foreground"
+                >
                     No project records match your search.
                 </div>
 
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full min-w-[1320px] table-fixed text-sm">
+                    <table class="w-full min-w-[1500px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
-                                <th class="w-[190px] px-3 py-3 font-medium">
-                                    <SortableHeader label="Project" column="project" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                <th class="w-[220px] px-3 py-3 font-medium">
+                                    <SortableHeader
+                                        label="Project"
+                                        column="project"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortRows"
+                                    />
                                 </th>
                                 <th class="w-[130px] px-3 py-3 font-medium">
-                                    <SortableHeader label="Category" column="category" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                    <SortableHeader
+                                        label="Category"
+                                        column="category"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortRows"
+                                    />
                                 </th>
-                                <th class="w-[90px] px-3 py-3 font-medium">
-                                    <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                <th class="w-[100px] px-3 py-3 font-medium">
+                                    <SortableHeader
+                                        label="Status"
+                                        column="status"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortRows"
+                                    />
                                 </th>
-                                <th class="w-[105px] px-3 py-3 font-medium">
-                                    <SortableHeader label="First Work" column="first_work" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
-                                <th class="w-[105px] px-3 py-3 font-medium">
-                                    <SortableHeader label="Last Work" column="last_work" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
-                                <th class="w-[70px] px-3 py-3 text-right font-medium">
-                                    <SortableHeader label="Days" column="days" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
-                                <th class="w-[80px] px-3 py-3 text-right font-medium">
-                                    <SortableHeader label="Worked" column="worked" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
-                                <th class="w-[80px] px-3 py-3 text-right font-medium">
-                                    <SortableHeader label="Labour" column="labour" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
-                                <th class="w-[80px] px-3 py-3 text-right font-medium">
-                                    <SortableHeader label="Entries" column="entries" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
-                                <th class="w-[75px] px-3 py-3 text-right font-medium">
-                                    <SortableHeader label="OT Hrs" column="ot_hours" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
-                                <th class="w-[105px] px-3 py-3 text-right font-medium">
-                                    <SortableHeader label="Basic Cost" column="basic_cost" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
-                                <th class="w-[105px] px-3 py-3 text-right font-medium">
-                                    <SortableHeader label="OT Cost" column="ot_cost" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
-                                </th>
+                                <th class="w-[100px] px-3 py-3 text-right font-medium">Progress</th>
+                                <th class="w-[120px] px-3 py-3 text-right font-medium">Cost Budget</th>
                                 <th class="w-[110px] px-3 py-3 text-right font-medium">
-                                    <SortableHeader label="Total Cost" column="total_cost" align="right" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRows" />
+                                    <SortableHeader
+                                        label="Labour"
+                                        column="basic_cost"
+                                        align="right"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortRows"
+                                    />
                                 </th>
-                                <th class="w-[70px] px-3 py-3 text-center font-medium">History</th>
+                                <th class="w-[115px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader
+                                        label="Purchases"
+                                        column="purchase_cost"
+                                        align="right"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortRows"
+                                    />
+                                </th>
+                                <th class="w-[115px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader
+                                        label="Expenses"
+                                        column="expense_cost"
+                                        align="right"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortRows"
+                                    />
+                                </th>
+                                <th class="w-[120px] px-3 py-3 text-right font-medium">
+                                    <SortableHeader
+                                        label="Actual Cost"
+                                        column="total_cost"
+                                        align="right"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortRows"
+                                    />
+                                </th>
+                                <th class="w-[120px] px-3 py-3 text-right font-medium">Remaining</th>
+                                <th class="w-[120px] px-3 py-3 text-right font-medium">Expected Profit</th>
+                                <th class="w-[105px] px-3 py-3 font-medium">Health</th>
+                                <th class="w-[90px] px-3 py-3 text-center font-medium">History</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="row in filteredRows" :key="row.id" class="border-b last:border-b-0">
                                 <td class="px-3 py-3">
                                     <p class="truncate font-medium">{{ row.name }}</p>
+                                    <p class="truncate text-xs text-muted-foreground">
+                                        {{ row.projectCode || `Project ${row.id}` }}
+                                        <template v-if="row.clientName"> / {{ row.clientName }}</template>
+                                    </p>
                                     <p v-if="row.missingPayrollSettings.length" class="mt-1 truncate text-xs text-amber-700">
                                         Missing salary: {{ row.missingPayrollSettings.join(', ') }}
                                     </p>
@@ -436,16 +720,43 @@ const closeProjectHistory = () => {
                                         {{ statusLabels[row.status] }}
                                     </span>
                                 </td>
-                                <td class="px-3 py-3 text-muted-foreground">{{ row.firstWorkDate || '-' }}</td>
-                                <td class="px-3 py-3 text-muted-foreground">{{ row.lastWorkDate || '-' }}</td>
-                                <td class="px-3 py-3 text-right">{{ row.daysSinceStart }}</td>
-                                <td class="px-3 py-3 text-right">{{ row.workedDays }}</td>
-                                <td class="px-3 py-3 text-right">{{ row.labourCount }}</td>
-                                <td class="px-3 py-3 text-right">{{ row.labourEntries }}</td>
-                                <td class="px-3 py-3 text-right">{{ row.overtimeHours }}</td>
-                                <td class="px-3 py-3 text-right">{{ money(row.basicCost) }}</td>
-                                <td class="px-3 py-3 text-right">{{ money(row.overtimeCost) }}</td>
+                                <td class="px-3 py-3 text-right">
+                                    <span class="font-medium">{{ row.progressPercentage }}%</span>
+                                    <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                                        <div class="h-full rounded-full bg-blue-600" :style="{ width: `${row.progressPercentage}%` }" />
+                                    </div>
+                                </td>
+                                <td class="px-3 py-3 text-right">{{ money(row.costBudget) }}</td>
+                                <td class="px-3 py-3 text-right">
+                                    {{ money(row.labourCost) }}
+                                    <p class="text-xs text-muted-foreground">{{ row.labourCount }} people</p>
+                                </td>
+                                <td class="px-3 py-3 text-right">
+                                    {{ money(row.purchaseCost) }}
+                                    <p class="text-xs text-muted-foreground">{{ row.purchaseBillCount }} bills</p>
+                                </td>
+                                <td class="px-3 py-3 text-right">
+                                    {{ money(row.expenseCost) }}
+                                    <p class="text-xs text-muted-foreground">{{ row.approvedExpenseCount }} records</p>
+                                </td>
                                 <td class="px-3 py-3 text-right font-semibold">{{ money(row.totalCost) }}</td>
+                                <td
+                                    class="px-3 py-3 text-right"
+                                    :class="row.budgetRemaining !== null && row.budgetRemaining < 0 ? 'text-red-700' : ''"
+                                >
+                                    {{ money(row.budgetRemaining) }}
+                                </td>
+                                <td class="px-3 py-3 text-right" :class="row.expectedProfit !== null && row.expectedProfit < 0 ? 'text-red-700' : ''">
+                                    {{ money(row.expectedProfit) }}
+                                </td>
+                                <td class="px-3 py-3">
+                                    <span
+                                        class="inline-flex rounded-full border px-2 py-1 text-xs font-medium"
+                                        :class="healthClass(row.healthStatus)"
+                                    >
+                                        {{ row.healthLabel }}
+                                    </span>
+                                </td>
                                 <td class="px-3 py-3 text-center">
                                     <button
                                         type="button"
@@ -463,13 +774,17 @@ const closeProjectHistory = () => {
             </div>
 
             <div v-if="historyOpen" class="fixed inset-0 z-50 bg-black/50 p-2 sm:p-4">
-                <div class="mx-auto flex max-h-[94vh] w-[calc(100vw-1rem)] max-w-none flex-col overflow-hidden rounded-lg border bg-background shadow-xl sm:w-[calc(100vw-2rem)]">
+                <div
+                    class="mx-auto flex max-h-[94vh] w-[calc(100vw-1rem)] max-w-none flex-col overflow-hidden rounded-lg border bg-background shadow-xl sm:w-[calc(100vw-2rem)]"
+                >
                     <div class="flex flex-col gap-3 border-b p-4 xl:flex-row xl:items-end xl:justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Project Employee History</h2>
                             <p class="mt-1 text-sm text-muted-foreground">
                                 {{ historyProject?.name }}
-                                <template v-if="historyProject"> - {{ historyProject.typeLabel }} - {{ statusLabels[historyProject.status] }}</template>
+                                <template v-if="historyProject">
+                                    - {{ historyProject.typeLabel }} - {{ statusLabels[historyProject.status] }}</template
+                                >
                             </p>
                         </div>
                         <div class="grid gap-2 sm:grid-cols-[160px_160px_auto_auto]">
@@ -485,10 +800,19 @@ const closeProjectHistory = () => {
                                 class="h-10 rounded-md border border-input bg-background px-3 text-sm"
                                 aria-label="To date"
                             />
-                            <button type="button" class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60" :disabled="historyLoading" @click="loadProjectHistory()">
+                            <button
+                                type="button"
+                                class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                                :disabled="historyLoading"
+                                @click="loadProjectHistory()"
+                            >
                                 Filter
                             </button>
-                            <button type="button" class="inline-flex h-10 items-center justify-center rounded-md border px-3" @click="closeProjectHistory">
+                            <button
+                                type="button"
+                                class="inline-flex h-10 items-center justify-center rounded-md border px-3"
+                                @click="closeProjectHistory"
+                            >
                                 <X class="size-4" />
                             </button>
                         </div>
@@ -538,7 +862,10 @@ const closeProjectHistory = () => {
                                 <LoaderCircle class="size-4 animate-spin" />
                                 Loading project history...
                             </div>
-                            <div v-else-if="historyEmployeeSummary.length === 0" class="flex min-h-28 items-center justify-center text-sm text-muted-foreground">
+                            <div
+                                v-else-if="historyEmployeeSummary.length === 0"
+                                class="flex min-h-28 items-center justify-center text-sm text-muted-foreground"
+                            >
                                 No employee summary available.
                             </div>
                             <div v-else class="overflow-x-auto">
@@ -557,7 +884,11 @@ const closeProjectHistory = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr v-for="summaryRow in historyEmployeeSummary" :key="summaryRow.employeeId || summaryRow.employeeName" class="border-b last:border-b-0">
+                                        <tr
+                                            v-for="summaryRow in historyEmployeeSummary"
+                                            :key="summaryRow.employeeId || summaryRow.employeeName"
+                                            class="border-b last:border-b-0"
+                                        >
                                             <td class="px-3 py-3 font-medium">{{ summaryRow.employeeName }}</td>
                                             <td class="px-3 py-3 text-muted-foreground">{{ summaryRow.profession }}</td>
                                             <td class="px-3 py-3 text-right">{{ summaryRow.entries }}</td>
