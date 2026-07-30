@@ -97,7 +97,11 @@ class AppSetting extends Model
             return false;
         }
 
-        $scheme = $settings['encryption'] === 'none' ? null : $settings['encryption'];
+        $scheme = match ($settings['encryption']) {
+            'ssl' => 'smtps',
+            default => 'smtp',
+        };
+        
 
         config([
             'mail.default' => 'smtp',
