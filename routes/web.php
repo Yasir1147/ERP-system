@@ -10,6 +10,8 @@ use App\Http\Controllers\ChequePartyController;
 use App\Http\Controllers\ContractingDutyPlanController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\DocumentCategoryController;
+use App\Http\Controllers\EmployeeDocumentController;
 use App\Http\Controllers\EmployeeExpenseController;
 use App\Http\Controllers\EmployeeFineController;
 use App\Http\Controllers\EmployeeLeaveController;
@@ -24,6 +26,7 @@ use App\Http\Controllers\PublicAttendanceController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPaymentController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\Settings\WhatsAppSettingsController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -110,6 +113,19 @@ Route::middleware(['auth', 'role:office_staff'])->group(function () {
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+    Route::get('employee-documents', [EmployeeDocumentController::class, 'index'])->name('employee-documents.index');
+    Route::post('employee-documents', [EmployeeDocumentController::class, 'store'])->name('employee-documents.store');
+    Route::put('employee-documents/{employeeDocument}', [EmployeeDocumentController::class, 'update'])->name('employee-documents.update');
+    Route::patch('employee-documents/{employeeDocument}/notification', [EmployeeDocumentController::class, 'toggleNotification'])
+        ->name('employee-documents.notification.update');
+    Route::get('employee-documents/{employeeDocument}/download', [EmployeeDocumentController::class, 'download'])
+        ->name('employee-documents.download');
+    Route::delete('employee-documents/{employeeDocument}', [EmployeeDocumentController::class, 'destroy'])->name('employee-documents.destroy');
+    Route::post('document-categories', [DocumentCategoryController::class, 'store'])->name('document-categories.store');
+    Route::put('document-categories/{documentCategory}', [DocumentCategoryController::class, 'update'])->name('document-categories.update');
+    Route::delete('document-categories/{documentCategory}', [DocumentCategoryController::class, 'destroy'])->name('document-categories.destroy');
+    Route::put('settings/whatsapp', [WhatsAppSettingsController::class, 'update'])->name('whatsapp-settings.update');
+
     Route::post('banks', [BankController::class, 'store'])->name('banks.store');
     Route::post('cheque-formats/{chequeFormat}/background', [ChequeFormatController::class, 'storeBackground'])->name('cheque-formats.background.store');
     Route::delete('cheque-formats/{chequeFormat}/background', [ChequeFormatController::class, 'destroyBackground'])->name('cheque-formats.background.destroy');

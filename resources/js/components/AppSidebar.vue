@@ -11,6 +11,7 @@ import {
     CalendarCheck,
     CircleDollarSign,
     FileCheck2,
+    FileClock,
     LayoutGrid,
     Plane,
     ReceiptText,
@@ -93,6 +94,11 @@ const mainNavItems: NavItem[] = [
                 href: '/office-attendance/report',
             },
         ],
+    },
+    {
+        title: 'Documents',
+        href: '/employee-documents',
+        icon: FileClock,
     },
     {
         title: 'Payroll',
@@ -196,7 +202,7 @@ const navGroups = [
     },
     {
         label: 'Office Management',
-        titles: ['Office Staff'],
+        titles: ['Office Staff', 'Documents'],
     },
     {
         label: 'Administration',

@@ -818,3 +818,15 @@ Database tables:
 - Equipment can optionally link to an equipment-type purchase bill line, a project, and an employee.
 - Suppliers and purchase bills with related financial/equipment records are protected from unsafe deletion.
 - Uploaded procurement documents use Laravel's `public` disk; production requires `php artisan storage:link`.
+
+# Employee Document Expiry
+
+- Admin-only document tracking is available at `/employee-documents`.
+- Categories include Passport, Emirates ID, IRATA Certificate, Visa, Medical Certificate, and Driving Licence; admins may add or disable categories.
+- Each document stores its employee, document number, issue/expiry dates, optional private attachment, notes, and an optional reminder-day override.
+- Email and official Meta WhatsApp Cloud API delivery can be enabled independently per document.
+- Once the reminder threshold is reached, each enabled channel sends at most once per calendar day and repeats daily, including after expiry, until the document notification is manually stopped.
+- Notification attempts are recorded in `document_notification_logs`; the unique document/channel/date key prevents duplicate same-day sends.
+- Document attachments use the private `local` disk and are downloaded only through the authenticated admin route.
+- The scheduled command is `php artisan documents:send-expiry-reminders`; Laravel Scheduler runs it daily at 08:00 Asia/Dubai.
+- WhatsApp messages use an approved four-variable template for employee, category, expiry date, and expiry status. Unofficial WhatsApp Web automation is not used.

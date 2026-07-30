@@ -53,4 +53,9 @@ class Employee extends Model
     {
         return $this->hasMany(EmployeeFine::class);
     }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(EmployeeDocument::class);
+    }
 }

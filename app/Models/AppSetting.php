@@ -23,6 +23,20 @@ class AppSetting extends Model
         'mail_from_name',
     ];
 
+    public const WHATSAPP_KEYS = [
+        'whatsapp_enabled',
+        'whatsapp_graph_version',
+        'whatsapp_phone_number_id',
+        'whatsapp_access_token',
+        'whatsapp_template_name',
+        'whatsapp_template_language',
+    ];
+
+    private const ENCRYPTED_KEYS = [
+        'mail_password',
+        'whatsapp_access_token',
+    ];
+
     public const ABSENCE_DEDUCTION_APPLY_FIXED_ONLY = 'fixed_only';
 
     public static function absenceDeductionSettings(): array
@@ -41,7 +55,7 @@ class AppSetting extends Model
             return $default;
         }
 
-        if ($key === 'mail_password' && $value !== '') {
+        if (in_array($key, self::ENCRYPTED_KEYS, true) && $value !== '') {
             return Crypt::decryptString($value);
         }
 
@@ -50,7 +64,7 @@ class AppSetting extends Model
 
     public static function setValue(string $key, mixed $value): void
     {
-        if ($key === 'mail_password' && filled($value)) {
+        if (in_array($key, self::ENCRYPTED_KEYS, true) && filled($value)) {
             $value = Crypt::encryptString((string) $value);
         }
 
@@ -97,5 +111,18 @@ class AppSetting extends Model
         ]);
 
         return true;
+    }
+
+    public static function whatsappSettings(): array
+    {
+        return [
+            'enabled' => static::getValue('whatsapp_enabled', '0') === '1',
+            'graph_version' => static::getValue('whatsapp_graph_version', ''),
+            'phone_number_id' => static::getValue('whatsapp_phone_number_id', ''),
+            'access_token' => static::getValue('whatsapp_access_token', ''),
+            'template_name' => static::getValue('whatsapp_template_name', ''),
+            'template_language' => static::getValue('whatsapp_template_language', 'en'),
+            'token_configured' => filled(static::query()->where('key', 'whatsapp_access_token')->value('value')),
+        ];
     }
 }
