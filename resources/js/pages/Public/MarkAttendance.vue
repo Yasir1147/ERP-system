@@ -35,6 +35,7 @@ interface SubmittedRecord {
     employeeCode: string | null;
     employeeName: string;
     employeeProfession: string | null;
+    attendanceFraction: number | null;
     status: string;
     projectName: string | null;
     overtimeProjectName: string | null;
@@ -93,6 +94,7 @@ const form = useForm({
     overtime_project_id: '',
     employee_ids: [] as string[],
     status: '',
+    attendance_fraction: '1',
     leave_reason: '',
     attendance_date: today,
     attendance_end_date: today,
@@ -191,7 +193,9 @@ const submittedRecordDetail = (record: SubmittedRecord) => {
                 ? `, OT ${record.overtimeHours}h${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
                 : '';
 
-        return `${record.projectName || 'Project not selected'}${overtime}`;
+        const dayType = Number(record.attendanceFraction) === 0.5 ? 'Half Day, ' : '';
+
+        return `${dayType}${record.projectName || 'Project not selected'}${overtime}`;
     }
 
     return record.reason || statusLabel(record.status);
@@ -333,6 +337,7 @@ watch(
     () => form.status,
     (status) => {
         if (status !== 'present') {
+            form.attendance_fraction = '1';
             form.project_id = '';
             form.overtime_project_id = '';
             form.has_overtime = false;
@@ -389,6 +394,7 @@ const submit = () => {
         preserveScroll: true,
         onSuccess: () => {
             form.employee_ids = [];
+            form.attendance_fraction = '1';
             form.overtime_project_id = '';
             form.leave_reason = '';
             form.attendance_end_date = form.attendance_date;
@@ -544,6 +550,30 @@ const submit = () => {
                     </div>
 
                     <template v-if="isPresent">
+                        <div class="grid gap-2">
+                            <Label>Day Type</Label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <label
+                                    v-for="option in [
+                                        { value: '1', label: 'Full Day' },
+                                        { value: '0.5', label: 'Half Day' },
+                                    ]"
+                                    :key="option.value"
+                                    class="flex h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium transition hover:bg-accent"
+                                    :class="
+                                        form.attendance_fraction === option.value
+                                            ? 'border-primary bg-primary text-primary-foreground hover:bg-primary'
+                                            : 'border-input bg-background'
+                                    "
+                                >
+                                    <input v-model="form.attendance_fraction" type="radio" name="attendance_fraction" :value="option.value" class="sr-only" />
+                                    {{ option.label }}
+                                </label>
+                            </div>
+                            <p class="text-xs text-muted-foreground">Full Day is selected by default.</p>
+                            <InputError :message="form.errors.attendance_fraction" />
+                        </div>
+
                         <div class="grid gap-2">
                             <Label for="project-search">Project</Label>
                             <div ref="projectDropdownRef" class="relative">

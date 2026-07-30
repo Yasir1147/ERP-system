@@ -20,6 +20,14 @@ class AttendanceRecord extends Model
         self::STATUS_LEAVE,
     ];
 
+    public const FULL_DAY_FRACTION = 1.0;
+    public const HALF_DAY_FRACTION = 0.5;
+
+    public const ATTENDANCE_FRACTIONS = [
+        self::FULL_DAY_FRACTION,
+        self::HALF_DAY_FRACTION,
+    ];
+
     public const PAYROLL_DEDUCTION_PENDING = 'pending';
     public const PAYROLL_DEDUCTION_APPLIED = 'applied';
     public const PAYROLL_DEDUCTION_WAIVED = 'waived';
@@ -36,6 +44,7 @@ class AttendanceRecord extends Model
         'employee_id',
         'submitted_by',
         'status',
+        'attendance_fraction',
         'leave_reason',
         'payroll_deduction_status',
         'payroll_deduct_days',
@@ -51,6 +60,7 @@ class AttendanceRecord extends Model
 
     protected $casts = [
         'attendance_date' => 'date',
+        'attendance_fraction' => 'decimal:2',
         'has_overtime' => 'boolean',
         'overtime_hours' => 'integer',
         'payroll_deduction_month' => 'date',

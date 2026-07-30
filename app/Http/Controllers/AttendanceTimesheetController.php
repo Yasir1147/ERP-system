@@ -120,6 +120,7 @@ class AttendanceTimesheetController extends Controller
             ->get([
                 'attendance_records.employee_id',
                 'attendance_records.status',
+                'attendance_records.attendance_fraction',
                 'attendance_records.attendance_date',
                 'attendance_records.leave_reason',
                 'attendance_records.overtime_hours',
@@ -169,6 +170,7 @@ class AttendanceTimesheetController extends Controller
                             return [
                                 'date' => $date['date'],
                                 'status' => AttendanceRecord::STATUS_LEAVE,
+                                'attendanceFraction' => null,
                                 'projectName' => null,
                                 'overtimeProjectName' => null,
                                 'overtimeHours' => null,
@@ -179,6 +181,7 @@ class AttendanceTimesheetController extends Controller
                         return [
                             'date' => $date['date'],
                             'status' => null,
+                            'attendanceFraction' => null,
                             'projectName' => null,
                             'overtimeProjectName' => null,
                             'overtimeHours' => null,
@@ -189,6 +192,7 @@ class AttendanceTimesheetController extends Controller
                     return [
                         'date' => $date['date'],
                         'status' => $record->status,
+                        'attendanceFraction' => (float) $record->attendance_fraction,
                         'projectName' => $record->project_name,
                         'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
                         'overtimeHours' => $record->overtime_hours,
@@ -202,7 +206,13 @@ class AttendanceTimesheetController extends Controller
                     'name' => $employee->name,
                     'profession' => $employee->profession,
                     'status' => $employee->status,
-                    'presentDays' => $days->where('status', AttendanceRecord::STATUS_PRESENT)->count(),
+                    'presentDays' => round($days
+                        ->where('status', AttendanceRecord::STATUS_PRESENT)
+                        ->sum(fn (array $day) => (float) ($day['attendanceFraction'] ?? AttendanceRecord::FULL_DAY_FRACTION)), 2),
+                    'halfDays' => $days
+                        ->where('status', AttendanceRecord::STATUS_PRESENT)
+                        ->filter(fn (array $day) => (float) ($day['attendanceFraction'] ?? 1) === AttendanceRecord::HALF_DAY_FRACTION)
+                        ->count(),
                     'days' => $days,
                 ];
             })
@@ -221,11 +231,14 @@ class AttendanceTimesheetController extends Controller
         }
 
         if ($day['status'] === AttendanceRecord::STATUS_PRESENT) {
+            $dayTypeLabel = (float) ($day['attendanceFraction'] ?? 1) === AttendanceRecord::HALF_DAY_FRACTION
+                ? 'Half Day - '
+                : '';
             $overtimeLabel = $day['overtimeHours']
                 ? ' (OT '.$day['overtimeHours'].'H'.($day['overtimeProjectName'] && $day['overtimeProjectName'] !== $day['projectName'] ? ' - '.$day['overtimeProjectName'] : '').')'
                 : '';
 
-            return trim(($day['projectName'] ?? 'Present').$overtimeLabel);
+            return trim($dayTypeLabel.($day['projectName'] ?? 'Present').$overtimeLabel);
         }
 
         if ($day['status'] === AttendanceRecord::STATUS_ABSENT) {

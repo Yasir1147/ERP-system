@@ -115,7 +115,8 @@ class ProjectController extends Controller
             $setting = $employee?->payrollSetting;
             $dailySalary = (float) ($setting?->daily_salary ?? 0);
             $standardHours = max(1, (int) ($setting?->standard_hours_per_day ?? 8));
-            $basicCost = (int) $record->project_id === (int) $project->id ? $dailySalary : 0;
+            $attendanceFraction = (float) ($record->attendance_fraction ?? AttendanceRecord::FULL_DAY_FRACTION);
+            $basicCost = (int) $record->project_id === (int) $project->id ? $dailySalary * $attendanceFraction : 0;
             $effectiveOvertimeProjectId = $record->overtime_project_id ?: $record->project_id;
             $overtimeHours = (int) $effectiveOvertimeProjectId === (int) $project->id ? (int) ($record->overtime_hours ?? 0) : 0;
             $overtimeCost = $setting?->is_overtime_enabled === false ? 0 : $overtimeHours * ($dailySalary / $standardHours);
@@ -129,6 +130,7 @@ class ProjectController extends Controller
                 'employeeName' => $employee?->name ?? 'Unknown Employee',
                 'profession' => $employee?->profession ?? '-',
                 'status' => $record->status,
+                'attendanceFraction' => $attendanceFraction,
                 'dailySalary' => round($dailySalary, 2),
                 'overtimeHours' => $overtimeHours,
                 'basicCost' => round($basicCost, 2),
@@ -150,7 +152,7 @@ class ProjectController extends Controller
                     'employeeName' => $first['employeeName'],
                     'profession' => $first['profession'],
                     'entries' => $employeeRows->count(),
-                    'workedDays' => $employeeRows->pluck('dateValue')->unique()->count(),
+                    'workedDays' => round($employeeRows->sum('attendanceFraction'), 2),
                     'overtimeHours' => (int) $employeeRows->sum('overtimeHours'),
                     'basicCost' => round($employeeRows->sum('basicCost'), 2),
                     'overtimeCost' => round($employeeRows->sum('overtimeCost'), 2),
@@ -299,7 +301,7 @@ class ProjectController extends Controller
             }
 
             if ((int) $record->project_id === (int) $project->id) {
-                $basicCost += $dailySalary;
+                $basicCost += $dailySalary * (float) ($record->attendance_fraction ?? AttendanceRecord::FULL_DAY_FRACTION);
             }
 
             $overtimeCost += $setting?->is_overtime_enabled === false ? 0 : $overtimeHours * ($dailySalary / $standardHours);

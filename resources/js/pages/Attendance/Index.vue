@@ -28,6 +28,7 @@ interface AttendanceRecord {
     overtimeProjectId: number | null;
     overtimeProjectName: string | null;
     hasOvertime: boolean;
+    attendanceFraction: number | null;
     status: string;
     dateRaw: string;
     date: string;
@@ -47,6 +48,7 @@ interface Project {
 
 interface Summary {
     present: number;
+    halfDays: number;
     absent: number;
     leave: number;
     overtimeDays: number;
@@ -209,6 +211,7 @@ const editForm = useForm({
     employee_id: '',
     attendance_date: '',
     status: '',
+    attendance_fraction: '1',
     project_id: '',
     has_overtime: false,
     overtime_project_id: '',
@@ -228,6 +231,7 @@ const startEditing = (record: AttendanceRecord) => {
     editForm.employee_id = String(record.employeeId);
     editForm.attendance_date = record.dateRaw;
     editForm.status = record.status;
+    editForm.attendance_fraction = String(record.attendanceFraction ?? 1);
     editForm.project_id = record.projectId ? String(record.projectId) : '';
     editForm.has_overtime = Boolean(record.hasOvertime || record.overtimeHours);
     editForm.overtime_project_id = record.overtimeProjectId ? String(record.overtimeProjectId) : '';
@@ -245,6 +249,7 @@ watch(
     () => editForm.status,
     (status) => {
         if (status !== 'present') {
+            editForm.attendance_fraction = '1';
             editForm.project_id = '';
             editForm.has_overtime = false;
             editForm.overtime_project_id = '';
@@ -378,6 +383,7 @@ const deleteAttendance = (record: AttendanceRecord) => {
                         <div>
                             <p class="text-sm text-muted-foreground">Present</p>
                             <p class="mt-2 text-3xl font-semibold">{{ summary.present }}</p>
+                            <p v-if="summary.halfDays" class="mt-1 text-xs text-muted-foreground">{{ summary.halfDays }} half {{ summary.halfDays === 1 ? 'day' : 'days' }}</p>
                         </div>
                         <CalendarCheck class="size-6 text-green-600" />
                     </div>
@@ -515,7 +521,9 @@ const deleteAttendance = (record: AttendanceRecord) => {
                             </div>
                             <span class="truncate text-muted-foreground">{{ employeeTypes[record.employeeType] }}</span>
                             <span class="truncate text-muted-foreground">{{ record.reason || record.projectName || '-' }}</span>
-                            <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
+                            <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">
+                                {{ statusLabel(record.status) }}<template v-if="record.status === 'present' && Number(record.attendanceFraction) === 0.5"> · Half Day</template>
+                            </span>
                             <span class="truncate text-muted-foreground">
                                 {{
                                     record.overtimeHours
@@ -602,6 +610,29 @@ const deleteAttendance = (record: AttendanceRecord) => {
                     </div>
 
                     <template v-if="editForm.status === 'present'">
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">Day Type</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <label
+                                    v-for="option in [
+                                        { value: '1', label: 'Full Day' },
+                                        { value: '0.5', label: 'Half Day' },
+                                    ]"
+                                    :key="option.value"
+                                    class="flex h-10 cursor-pointer items-center justify-center rounded-md border text-sm font-medium"
+                                    :class="
+                                        editForm.attendance_fraction === option.value
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-input bg-background'
+                                    "
+                                >
+                                    <input v-model="editForm.attendance_fraction" type="radio" name="edit-attendance-fraction" :value="option.value" class="sr-only" />
+                                    {{ option.label }}
+                                </label>
+                            </div>
+                            <p v-if="editForm.errors.attendance_fraction" class="text-sm text-red-600">{{ editForm.errors.attendance_fraction }}</p>
+                        </div>
+
                         <div class="grid gap-4 md:grid-cols-2">
                             <div class="grid gap-2">
                                 <label class="text-sm font-medium">Project</label>

@@ -35,6 +35,12 @@
             <td style="border: 1px solid #d1d5db; font-weight: bold;">Expiry Date</td>
             <td style="border: 1px solid #d1d5db;">{{ $document->expiry_date->format('d/m/Y') }}</td>
         </tr>
+        @if (filled($document->notes))
+            <tr>
+                <td style="border: 1px solid #d1d5db; font-weight: bold; vertical-align: top;">Notes</td>
+                <td style="border: 1px solid #d1d5db;">{!! nl2br(e($document->notes)) !!}</td>
+            </tr>
+        @endif
     </table>
 
     <p style="margin-top: 18px;">

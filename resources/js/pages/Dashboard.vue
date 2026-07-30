@@ -27,6 +27,7 @@ interface AttendanceRecord {
     employeeType: string;
     projectName: string | null;
     overtimeProjectName: string | null;
+    attendanceFraction: number | null;
     status: string;
     date: string;
     leaveReason: string | null;
@@ -335,7 +336,9 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                                     <p class="truncate text-xs text-muted-foreground">{{ record.employeeProfession }}</p>
                                 </div>
                                 <span class="truncate text-muted-foreground">{{ record.leaveReason || record.projectName || '-' }}</span>
-                                <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
+                                <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">
+                                    {{ statusLabel(record.status) }}<template v-if="record.status === 'present' && Number(record.attendanceFraction) === 0.5"> · Half Day</template>
+                                </span>
                                 <span class="truncate text-muted-foreground">
                                     {{
                                         record.overtimeHours
@@ -376,7 +379,9 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                                     <p class="truncate text-xs text-muted-foreground">{{ record.employeeProfession }}</p>
                                 </div>
                                 <span class="truncate text-muted-foreground">{{ record.leaveReason || record.projectName || '-' }}</span>
-                                <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
+                                <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">
+                                    {{ statusLabel(record.status) }}<template v-if="record.status === 'present' && Number(record.attendanceFraction) === 0.5"> · Half Day</template>
+                                </span>
                                 <span class="truncate text-muted-foreground">
                                     {{
                                         record.overtimeHours

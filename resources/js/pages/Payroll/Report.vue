@@ -26,6 +26,8 @@ interface PayrollRow {
     salaryRule: string;
     standardHoursPerDay: number;
     presentDays: number;
+    halfDays: number;
+    halfDayDeductionDays: number;
     absentDays: number;
     leaveDays: number;
     overtimeHours: number;
@@ -928,7 +930,10 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                             <p class="truncate text-xs text-muted-foreground">{{ row.employeeProfession }} - {{ employeeTypes[row.employeeType] }}</p>
                                         </div>
                                     </td>
-                                    <td class="px-3 py-3">{{ row.presentDays }}</td>
+                                    <td class="px-3 py-3">
+                                        <div>{{ row.presentDays }}</div>
+                                        <div v-if="row.halfDays" class="text-[10px] text-orange-700">{{ row.halfDays }} half {{ row.halfDays === 1 ? 'day' : 'days' }}</div>
+                                    </td>
                                     <td class="px-3 py-3">{{ row.absentDays }}</td>
                                     <td class="px-3 py-3">{{ money(row.dailySalary) }}</td>
                                     <td class="px-3 py-3">{{ money(row.basicSalary) }}</td>
@@ -1098,7 +1103,10 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                     <tbody>
                                         <tr v-for="row in ledgerRows" :key="ledgerKey(row)" class="border-b last:border-b-0">
                                             <td class="px-3 py-3 font-medium">{{ row.monthLabel }}</td>
-                                            <td class="px-3 py-3">{{ row.presentDays }}</td>
+                                            <td class="px-3 py-3">
+                                                <div>{{ row.presentDays }}</div>
+                                                <div v-if="row.halfDays" class="text-[10px] text-orange-700">{{ row.halfDays }} half {{ row.halfDays === 1 ? 'day' : 'days' }}</div>
+                                            </td>
                                             <td class="px-3 py-3">{{ row.absentDays }}</td>
                                             <td class="px-3 py-3">{{ money(row.dailySalary) }}</td>
                                             <td class="px-3 py-3">{{ money(row.basicSalary) }}</td>

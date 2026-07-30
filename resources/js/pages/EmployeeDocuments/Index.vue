@@ -482,16 +482,34 @@ const saveWhatsApp = () =>
                                 <td class="px-4 py-3">
                                     <button
                                         type="button"
-                                        class="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs"
+                                        role="switch"
+                                        :aria-checked="document.notificationEnabled"
+                                        :aria-label="`${document.notificationEnabled ? 'Disable' : 'Enable'} notifications for ${document.employeeName}'s ${document.categoryName}`"
+                                        class="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors"
                                         :class="
                                             document.notificationEnabled
                                                 ? 'border-green-600/30 bg-green-600/10 text-green-700'
-                                                : 'text-muted-foreground'
+                                                : 'border-muted-foreground/30 bg-muted text-muted-foreground'
                                         "
                                         @click="toggleNotification(document)"
                                     >
+                                        <span
+                                            class="relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors"
+                                            :class="document.notificationEnabled ? 'bg-green-600' : 'bg-muted-foreground/40'"
+                                            aria-hidden="true"
+                                        >
+                                            <span
+                                                class="absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform"
+                                                :class="document.notificationEnabled ? 'translate-x-3.5' : 'translate-x-0.5'"
+                                            />
+                                        </span>
                                         <Bell v-if="document.notificationEnabled" class="size-3.5" /><BellOff v-else class="size-3.5" />
-                                        {{ document.notificationEnabled ? `Daily from ${document.effectiveReminderDays} days` : 'Stopped' }}
+                                        <span>
+                                            {{ document.notificationEnabled ? 'Notifications On' : 'Notifications Off' }}
+                                            <span v-if="document.notificationEnabled" class="font-normal">
+                                                · Daily from {{ document.effectiveReminderDays }} days
+                                            </span>
+                                        </span>
                                     </button>
                                 </td>
                                 <td class="px-4 py-3 text-xs">

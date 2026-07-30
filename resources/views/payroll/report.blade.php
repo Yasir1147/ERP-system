@@ -203,7 +203,12 @@
                             <strong>{{ $row['employeeName'] }}</strong>
                             <div class="muted">{{ $row['employeeProfession'] }}</div>
                         </td>
-                        <td class="amount">{{ $row['presentDays'] }}</td>
+                        <td class="amount">
+                            {{ $row['presentDays'] }}
+                            @if (($row['halfDays'] ?? 0) > 0)
+                                <div class="muted">{{ $row['halfDays'] }} half {{ $row['halfDays'] === 1 ? 'day' : 'days' }}</div>
+                            @endif
+                        </td>
                         <td class="amount">{{ $row['absentDays'] }}</td>
                         <td class="amount">{{ number_format($row['dailySalary'], 2) }}</td>
                         <td class="amount">{{ number_format($row['basicSalary'], 2) }}</td>

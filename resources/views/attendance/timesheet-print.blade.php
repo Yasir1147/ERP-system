@@ -177,6 +177,11 @@
             color: #022c22;
         }
 
+        .half-day {
+            background: #ffedd5;
+            color: #7c2d12;
+        }
+
         .absent {
             background: #fee2e2;
             color: #450a0a;
@@ -271,12 +276,16 @@
                             @php
                                 $date = $dates[$index];
                                 $status = $day['status'];
-                                $class = $status ?: ($date['isWeekend'] ? 'weekend' : '');
+                                $isHalfDay = $status === 'present' && (float) ($day['attendanceFraction'] ?? 1) === 0.5;
+                                $class = $isHalfDay ? 'half-day' : ($status ?: ($date['isWeekend'] ? 'weekend' : ''));
                                 $hasDifferentOvertimeProject = $day['overtimeProjectName'] && $day['overtimeProjectName'] !== $day['projectName'];
                             @endphp
                             <td class="day-cell {{ $class }}">
                                 @if ($status === 'present')
                                     <span class="project">{{ $day['projectName'] ?: 'Present' }}</span>
+                                    @if ($isHalfDay)
+                                        <span class="detail"><strong>Half Day</strong></span>
+                                    @endif
                                     @if ($day['overtimeHours'])
                                         <span class="detail">OT {{ $day['overtimeHours'] }}H{{ $hasDifferentOvertimeProject ? ' - '.$day['overtimeProjectName'] : '' }}</span>
                                     @endif
@@ -290,7 +299,12 @@
                                 @endif
                             </td>
                         @endforeach
-                        <td class="total-cell">{{ $employee['presentDays'] }}</td>
+                        <td class="total-cell">
+                            {{ $employee['presentDays'] }}
+                            @if (($employee['halfDays'] ?? 0) > 0)
+                                <span class="detail">{{ $employee['halfDays'] }} half {{ $employee['halfDays'] === 1 ? 'day' : 'days' }}</span>
+                            @endif
+                        </td>
                     </tr>
                 @endforeach
             </tbody>

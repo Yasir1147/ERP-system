@@ -58,7 +58,13 @@ class AttendanceReportController extends Controller
             ->values();
 
         $summary = [
-            'present' => $records->where('status', AttendanceRecord::STATUS_PRESENT)->count(),
+            'present' => round($records
+                ->where('status', AttendanceRecord::STATUS_PRESENT)
+                ->sum(fn ($record) => (float) ($record['attendanceFraction'] ?? AttendanceRecord::FULL_DAY_FRACTION)), 2),
+            'halfDays' => $records
+                ->where('status', AttendanceRecord::STATUS_PRESENT)
+                ->filter(fn ($record) => (float) ($record['attendanceFraction'] ?? 1) === AttendanceRecord::HALF_DAY_FRACTION)
+                ->count(),
             'absent' => $records->where('status', AttendanceRecord::STATUS_ABSENT)->count(),
             'leave' => $records->where('status', AttendanceRecord::STATUS_LEAVE)->count(),
             'overtimeDays' => $records->filter(fn ($record) => (int) ($record['overtimeHours'] ?? 0) > 0)->count(),
@@ -74,7 +80,7 @@ class AttendanceReportController extends Controller
                 if (filled($record['projectName'])) {
                     $items[] = [
                         'projectName' => $record['projectName'],
-                        'days' => 1,
+                        'days' => (float) ($record['attendanceFraction'] ?? AttendanceRecord::FULL_DAY_FRACTION),
                         'overtimeHours' => 0,
                     ];
                 }
@@ -143,6 +149,7 @@ class AttendanceReportController extends Controller
             ],
             'attendance_date' => ['required', 'date'],
             'status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
+            'attendance_fraction' => ['nullable', 'numeric', Rule::in(AttendanceRecord::ATTENDANCE_FRACTIONS)],
             'project_id' => [
                 'nullable',
                 Rule::requiredIf($isPresent),
@@ -186,6 +193,10 @@ class AttendanceReportController extends Controller
             $data['has_overtime'] = false;
             $data['overtime_hours'] = null;
         }
+
+        $data['attendance_fraction'] = $isPresent
+            ? (float) ($data['attendance_fraction'] ?? AttendanceRecord::FULL_DAY_FRACTION)
+            : AttendanceRecord::FULL_DAY_FRACTION;
 
         if (! $isLeave) {
             $data['leave_reason'] = null;
@@ -236,6 +247,7 @@ class AttendanceReportController extends Controller
                 'attendance_records.id',
                 'attendance_records.employee_id',
                 'attendance_records.status',
+                'attendance_records.attendance_fraction',
                 'attendance_records.attendance_date',
                 'attendance_records.leave_reason',
                 'attendance_records.project_id',
@@ -263,6 +275,7 @@ class AttendanceReportController extends Controller
                 'overtimeProjectId' => $record->overtime_project_id,
                 'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
                 'hasOvertime' => (bool) $record->has_overtime,
+                'attendanceFraction' => (float) $record->attendance_fraction,
                 'status' => $record->status,
                 'dateRaw' => Carbon::parse($record->attendance_date)->toDateString(),
                 'date' => Carbon::parse($record->attendance_date)->format('d/m/Y'),
@@ -312,6 +325,7 @@ class AttendanceReportController extends Controller
                         'employeeProfession' => $leave->employee_profession,
                         'employeeType' => $leave->employee_type,
                         'projectName' => null,
+                        'attendanceFraction' => null,
                         'status' => AttendanceRecord::STATUS_LEAVE,
                         'dateRaw' => $date->toDateString(),
                         'date' => $date->format('d/m/Y'),

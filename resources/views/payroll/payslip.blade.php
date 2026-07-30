@@ -274,7 +274,12 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>{{ $row['presentDays'] }}</td>
+                        <td>
+                            {{ $row['presentDays'] }}
+                            @if (($row['halfDays'] ?? 0) > 0)
+                                <div>{{ $row['halfDays'] }} half {{ $row['halfDays'] === 1 ? 'day' : 'days' }}</div>
+                            @endif
+                        </td>
                         <td>{{ $row['absentDays'] }}</td>
                         <td>{{ number_format($row['dailySalary'], 2) }}</td>
                         <td>{{ number_format($row['basicSalary'], 2) }}</td>

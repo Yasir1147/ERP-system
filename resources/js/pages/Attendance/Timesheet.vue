@@ -16,6 +16,7 @@ interface TimesheetDate {
 interface TimesheetDay {
     date: string;
     status: string | null;
+    attendanceFraction: number | null;
     projectName: string | null;
     overtimeProjectName: string | null;
     overtimeHours: number | null;
@@ -29,6 +30,7 @@ interface TimesheetEmployee {
     profession: string;
     status: string;
     presentDays: number;
+    halfDays: number;
     days: TimesheetDay[];
 }
 
@@ -108,6 +110,9 @@ const statusLabel = (status: string | null) => {
 };
 
 const cellClass = (day: TimesheetDay) => {
+    if (day.status === 'present' && Number(day.attendanceFraction) === 0.5) {
+        return 'bg-orange-50 text-orange-950 dark:bg-orange-950/20 dark:text-orange-100';
+    }
     if (day.status === 'present') return 'bg-green-50 text-green-950 dark:bg-green-950/20 dark:text-green-100';
     if (day.status === 'absent') return 'bg-red-50 text-red-950 dark:bg-red-950/20 dark:text-red-100';
     if (day.status === 'leave') return 'bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100';
@@ -233,6 +238,12 @@ const selectEmployeeRow = (employeeId: number) => {
                                         <p class="truncate text-[11px] font-medium leading-tight">
                                             {{ day.projectName || statusLabel(day.status) }}
                                         </p>
+                                        <p
+                                            v-if="day.status === 'present' && Number(day.attendanceFraction) === 0.5"
+                                            class="truncate text-[11px] font-semibold leading-tight text-orange-700 dark:text-orange-300"
+                                        >
+                                            Half Day
+                                        </p>
                                         <p v-if="day.status === 'present' && day.overtimeHours" class="truncate text-[11px] leading-tight text-muted-foreground">
                                             OT {{ day.overtimeHours }}H<template v-if="day.overtimeProjectName && day.overtimeProjectName !== day.projectName"> - {{ day.overtimeProjectName }}</template>
                                         </p>
@@ -242,7 +253,10 @@ const selectEmployeeRow = (employeeId: number) => {
                                     </div>
                                 </td>
                                 <td class="sticky right-0 z-10 w-24 min-w-24 border-b border-l bg-indigo-50 px-2 text-center align-middle text-base font-semibold text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100">
-                                    {{ employee.presentDays }}
+                                    <div>{{ employee.presentDays }}</div>
+                                    <div v-if="employee.halfDays" class="text-[10px] font-normal text-orange-700 dark:text-orange-300">
+                                        {{ employee.halfDays }} half {{ employee.halfDays === 1 ? 'day' : 'days' }}
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>

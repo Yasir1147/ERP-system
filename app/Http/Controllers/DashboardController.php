@@ -97,6 +97,7 @@ class DashboardController extends Controller
             ->get([
                 'attendance_records.id',
                 'attendance_records.status',
+                'attendance_records.attendance_fraction',
                 'attendance_records.attendance_date',
                 'attendance_records.leave_reason',
                 'attendance_records.overtime_hours',
@@ -117,6 +118,7 @@ class DashboardController extends Controller
                 'employeeType' => $record->employee_type,
                 'projectName' => $record->project_name,
                 'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
+                'attendanceFraction' => (float) $record->attendance_fraction,
                 'status' => $record->status,
                 'date' => Carbon::parse($record->attendance_date)->format('d/m/Y'),
                 'leaveReason' => $record->leave_reason,
@@ -153,6 +155,7 @@ class DashboardController extends Controller
                 'employeeProfession' => $record->employee_profession,
                 'employeeType' => $record->employee_type,
                 'projectName' => null,
+                'attendanceFraction' => null,
                 'status' => AttendanceRecord::STATUS_LEAVE,
                 'date' => $selectedDay->format('d/m/Y'),
                 'leaveReason' => $record->reason ?: 'Leave',

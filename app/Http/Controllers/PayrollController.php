@@ -592,6 +592,7 @@ class PayrollController extends Controller
             ->get([
                 'attendance_records.employee_id',
                 'attendance_records.status',
+                'attendance_records.attendance_fraction',
                 'attendance_records.overtime_hours',
                 'projects.name as project_name',
             ])
@@ -622,11 +623,17 @@ class PayrollController extends Controller
     {
         $setting = $employee->payrollSetting;
         $absenceSettings = AppSetting::absenceDeductionSettings();
-        $realPresentDays = $employeeRecords->where('status', AttendanceRecord::STATUS_PRESENT)->count();
+        $presentRecords = $employeeRecords->where('status', AttendanceRecord::STATUS_PRESENT);
+        $realPresentDays = round($presentRecords->sum(
+            fn ($record) => (float) ($record->attendance_fraction ?? AttendanceRecord::FULL_DAY_FRACTION)
+        ), 2);
+        $halfDays = $presentRecords
+            ->filter(fn ($record) => (float) ($record->attendance_fraction ?? 1) === AttendanceRecord::HALF_DAY_FRACTION)
+            ->count();
+        $halfDayDeductionDays = $halfDays * AttendanceRecord::HALF_DAY_FRACTION;
         $realAbsentDays = $employeeRecords->where('status', AttendanceRecord::STATUS_ABSENT)->count();
         $leaveDeductions ??= collect();
         $leaveDeductedAsAbsentDays = (int) $leaveDeductions->sum('days');
-        $rawAbsentDays = $realAbsentDays + $leaveDeductedAsAbsentDays;
         $leaveDays = $employeeRecords->where('status', AttendanceRecord::STATUS_LEAVE)->count();
         $overtimeHours = (int) $employeeRecords->sum(fn ($record) => (int) ($record->overtime_hours ?? 0));
         $dailySalary = (float) ($setting?->daily_salary ?? 0);
@@ -642,17 +649,26 @@ class PayrollController extends Controller
         $presentDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
             ? min($realPresentDays, 30)
             : $realPresentDays;
-        $absentDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
-            ? min($rawAbsentDays, max(0, 30 - $presentDays))
-            : $rawAbsentDays;
-        $effectiveRealAbsentDays = min($realAbsentDays, $absentDays);
-        $effectiveLeaveDeductedAsAbsentDays = max(0, $absentDays - $effectiveRealAbsentDays);
+        $availableDeductionDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
+            ? max(0, 30 - $presentDays)
+            : PHP_FLOAT_MAX;
+        $effectiveRealAbsentDays = min($realAbsentDays, $availableDeductionDays);
+        $availableDeductionDays -= $effectiveRealAbsentDays;
+        $effectiveLeaveDeductedAsAbsentDays = min($leaveDeductedAsAbsentDays, $availableDeductionDays);
+        $availableDeductionDays -= $effectiveLeaveDeductedAsAbsentDays;
+        $effectiveHalfDayDeductionDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
+            ? min($halfDayDeductionDays, $availableDeductionDays)
+            : 0;
+        $absentDays = $effectiveRealAbsentDays + $effectiveLeaveDeductedAsAbsentDays + $effectiveHalfDayDeductionDays;
         $payableDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS ? 30 : $presentDays;
         $basicSalary = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
             ? (float) ($monthlySalary ?? 0)
             : $dailySalary * $payableDays;
-        $absenceDeduction = $absenceSettings['enabled'] && $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
-            ? $effectiveDailySalary * $absentDays
+        $deductibleAbsenceDays = ($absenceSettings['enabled']
+            ? $effectiveRealAbsentDays + $effectiveLeaveDeductedAsAbsentDays
+            : 0) + $effectiveHalfDayDeductionDays;
+        $absenceDeduction = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
+            ? $effectiveDailySalary * $deductibleAbsenceDays
             : 0;
         $overtimeAmount = $setting?->is_overtime_enabled === false ? 0 : $overtimeHours * $hourlyRate;
         $totalSalary = $basicSalary + $overtimeAmount;
@@ -694,6 +710,8 @@ class PayrollController extends Controller
             'salaryRule' => $salaryRule,
             'standardHoursPerDay' => $standardHours,
             'presentDays' => $presentDays,
+            'halfDays' => $halfDays,
+            'halfDayDeductionDays' => $effectiveHalfDayDeductionDays,
             'realPresentDays' => $realPresentDays,
             'realAbsentDays' => $realAbsentDays,
             'leaveDeductedAsAbsentDays' => $effectiveLeaveDeductedAsAbsentDays,
@@ -775,6 +793,7 @@ class PayrollController extends Controller
                 ->get([
                     'attendance_records.employee_id',
                     'attendance_records.status',
+                    'attendance_records.attendance_fraction',
                     'attendance_records.overtime_hours',
                     'projects.name as project_name',
                 ]);

@@ -91,6 +91,7 @@ class PublicAttendanceController extends Controller
                     ->where('status', '!=', Employee::STATUS_LEFT)),
             ],
             'status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
+            'attendance_fraction' => ['nullable', 'numeric', Rule::in(AttendanceRecord::ATTENDANCE_FRACTIONS)],
             'project_id' => [
                 'nullable',
                 Rule::requiredIf($isPresent),
@@ -182,6 +183,10 @@ class PublicAttendanceController extends Controller
             $data['overtime_hours'] = null;
         }
 
+        $data['attendance_fraction'] = $isPresent
+            ? (float) ($data['attendance_fraction'] ?? AttendanceRecord::FULL_DAY_FRACTION)
+            : AttendanceRecord::FULL_DAY_FRACTION;
+
         if (! $isLeave) {
             $data['leave_reason'] = null;
         }
@@ -264,6 +269,7 @@ class PublicAttendanceController extends Controller
             ->get([
                 'attendance_records.id',
                 'attendance_records.status',
+                'attendance_records.attendance_fraction',
                 'attendance_records.attendance_date',
                 'attendance_records.leave_reason',
                 'attendance_records.overtime_hours',
@@ -279,6 +285,7 @@ class PublicAttendanceController extends Controller
                 'employeeCode' => $record->employee_code,
                 'employeeName' => $record->employee_name,
                 'employeeProfession' => $record->employee_profession,
+                'attendanceFraction' => (float) $record->attendance_fraction,
                 'status' => $record->status,
                 'projectName' => $record->project_name,
                 'overtimeProjectName' => $record->overtime_project_name ?: $record->project_name,
@@ -308,6 +315,7 @@ class PublicAttendanceController extends Controller
                 'employeeCode' => $leave->employee_code,
                 'employeeName' => $leave->employee_name,
                 'employeeProfession' => $leave->employee_profession,
+                'attendanceFraction' => null,
                 'status' => AttendanceRecord::STATUS_LEAVE,
                 'projectName' => null,
                 'overtimeProjectName' => null,
