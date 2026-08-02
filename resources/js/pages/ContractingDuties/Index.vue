@@ -386,7 +386,18 @@ const finalizePlan = () => {
                             <div v-if="employeeOpen" class="absolute z-30 mt-2 w-full rounded-md border bg-popover p-2 shadow-lg">
                                 <div class="relative">
                                     <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                                    <Input v-model="employeeSearch" type="search" class="pl-9" placeholder="Search code, name, or profession" />
+                                    <Input
+                                        v-model="employeeSearch"
+                                        type="text"
+                                        inputmode="search"
+                                        autocomplete="off"
+                                        autocorrect="off"
+                                        autocapitalize="none"
+                                        :spellcheck="false"
+                                        enterkeyhint="search"
+                                        class="pl-9"
+                                        placeholder="Search code, name, or profession"
+                                    />
                                 </div>
                                 <div v-if="selectedEmployeeCount" class="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
                                     <span>{{ selectedEmployeeCount }} selected</span>
