@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceRecord;
+use App\Models\ContractingDutyAssignment;
+use App\Models\ContractingDutyPlan;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use App\Models\Project;
@@ -11,6 +13,7 @@ use Carbon\CarbonPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -221,7 +224,33 @@ class AttendanceReportController extends Controller
 
     public function destroy(Request $request, AttendanceRecord $attendanceRecord): RedirectResponse
     {
-        $attendanceRecord->delete();
+        DB::transaction(function () use ($attendanceRecord) {
+            $linkedAssignments = ContractingDutyAssignment::query()
+                ->where('attendance_record_id', $attendanceRecord->id)
+                ->get(['id', 'contracting_duty_plan_id']);
+
+            $planIds = $linkedAssignments
+                ->pluck('contracting_duty_plan_id')
+                ->unique()
+                ->values();
+
+            if ($linkedAssignments->isNotEmpty()) {
+                ContractingDutyAssignment::query()
+                    ->whereIn('id', $linkedAssignments->pluck('id'))
+                    ->delete();
+            }
+
+            $attendanceRecord->delete();
+
+            ContractingDutyPlan::query()
+                ->whereIn('id', $planIds)
+                ->get()
+                ->each(function (ContractingDutyPlan $plan) {
+                    if (! $plan->assignments()->exists()) {
+                        $plan->delete();
+                    }
+                });
+        });
 
         return to_route('attendance.index', [
             'type' => $request->query('filter_type', 'all'),

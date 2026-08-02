@@ -66,6 +66,108 @@ test('an attendance user can finalize a reviewed contracting duty with overtime'
         ->and($assignment->fresh()->attendance_record_id)->toBe($record->id);
 });
 
+test('deleting finalized contracting attendance releases the employee for duty planning', function () {
+    $attendanceUser = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $employee = Employee::query()->create([
+        'code' => '908',
+        'name' => 'Released Duty Employee',
+        'profession' => 'Electrician',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    $project = Project::query()->create([
+        'name' => 'Released Duty Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+    ]);
+    $date = now()->toDateString();
+
+    $this->actingAs($attendanceUser)->post('/contracting-duty-plans/assignments', [
+        'duty_date' => $date,
+        'project_id' => $project->id,
+        'employee_ids' => [$employee->id],
+    ])->assertSessionHasNoErrors();
+
+    $plan = ContractingDutyPlan::query()->firstOrFail();
+
+    $this->actingAs($attendanceUser)
+        ->post("/contracting-duty-plans/{$plan->id}/finalize")
+        ->assertSessionHasNoErrors();
+
+    $record = AttendanceRecord::query()->where('employee_id', $employee->id)->firstOrFail();
+
+    $this->actingAs($admin)
+        ->delete("/attendance/{$record->id}")
+        ->assertSessionHasNoErrors();
+
+    expect(AttendanceRecord::query()->whereKey($record->id)->exists())->toBeFalse()
+        ->and(ContractingDutyAssignment::query()->where('employee_id', $employee->id)->exists())->toBeFalse()
+        ->and(ContractingDutyPlan::query()->whereKey($plan->id)->exists())->toBeFalse();
+
+    $this->actingAs($attendanceUser)
+        ->get('/contracting-duty-plans?date='.$date)
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('ContractingDuties/Index')
+            ->where('employees.0.id', $employee->id));
+});
+
+test('previously orphaned finalized assignments are released when duty is created again', function () {
+    $firstUser = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+    $secondUser = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+    $employee = Employee::query()->create([
+        'code' => '909',
+        'name' => 'Previously Released Employee',
+        'profession' => 'Mason',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    $project = Project::query()->create([
+        'name' => 'Orphan Cleanup Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+    ]);
+    $date = now()->toDateString();
+
+    $this->actingAs($firstUser)->post('/contracting-duty-plans/assignments', [
+        'duty_date' => $date,
+        'project_id' => $project->id,
+        'employee_ids' => [$employee->id],
+    ])->assertSessionHasNoErrors();
+
+    $firstPlan = ContractingDutyPlan::query()->firstOrFail();
+    $this->actingAs($firstUser)
+        ->post("/contracting-duty-plans/{$firstPlan->id}/finalize")
+        ->assertSessionHasNoErrors();
+
+    AttendanceRecord::query()->where('employee_id', $employee->id)->firstOrFail()->delete();
+
+    $this->actingAs($secondUser)
+        ->get('/contracting-duty-plans?date='.$date)
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('ContractingDuties/Index')
+            ->where('employees.0.id', $employee->id));
+
+    $this->actingAs($secondUser)->post('/contracting-duty-plans/assignments', [
+        'duty_date' => $date,
+        'project_id' => $project->id,
+        'employee_ids' => [$employee->id],
+    ])->assertSessionHasNoErrors();
+
+    expect(ContractingDutyPlan::query()->whereKey($firstPlan->id)->exists())->toBeFalse()
+        ->and(ContractingDutyPlan::query()->where('created_by', $secondUser->id)->exists())->toBeTrue()
+        ->and(ContractingDutyAssignment::query()->where('employee_id', $employee->id)->count())->toBe(1);
+});
+
 test('removed duty employees do not create attendance records', function () {
     $user = User::factory()->create([
         'role' => User::ROLE_ATTENDANCE,

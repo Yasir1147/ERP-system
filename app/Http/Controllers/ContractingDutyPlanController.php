@@ -11,6 +11,7 @@ use App\Models\Project;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -56,6 +57,12 @@ class ContractingDutyPlanController extends Controller
             ->get(['employee_id', 'start_date', 'end_date', 'reason']);
         $assignedEmployeeIds = ContractingDutyAssignment::query()
             ->whereDate('duty_date', $selectedDate)
+            ->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED)
+            ->where(function ($query) {
+                $query->whereNotNull('attendance_record_id')
+                    ->orWhereHas('plan', fn ($planQuery) => $planQuery
+                        ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED));
+            })
             ->pluck('employee_id');
 
         return Inertia::render('ContractingDuties/Index', [
@@ -155,6 +162,8 @@ class ContractingDutyPlanController extends Controller
         }
 
         DB::transaction(function () use ($data, $employeeIds, $request) {
+            $this->removeReleasedAssignments($data['duty_date'], $employeeIds);
+
             $plan = ContractingDutyPlan::query()->firstOrCreate(
                 ['duty_date' => $data['duty_date'], 'created_by' => $request->user()->id],
                 ['status' => ContractingDutyPlan::STATUS_DRAFT],
@@ -502,6 +511,39 @@ class ContractingDutyPlanController extends Controller
     private function ensurePlanAccess(Request $request, ContractingDutyPlan $plan): void
     {
         abort_unless($request->user()->isAdmin() || (int) $plan->created_by === (int) $request->user()->id, 403);
+    }
+
+    private function removeReleasedAssignments(string $date, Collection $employeeIds): void
+    {
+        $releasedAssignments = ContractingDutyAssignment::query()
+            ->whereDate('duty_date', $date)
+            ->whereIn('employee_id', $employeeIds)
+            ->whereNull('attendance_record_id')
+            ->whereHas('plan', fn ($query) => $query
+                ->where('status', ContractingDutyPlan::STATUS_FINALIZED))
+            ->get(['id', 'contracting_duty_plan_id']);
+
+        if ($releasedAssignments->isEmpty()) {
+            return;
+        }
+
+        $planIds = $releasedAssignments
+            ->pluck('contracting_duty_plan_id')
+            ->unique()
+            ->values();
+
+        ContractingDutyAssignment::query()
+            ->whereIn('id', $releasedAssignments->pluck('id'))
+            ->delete();
+
+        ContractingDutyPlan::query()
+            ->whereIn('id', $planIds)
+            ->get()
+            ->each(function (ContractingDutyPlan $plan) {
+                if (! $plan->assignments()->exists()) {
+                    $plan->delete();
+                }
+            });
     }
 
     private function ensureEditable(ContractingDutyPlan $plan): void
