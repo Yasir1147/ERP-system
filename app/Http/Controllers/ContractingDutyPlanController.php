@@ -38,10 +38,12 @@ class ContractingDutyPlanController extends Controller
                     ->orderBy('id'),
             ])
             ->whereDate('duty_date', $selectedDate)
+            ->where('created_by', $request->user()->id)
             ->first();
 
         $pendingOlderPlan = ContractingDutyPlan::query()
             ->whereDate('duty_date', '<', $selectedDate)
+            ->where('created_by', $request->user()->id)
             ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED)
             ->orderBy('duty_date')
             ->first(['id', 'duty_date', 'status']);
@@ -52,6 +54,9 @@ class ContractingDutyPlanController extends Controller
             ->whereDate('start_date', '<=', $selectedDate)
             ->whereDate('end_date', '>=', $selectedDate)
             ->get(['employee_id', 'start_date', 'end_date', 'reason']);
+        $assignedEmployeeIds = ContractingDutyAssignment::query()
+            ->whereDate('duty_date', $selectedDate)
+            ->pluck('employee_id');
 
         return Inertia::render('ContractingDuties/Index', [
             'selectedDate' => $selectedDate,
@@ -66,6 +71,7 @@ class ContractingDutyPlanController extends Controller
             'employees' => Employee::query()
                 ->where('type', 'contracting')
                 ->where('status', '!=', Employee::STATUS_LEFT)
+                ->whereNotIn('id', $assignedEmployeeIds)
                 ->orderByRaw('CAST(code AS UNSIGNED) asc')
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'profession', 'status'])
@@ -84,14 +90,17 @@ class ContractingDutyPlanController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name', 'status']),
             'recentPlans' => ContractingDutyPlan::query()
+                ->where('created_by', $request->user()->id)
+                ->with('creator:id,name')
                 ->withCount('assignments')
                 ->orderByDesc('duty_date')
                 ->limit(10)
-                ->get(['id', 'duty_date', 'status'])
+                ->get(['id', 'duty_date', 'status', 'created_by'])
                 ->map(fn (ContractingDutyPlan $recentPlan) => [
                     'id' => $recentPlan->id,
                     'date' => $recentPlan->duty_date->toDateString(),
                     'status' => $recentPlan->status,
+                    'createdBy' => $recentPlan->creator?->name,
                     'assignmentCount' => $recentPlan->assignments_count,
                 ]),
         ]);
@@ -147,13 +156,17 @@ class ContractingDutyPlanController extends Controller
 
         DB::transaction(function () use ($data, $employeeIds, $request) {
             $plan = ContractingDutyPlan::query()->firstOrCreate(
-                ['duty_date' => $data['duty_date']],
-                ['status' => ContractingDutyPlan::STATUS_DRAFT, 'created_by' => $request->user()->id],
+                ['duty_date' => $data['duty_date'], 'created_by' => $request->user()->id],
+                ['status' => ContractingDutyPlan::STATUS_DRAFT],
             );
 
+            $this->ensurePlanAccess($request, $plan);
             $this->ensureEditable($plan);
 
-            $existingIds = $plan->assignments()->whereIn('employee_id', $employeeIds)->pluck('employee_id');
+            $existingIds = ContractingDutyAssignment::query()
+                ->whereDate('duty_date', $data['duty_date'])
+                ->whereIn('employee_id', $employeeIds)
+                ->pluck('employee_id');
             if ($existingIds->isNotEmpty()) {
                 $names = Employee::query()
                     ->whereIn('id', $existingIds)
@@ -168,6 +181,7 @@ class ContractingDutyPlanController extends Controller
 
             foreach ($employeeIds as $employeeId) {
                 $plan->assignments()->create([
+                    'duty_date' => $data['duty_date'],
                     'employee_id' => $employeeId,
                     'project_id' => $data['project_id'],
                     'status' => ContractingDutyAssignment::STATUS_PRESENT,
@@ -182,6 +196,7 @@ class ContractingDutyPlanController extends Controller
     {
         $this->ensureContractingAccess($request);
         $assignment->loadMissing('plan');
+        $this->ensurePlanAccess($request, $assignment->plan);
         $this->ensureEditable($assignment->plan);
 
         $isPresent = $request->input('status') === ContractingDutyAssignment::STATUS_PRESENT;
@@ -216,6 +231,7 @@ class ContractingDutyPlanController extends Controller
     {
         $this->ensureContractingAccess($request);
         $assignment->loadMissing('plan');
+        $this->ensurePlanAccess($request, $assignment->plan);
         $this->ensureEditable($assignment->plan);
         $assignment->delete();
 
@@ -225,6 +241,7 @@ class ContractingDutyPlanController extends Controller
     public function destroy(Request $request, ContractingDutyPlan $plan): RedirectResponse
     {
         $this->ensureContractingAccess($request);
+        $this->ensurePlanAccess($request, $plan);
         $this->ensureEditable($plan);
         $plan->delete();
 
@@ -234,6 +251,7 @@ class ContractingDutyPlanController extends Controller
     public function markPlannedPresent(Request $request, ContractingDutyPlan $plan): RedirectResponse
     {
         $this->ensureContractingAccess($request);
+        $this->ensurePlanAccess($request, $plan);
         $this->ensureEditable($plan);
 
         $plan->assignments()
@@ -246,6 +264,7 @@ class ContractingDutyPlanController extends Controller
     public function publish(Request $request, ContractingDutyPlan $plan): RedirectResponse
     {
         $this->ensureContractingAccess($request);
+        $this->ensurePlanAccess($request, $plan);
         $this->ensureEditable($plan);
 
         if (! $plan->assignments()->exists()) {
@@ -254,6 +273,7 @@ class ContractingDutyPlanController extends Controller
 
         $olderPending = ContractingDutyPlan::query()
             ->whereDate('duty_date', '<', $plan->duty_date)
+            ->where('created_by', $plan->created_by)
             ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED)
             ->orderBy('duty_date')
             ->first();
@@ -276,6 +296,7 @@ class ContractingDutyPlanController extends Controller
     public function finalize(Request $request, ContractingDutyPlan $plan): RedirectResponse
     {
         $this->ensureContractingAccess($request);
+        $this->ensurePlanAccess($request, $plan);
 
         if ($plan->status === ContractingDutyPlan::STATUS_FINALIZED) {
             throw ValidationException::withMessages(['plan' => 'This duty plan is already submitted.']);
@@ -287,6 +308,7 @@ class ContractingDutyPlanController extends Controller
 
         $olderPending = ContractingDutyPlan::query()
             ->whereDate('duty_date', '<', $plan->duty_date)
+            ->where('created_by', $plan->created_by)
             ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED)
             ->orderBy('duty_date')
             ->first();
@@ -299,6 +321,7 @@ class ContractingDutyPlanController extends Controller
 
         DB::transaction(function () use ($plan, $request) {
             $lockedPlan = ContractingDutyPlan::query()->lockForUpdate()->findOrFail($plan->id);
+            $this->ensurePlanAccess($request, $lockedPlan);
             if ($lockedPlan->status === ContractingDutyPlan::STATUS_FINALIZED) {
                 throw ValidationException::withMessages(['plan' => 'This duty plan is already finalized.']);
             }
@@ -361,6 +384,105 @@ class ContractingDutyPlanController extends Controller
         return back()->with('success', 'Duty plan finalized and attendance submitted.');
     }
 
+    public function repeat(Request $request, ContractingDutyPlan $plan): RedirectResponse
+    {
+        $this->ensureContractingAccess($request);
+        $this->ensurePlanAccess($request, $plan);
+        $dateRange = $request->user()->attendanceDateRange();
+
+        $data = $request->validate([
+            'target_date' => [
+                'required',
+                'date',
+                ...($dateRange['min'] ? ['after_or_equal:'.$dateRange['min']] : []),
+                'before_or_equal:'.now()->addDays(30)->toDateString(),
+            ],
+        ]);
+
+        if ($plan->duty_date->toDateString() === $data['target_date']) {
+            throw ValidationException::withMessages(['plan' => 'Choose a different date for the repeated duty plan.']);
+        }
+
+        $plan->loadMissing('assignments.employee:id,code,name,status');
+        $sourceAssignments = $plan->assignments
+            ->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED);
+
+        if ($sourceAssignments->isEmpty()) {
+            throw ValidationException::withMessages(['plan' => 'The selected duty plan has no employees to copy.']);
+        }
+
+        $employeeIds = $sourceAssignments->pluck('employee_id');
+        $unavailableIds = Employee::query()
+            ->whereIn('id', $employeeIds)
+            ->whereIn('status', [Employee::STATUS_LEFT, Employee::STATUS_ON_LEAVE])
+            ->pluck('id')
+            ->merge(
+                EmployeeLeave::query()
+                    ->whereIn('employee_id', $employeeIds)
+                    ->whereDate('start_date', '<=', $data['target_date'])
+                    ->whereDate('end_date', '>=', $data['target_date'])
+                    ->pluck('employee_id'),
+            )
+            ->merge(
+                ContractingDutyAssignment::query()
+                    ->whereDate('duty_date', $data['target_date'])
+                    ->whereIn('employee_id', $employeeIds)
+                    ->pluck('employee_id'),
+            )
+            ->unique();
+
+        $eligibleAssignments = $sourceAssignments
+            ->reject(fn (ContractingDutyAssignment $assignment) => $unavailableIds->contains($assignment->employee_id));
+
+        if ($eligibleAssignments->isEmpty()) {
+            throw ValidationException::withMessages([
+                'plan' => 'No employees can be copied. They are unavailable or already assigned on the selected date.',
+            ]);
+        }
+
+        $newPlan = DB::transaction(function () use ($data, $eligibleAssignments, $plan) {
+            if (ContractingDutyPlan::query()
+                ->whereDate('duty_date', $data['target_date'])
+                ->where('created_by', $plan->created_by)
+                ->lockForUpdate()
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'plan' => 'You already have a duty plan for the selected date.',
+                ]);
+            }
+
+            $newPlan = ContractingDutyPlan::query()->create([
+                'duty_date' => $data['target_date'],
+                'status' => ContractingDutyPlan::STATUS_DRAFT,
+                'created_by' => $plan->created_by,
+            ]);
+
+            $newPlan->assignments()->createMany(
+                $eligibleAssignments->map(fn (ContractingDutyAssignment $assignment) => [
+                    'duty_date' => $data['target_date'],
+                    'employee_id' => $assignment->employee_id,
+                    'project_id' => $assignment->project_id,
+                    'status' => ContractingDutyAssignment::STATUS_PRESENT,
+                    'has_overtime' => false,
+                    'overtime_hours' => null,
+                    'overtime_project_id' => null,
+                    'note' => null,
+                ])->all(),
+            );
+
+            return $newPlan;
+        });
+
+        $skipped = $sourceAssignments->count() - $eligibleAssignments->count();
+        $message = 'Previous duty copied with '.$eligibleAssignments->count().' employees.';
+        if ($skipped > 0) {
+            $message .= ' '.$skipped.' unavailable or already assigned employees were skipped.';
+        }
+
+        return redirect()->route('contracting-duties.index', ['date' => $newPlan->duty_date->toDateString()])
+            ->with('success', $message);
+    }
+
     private function selectedDate(Request $request): string
     {
         $date = $request->string('date')->toString() ?: now()->addDay()->toDateString();
@@ -375,6 +497,11 @@ class ContractingDutyPlanController extends Controller
     private function ensureContractingAccess(Request $request): void
     {
         abort_unless($request->user()?->canAccessEmployeeType('contracting'), 403);
+    }
+
+    private function ensurePlanAccess(Request $request, ContractingDutyPlan $plan): void
+    {
+        abort_unless($request->user()->isAdmin() || (int) $plan->created_by === (int) $request->user()->id, 403);
     }
 
     private function ensureEditable(ContractingDutyPlan $plan): void

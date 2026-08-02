@@ -80,6 +80,9 @@ Route::middleware(['attendance.access'])->group(function () {
     Route::post('contracting-duty-plans/{plan}/finalize', [ContractingDutyPlanController::class, 'finalize'])
         ->defaults('type', 'contracting')
         ->name('contracting-duties.finalize');
+    Route::post('contracting-duty-plans/{plan}/repeat', [ContractingDutyPlanController::class, 'repeat'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.repeat');
     Route::delete('contracting-duty-plans/{plan}', [ContractingDutyPlanController::class, 'destroy'])
         ->defaults('type', 'contracting')
         ->name('contracting-duties.destroy');

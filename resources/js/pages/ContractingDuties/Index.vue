@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, Clipboard, ClipboardList, Clock3, Save, Search, Trash2, Users, X } from 'lucide-vue-next';
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, Clipboard, ClipboardList, Clock3, CopyPlus, Save, Search, Trash2, Users, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 
 interface Employee {
@@ -57,6 +57,7 @@ interface RecentPlan {
     id: number;
     date: string;
     status: string;
+    createdBy: string | null;
     assignmentCount: number;
 }
 
@@ -84,6 +85,15 @@ const employeeOpen = ref(false);
 const employeeDropdownRef = ref<HTMLElement | null>(null);
 const openDutyGroups = reactive<Record<string, boolean>>({});
 const dutiesCopied = ref(false);
+const repeatProcessing = ref(false);
+
+const nextDate = (date: string) => {
+    const [year, month, day] = date.split('-').map(Number);
+    const value = new Date(Date.UTC(year, month - 1, day + 1));
+    return value.toISOString().slice(0, 10);
+};
+
+const repeatTargetDate = ref(nextDate(props.selectedDate));
 const assignmentForms = reactive<Record<number, {
     project_id: string;
     status: string;
@@ -138,7 +148,10 @@ const availableEmployees = computed(() => {
     });
 });
 
-const globalPlanError = computed(() => (page.props.errors as Record<string, string>).plan);
+const globalPlanError = computed(() => {
+    const errors = page.props.errors as Record<string, string>;
+    return errors.plan || errors.target_date;
+});
 
 const initializeAssignmentForms = () => {
     Object.keys(assignmentForms).forEach((key) => delete assignmentForms[Number(key)]);
@@ -282,6 +295,23 @@ const deleteRecentPlan = (recent: RecentPlan) => {
     router.delete(`/contracting-duty-plans/${recent.id}`, { preserveScroll: true });
 };
 
+const repeatPlan = (planId: number, sourceDate: string, targetDate: string) => {
+    if (!targetDate || sourceDate === targetDate || repeatProcessing.value) return;
+    if (!window.confirm(`Copy the ${formatDate(sourceDate)} duty plan to ${formatDate(targetDate)}? Employee statuses, overtime, and notes will be reset.`)) return;
+
+    repeatProcessing.value = true;
+    router.post(`/contracting-duty-plans/${planId}/repeat`, {
+        target_date: targetDate,
+    }, {
+        preserveScroll: true,
+        onFinish: () => {
+            repeatProcessing.value = false;
+        },
+    });
+};
+
+const repeatRecentPlan = (recent: RecentPlan) => repeatPlan(recent.id, recent.date, selectedDate.value);
+
 const finalizePlan = () => {
     if (!props.plan || !window.confirm('Submit this duty plan as attendance? Please confirm employee status and overtime before continuing.')) return;
     router.post(`/contracting-duty-plans/${props.plan.id}/finalize`, {}, { preserveScroll: true });
@@ -395,10 +425,25 @@ const finalizePlan = () => {
                     <div>
                         <h2 class="font-medium">Duty Plans - {{ formatDate(selectedDate) }}</h2>
                         <p class="mt-1 text-sm text-muted-foreground">{{ dutyGroups.length }} duties, {{ plan?.assignments.length || 0 }} employees.</p>
+                        <p v-if="plan?.createdBy" class="mt-1 text-xs text-muted-foreground">Created by {{ plan.createdBy }}</p>
                     </div>
-                    <div v-if="plan && !isFinalized" class="flex flex-wrap gap-2">
-                        <Button v-if="dutyGroups.length" type="button" variant="outline" @click="copyDuties"><Clipboard class="size-4" />{{ dutiesCopied ? 'Copied' : 'Copy Duties' }}</Button>
-                        <Button v-if="dutyGroups.length" type="button" @click="finalizePlan"><ClipboardList class="size-4" />Submit Attendance</Button>
+                    <div v-if="plan && dutyGroups.length" class="flex flex-col gap-2 sm:items-end">
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                            <Label for="repeat-target-date" class="sr-only">Repeat duty target date</Label>
+                            <Input id="repeat-target-date" v-model="repeatTargetDate" type="date" :min="dateMin || undefined" :max="dateMax" class="h-10 w-full sm:w-40" />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                :disabled="repeatProcessing || repeatTargetDate === plan.date"
+                                @click="repeatPlan(plan.id, plan.date, repeatTargetDate)"
+                            >
+                                <CopyPlus class="size-4" />{{ repeatProcessing ? 'Repeating...' : 'Repeat Duty' }}
+                            </Button>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                        <Button v-if="dutyGroups.length" type="button" variant="outline" @click="copyDuties"><Clipboard class="size-4" />{{ dutiesCopied ? 'Copied' : 'Copy Duty Text' }}</Button>
+                        <Button v-if="!isFinalized" type="button" @click="finalizePlan"><ClipboardList class="size-4" />Submit Attendance</Button>
+                        </div>
                     </div>
                 </div>
 
@@ -488,7 +533,20 @@ const finalizePlan = () => {
                                 <span class="rounded-full border px-2 py-0.5 text-[11px]" :class="statusClass(recent.status)">{{ statusLabel(recent.status) }}</span>
                             </div>
                             <p class="mt-2 text-xs text-muted-foreground">{{ recent.assignmentCount }} employees</p>
+                            <p v-if="recent.createdBy" class="mt-1 truncate text-xs text-muted-foreground">By {{ recent.createdBy }}</p>
                         </Link>
+                        <Button
+                            v-if="!plan && recent.date !== selectedDate"
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            class="shrink-0 text-primary hover:bg-primary/10 hover:text-primary"
+                            :title="`Copy this duty to ${formatDate(selectedDate)}`"
+                            @click="repeatRecentPlan(recent)"
+                        >
+                            <CopyPlus class="size-4" />
+                            <span class="hidden xl:inline">Repeat</span>
+                        </Button>
                         <Button
                             v-if="recent.status !== 'finalized'"
                             type="button"

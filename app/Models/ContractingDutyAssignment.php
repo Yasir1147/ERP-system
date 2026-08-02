@@ -23,6 +23,7 @@ class ContractingDutyAssignment extends Model
 
     protected $fillable = [
         'contracting_duty_plan_id',
+        'duty_date',
         'employee_id',
         'project_id',
         'status',
@@ -34,6 +35,7 @@ class ContractingDutyAssignment extends Model
     ];
 
     protected $casts = [
+        'duty_date' => 'date',
         'has_overtime' => 'boolean',
         'overtime_hours' => 'integer',
     ];
