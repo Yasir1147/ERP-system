@@ -7,14 +7,17 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
+    AlarmClock,
     Bell,
     BellOff,
     CheckCircle2,
     ChevronDown,
     Download,
     FileClock,
+    FlaskConical,
     MessageCircle,
     Pencil,
+    Play,
     Plus,
     Search,
     Settings2,
@@ -80,6 +83,13 @@ const props = defineProps<{
         templateLanguage: string;
         tokenConfigured: boolean;
     };
+    reminderSchedule: {
+        enabled: boolean;
+        time: string;
+        timezone: string;
+        lastAutomaticRunAt: string | null;
+        lastAutomaticResult: string | null;
+    };
     defaultEmail: string | null;
 }>();
 
@@ -94,6 +104,8 @@ const perPage = ref(String(props.filters.perPage));
 const showDocumentForm = ref(false);
 const showCategories = ref(false);
 const showWhatsApp = ref(false);
+const showReminderSchedule = ref(false);
+const runningReminderMode = ref<'dry-run' | 'send' | null>(null);
 const editingId = ref<number | null>(null);
 const editingCategoryId = ref<number | null>(null);
 const filterEmployeeSearch = ref('');
@@ -132,6 +144,11 @@ const whatsappForm = useForm({
     whatsapp_access_token: '',
     whatsapp_template_name: props.whatsappSettings.templateName || 'document_expiry_reminder',
     whatsapp_template_language: props.whatsappSettings.templateLanguage || 'en',
+});
+
+const reminderScheduleForm = useForm({
+    enabled: props.reminderSchedule.enabled,
+    time: props.reminderSchedule.time,
 });
 
 const activeCategories = computed(() =>
@@ -301,6 +318,36 @@ const saveWhatsApp = () =>
             whatsappForm.whatsapp_access_token = '';
         },
     });
+
+const saveReminderSchedule = () =>
+    reminderScheduleForm.put('/employee-documents/reminder-schedule', {
+        preserveScroll: true,
+        onSuccess: () => (showReminderSchedule.value = false),
+    });
+
+const runReminders = (dryRun: boolean) => {
+    if (!dryRun && !window.confirm('Send all due document reminders now? Same-day duplicate messages will be skipped.')) return;
+
+    runningReminderMode.value = dryRun ? 'dry-run' : 'send';
+    router.post(
+        '/employee-documents/reminders/run',
+        { dry_run: dryRun },
+        {
+            preserveScroll: true,
+            onFinish: () => (runningReminderMode.value = null),
+        },
+    );
+};
+
+const formatAutomaticRun = (value: string | null) => {
+    if (!value) return 'Not run yet';
+
+    return new Intl.DateTimeFormat('en-GB', {
+        timeZone: props.reminderSchedule.timezone,
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value));
+};
 </script>
 
 <template>
@@ -316,6 +363,7 @@ const saveWhatsApp = () =>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <Button variant="outline" @click="showCategories = true"><Settings2 class="size-4" />Categories</Button>
+                    <Button variant="outline" @click="showReminderSchedule = true"><AlarmClock class="size-4" />Reminder Schedule</Button>
                     <Button variant="outline" @click="showWhatsApp = true"><MessageCircle class="size-4" />WhatsApp Setup</Button>
                     <Button @click="openDocument()"><Plus class="size-4" />Add Document</Button>
                 </div>
@@ -326,6 +374,12 @@ const saveWhatsApp = () =>
             </div>
             <div v-if="page.props.errors?.category" class="rounded-md border border-red-600/30 bg-red-600/10 px-4 py-3 text-sm text-red-700">
                 {{ page.props.errors.category }}
+            </div>
+            <div
+                v-if="page.props.errors?.reminders"
+                class="whitespace-pre-line rounded-md border border-red-600/30 bg-red-600/10 px-4 py-3 text-sm text-red-700"
+            >
+                {{ page.props.errors.reminders }}
             </div>
 
             <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -760,6 +814,62 @@ const saveWhatsApp = () =>
                     <div class="flex justify-end gap-2 md:col-span-2">
                         <Button type="button" variant="outline" @click="showWhatsApp = false">Cancel</Button>
                         <Button :disabled="whatsappForm.processing">{{ whatsappForm.processing ? 'Saving...' : 'Save WhatsApp Settings' }}</Button>
+                    </div>
+                </form>
+            </section>
+        </div>
+
+        <div
+            v-if="showReminderSchedule"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
+            @click.self="showReminderSchedule = false"
+        >
+            <section class="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-background shadow-xl">
+                <div class="flex items-center justify-between border-b p-4">
+                    <div>
+                        <h2 class="text-lg font-semibold">Document Reminder Schedule</h2>
+                        <p class="text-xs text-muted-foreground">Choose when the daily expiry check runs in UAE time.</p>
+                    </div>
+                    <Button size="icon" variant="ghost" @click="showReminderSchedule = false"><X class="size-4" /></Button>
+                </div>
+                <form class="grid gap-4 p-4" @submit.prevent="saveReminderSchedule">
+                    <label class="flex items-center gap-2 rounded-md border p-3 text-sm">
+                        <input v-model="reminderScheduleForm.enabled" type="checkbox" />
+                        Enable automatic daily document reminders
+                    </label>
+                    <div class="grid gap-1.5">
+                        <Label>Daily reminder time ({{ reminderSchedule.timezone }})</Label>
+                        <Input v-model="reminderScheduleForm.time" type="time" required />
+                        <InputError :message="reminderScheduleForm.errors.time" />
+                    </div>
+                    <div class="rounded-md border bg-muted/30 p-3 text-sm">
+                        <div>
+                            <span class="text-muted-foreground">Last automatic run:</span>
+                            {{ formatAutomaticRun(reminderSchedule.lastAutomaticRunAt) }}
+                        </div>
+                        <div class="mt-1">
+                            <span class="text-muted-foreground">Last result:</span> {{ reminderSchedule.lastAutomaticResult || 'No result yet' }}
+                        </div>
+                    </div>
+                    <div class="rounded-md border border-amber-600/30 bg-amber-600/10 p-3 text-xs text-amber-800">
+                        The server cron must run Laravel <code>schedule:run</code> every minute. The portal setting controls when email and WhatsApp
+                        reminders actually send.
+                    </div>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" :disabled="runningReminderMode !== null" @click="runReminders(true)">
+                                <FlaskConical class="size-4" />{{ runningReminderMode === 'dry-run' ? 'Checking...' : 'Test Due Check' }}
+                            </Button>
+                            <Button type="button" variant="outline" :disabled="runningReminderMode !== null" @click="runReminders(false)">
+                                <Play class="size-4" />{{ runningReminderMode === 'send' ? 'Running...' : 'Run Now' }}
+                            </Button>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <Button type="button" variant="outline" @click="showReminderSchedule = false">Cancel</Button>
+                            <Button :disabled="reminderScheduleForm.processing">{{
+                                reminderScheduleForm.processing ? 'Saving...' : 'Save Schedule'
+                            }}</Button>
+                        </div>
                     </div>
                 </form>
             </section>

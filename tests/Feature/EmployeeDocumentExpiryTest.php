@@ -117,3 +117,21 @@ test('document expiry email includes document notes when provided', function () 
         ->toContain('Contact the issuing authority.')
         ->toContain('Request renewed document details.');
 });
+
+test('administrator can update the automatic document reminder schedule', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+    $this->actingAs($admin)
+        ->put('/employee-documents/reminder-schedule', [
+            'enabled' => true,
+            'time' => '09:30',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $schedule = AppSetting::documentReminderSchedule();
+
+    expect($schedule['enabled'])->toBeTrue()
+        ->and($schedule['time'])->toBe('09:30')
+        ->and($schedule['timezone'])->toBe('Asia/Dubai');
+});

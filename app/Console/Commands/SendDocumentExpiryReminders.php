@@ -13,13 +13,42 @@ use Illuminate\Support\Facades\Mail;
 
 class SendDocumentExpiryReminders extends Command
 {
-    protected $signature = 'documents:send-expiry-reminders {--dry-run : Show due notifications without sending them}';
+    protected $signature = 'documents:send-expiry-reminders
+        {--dry-run : Show due notifications without sending them}
+        {--scheduled : Respect the configured automatic reminder time and daily run limit}';
 
     protected $description = 'Send daily email and WhatsApp reminders for due employee documents';
 
     public function handle(MetaWhatsAppService $whatsApp): int
     {
-        $today = today();
+        $schedule = AppSetting::documentReminderSchedule();
+        $now = now(AppSetting::DOCUMENT_REMINDER_TIMEZONE);
+
+        if ($this->option('scheduled')) {
+            if (! $schedule['enabled']) {
+                $this->line('Automatic document reminders are disabled.');
+
+                return self::SUCCESS;
+            }
+
+            if ($now->format('H:i') < $schedule['time']) {
+                $this->line("Document reminders are scheduled for {$schedule['time']} {$schedule['timezone']}.");
+
+                return self::SUCCESS;
+            }
+
+            if ($schedule['last_automatic_run_date'] === $now->toDateString()) {
+                $this->line('Automatic document reminders have already run today.');
+
+                return self::SUCCESS;
+            }
+
+            // Claim today's automatic run before sending so overlapping scheduler calls cannot duplicate it.
+            AppSetting::setValue('document_reminders_last_automatic_run_date', $now->toDateString());
+            AppSetting::setValue('document_reminders_last_automatic_run_at', $now->toIso8601String());
+        }
+
+        $today = $now->copy()->startOfDay();
         $sent = 0;
         $failed = 0;
 
@@ -74,6 +103,10 @@ class SendDocumentExpiryReminders extends Command
             });
 
         $this->info("Document reminders finished. Sent: {$sent}; Failed: {$failed}.");
+
+        if ($this->option('scheduled')) {
+            AppSetting::setValue('document_reminders_last_automatic_result', "Sent: {$sent}; Failed: {$failed}");
+        }
 
         return $failed > 0 ? self::FAILURE : self::SUCCESS;
     }

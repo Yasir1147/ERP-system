@@ -8,7 +8,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('documents:send-expiry-reminders')
-    ->dailyAt('08:00')
+Schedule::command('documents:send-expiry-reminders --scheduled')
+    ->everyMinute()
     ->timezone('Asia/Dubai')
     ->withoutOverlapping();

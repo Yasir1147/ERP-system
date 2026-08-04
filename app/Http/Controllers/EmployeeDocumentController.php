@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppSetting;
 use App\Models\DocumentCategory;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -60,7 +62,8 @@ class EmployeeDocumentController extends Controller
         $documents = $query->paginate($perPage)->withQueryString();
         $today = today();
 
-        $whatsappSettings = \App\Models\AppSetting::whatsappSettings();
+        $whatsappSettings = AppSetting::whatsappSettings();
+        $reminderSchedule = AppSetting::documentReminderSchedule();
 
         return Inertia::render('EmployeeDocuments/Index', [
             'documents' => $documents->through(fn (EmployeeDocument $document) => $this->documentRow($document))->items(),
@@ -107,8 +110,46 @@ class EmployeeDocumentController extends Controller
                 'templateLanguage' => $whatsappSettings['template_language'],
                 'tokenConfigured' => $whatsappSettings['token_configured'],
             ],
+            'reminderSchedule' => [
+                'enabled' => $reminderSchedule['enabled'],
+                'time' => $reminderSchedule['time'],
+                'timezone' => $reminderSchedule['timezone'],
+                'lastAutomaticRunAt' => $reminderSchedule['last_automatic_run_at'],
+                'lastAutomaticResult' => $reminderSchedule['last_automatic_result'],
+            ],
             'defaultEmail' => $request->user()?->email,
         ]);
+    }
+
+    public function updateReminderSchedule(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'time' => ['required', 'date_format:H:i'],
+        ]);
+
+        AppSetting::setValue('document_reminders_automatic_enabled', $data['enabled'] ? '1' : '0');
+        AppSetting::setValue('document_reminders_time', $data['time']);
+
+        return back()->with('success', 'Document reminder schedule updated.');
+    }
+
+    public function runReminders(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'dry_run' => ['required', 'boolean'],
+        ]);
+
+        $arguments = $data['dry_run'] ? ['--dry-run' => true] : [];
+        $exitCode = Artisan::call('documents:send-expiry-reminders', $arguments);
+        $output = trim(Artisan::output());
+        $message = str($output ?: 'Document reminder command finished.')->limit(1200)->toString();
+
+        if ($exitCode !== 0) {
+            return back()->withErrors(['reminders' => $message]);
+        }
+
+        return back()->with('success', $data['dry_run'] ? "Dry run: {$message}" : $message);
     }
 
     public function store(Request $request): RedirectResponse

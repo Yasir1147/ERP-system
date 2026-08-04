@@ -32,6 +32,8 @@ class AppSetting extends Model
         'whatsapp_template_language',
     ];
 
+    public const DOCUMENT_REMINDER_TIMEZONE = 'Asia/Dubai';
+
     private const ENCRYPTED_KEYS = [
         'mail_password',
         'whatsapp_access_token',
@@ -127,6 +129,18 @@ class AppSetting extends Model
             'template_name' => static::getValue('whatsapp_template_name', ''),
             'template_language' => static::getValue('whatsapp_template_language', 'en'),
             'token_configured' => filled(static::query()->where('key', 'whatsapp_access_token')->value('value')),
+        ];
+    }
+
+    public static function documentReminderSchedule(): array
+    {
+        return [
+            'enabled' => static::getValue('document_reminders_automatic_enabled', '1') === '1',
+            'time' => static::getValue('document_reminders_time', '08:00'),
+            'timezone' => self::DOCUMENT_REMINDER_TIMEZONE,
+            'last_automatic_run_at' => static::getValue('document_reminders_last_automatic_run_at'),
+            'last_automatic_run_date' => static::getValue('document_reminders_last_automatic_run_date'),
+            'last_automatic_result' => static::getValue('document_reminders_last_automatic_result'),
         ];
     }
 }

@@ -173,6 +173,9 @@ Contracting duty plans are operational schedules and remain separate from attend
 - Present employees may have overtime hours and an optional different overtime project. The main project is used when no overtime project is selected.
 - Submit Attendance uses one database transaction and stops on duplicate attendance rather than saving a partial result.
 - Submitted plans are locked. Admin corrections continue through the Attendance Report.
+- Contracting attendance users can view, update, repeat, delete, and submit only duty plans they created; admins retain oversight access.
+- Repeat Duty copies the source plan's employee/project assignments to another allowed date, avoiding manual re-selection of the workforce.
+- When an admin deletes submitted contracting attendance, its linked duty assignment is removed and the employee becomes selectable again; empty duty plans are also removed.
 
 Admin modules:
 
@@ -828,5 +831,6 @@ Database tables:
 - Once the reminder threshold is reached, each enabled channel sends at most once per calendar day and repeats daily, including after expiry, until the document notification is manually stopped.
 - Notification attempts are recorded in `document_notification_logs`; the unique document/channel/date key prevents duplicate same-day sends.
 - Document attachments use the private `local` disk and are downloaded only through the authenticated admin route.
-- The scheduled command is `php artisan documents:send-expiry-reminders`; Laravel Scheduler runs it daily at 08:00 Asia/Dubai.
+- The scheduled command is `php artisan documents:send-expiry-reminders`. Admins can enable/disable automatic reminders, edit the UAE reminder time, run a dry due check, or run reminders immediately from the Documents page.
+- Laravel Scheduler evaluates the document task every minute, but the command sends automatically only once per UAE calendar day after the configured time. Production cPanel cron must therefore execute `php artisan schedule:run` every minute.
 - WhatsApp messages use an approved four-variable template for employee, category, expiry date, and expiry status. Unofficial WhatsApp Web automation is not used.
