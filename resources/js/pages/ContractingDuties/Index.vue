@@ -5,7 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, Clipboard, ClipboardList, Clock3, CopyPlus, Save, Search, Trash2, Users, X } from 'lucide-vue-next';
+import {
+    ArrowLeft,
+    ArrowRight,
+    CheckCircle2,
+    ChevronDown,
+    Clipboard,
+    ClipboardList,
+    LayoutDashboard,
+    Save,
+    Search,
+    Trash2,
+    Users,
+    X,
+} from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 
 interface Employee {
@@ -53,14 +66,6 @@ interface DutyPlan {
     assignments: Assignment[];
 }
 
-interface RecentPlan {
-    id: number;
-    date: string;
-    status: string;
-    createdBy: string | null;
-    assignmentCount: number;
-}
-
 interface DutyGroup {
     projectId: number;
     projectName: string;
@@ -68,6 +73,8 @@ interface DutyGroup {
 }
 
 const props = defineProps<{
+    initialStep: number;
+    extensionMode: boolean;
     selectedDate: string;
     dateMin: string | null;
     dateMax: string;
@@ -75,35 +82,34 @@ const props = defineProps<{
     pendingOlderPlan: { id: number; date: string; status: string } | null;
     employees: Employee[];
     projects: Project[];
-    recentPlans: RecentPlan[];
 }>();
 
 const page = usePage();
+const currentStep = ref(props.initialStep);
 const selectedDate = ref(props.selectedDate);
 const employeeSearch = ref('');
 const employeeOpen = ref(false);
 const employeeDropdownRef = ref<HTMLElement | null>(null);
 const openDutyGroups = reactive<Record<string, boolean>>({});
 const dutiesCopied = ref(false);
-const repeatProcessing = ref(false);
 
-const nextDate = (date: string) => {
-    const [year, month, day] = date.split('-').map(Number);
-    const value = new Date(Date.UTC(year, month - 1, day + 1));
-    return value.toISOString().slice(0, 10);
-};
-
-const repeatTargetDate = ref(nextDate(props.selectedDate));
-const assignmentForms = reactive<Record<number, {
-    project_id: string;
-    status: string;
-    has_overtime: boolean;
-    overtime_hours: string;
-    overtime_project_id: string;
-    note: string;
-}>>({});
+const assignmentForms = reactive<
+    Record<
+        number,
+        {
+            project_id: string;
+            status: string;
+            has_overtime: boolean;
+            overtime_hours: string;
+            overtime_project_id: string;
+            note: string;
+        }
+    >
+>({});
 
 const addForm = useForm({
+    workflow: 'wizard',
+    extend_finalized: props.extensionMode,
     duty_date: props.selectedDate,
     project_id: '',
     employee_ids: [] as string[],
@@ -117,6 +123,8 @@ const statusOptions = [
 ];
 
 const isFinalized = computed(() => props.plan?.status === 'finalized');
+const canAddEmployees = computed(() => !isFinalized.value || props.extensionMode);
+const pendingAssignmentCount = computed(() => props.plan?.assignments.filter((assignment) => assignment.attendanceRecordId === null).length ?? 0);
 const selectedEmployeeCount = computed(() => addForm.employee_ids.length);
 const dutyGroups = computed<DutyGroup[]>(() => {
     const groups = new Map<number, DutyGroup>();
@@ -142,9 +150,7 @@ const availableEmployees = computed(() => {
         if (assignedIds.has(employee.id)) return false;
         if (!query) return true;
 
-        return [employee.code, employee.name, employee.profession]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(query));
+        return [employee.code, employee.name, employee.profession].filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
     });
 });
 
@@ -170,21 +176,48 @@ const initializeAssignmentForms = () => {
 
 watch(() => props.plan, initializeAssignmentForms, { immediate: true, deep: true });
 
-watch(dutyGroups, (groups) => {
-    const activeKeys = new Set(groups.map((group) => String(group.projectId)));
+watch(
+    dutyGroups,
+    (groups) => {
+        const activeKeys = new Set(groups.map((group) => String(group.projectId)));
 
-    Object.keys(openDutyGroups).forEach((key) => {
-        if (!activeKeys.has(key)) delete openDutyGroups[key];
-    });
+        Object.keys(openDutyGroups).forEach((key) => {
+            if (!activeKeys.has(key)) delete openDutyGroups[key];
+        });
 
-    groups.forEach((group, index) => {
-        const key = String(group.projectId);
-        if (openDutyGroups[key] === undefined) openDutyGroups[key] = index === 0;
-    });
-}, { immediate: true });
+        groups.forEach((group, index) => {
+            const key = String(group.projectId);
+            if (openDutyGroups[key] === undefined) openDutyGroups[key] = index === 0;
+        });
+    },
+    { immediate: true },
+);
 
 const openDate = () => {
-    router.get('/contracting-duty-plans', { date: selectedDate.value }, { preserveState: false });
+    router.get('/contracting-duty-plans/create', { date: selectedDate.value, step: 2 }, { preserveState: false });
+};
+
+const goToStep = (step: number) => {
+    if (step < 1 || step > 3) return;
+
+    if (step === 1) {
+        router.get('/contracting-duty-plans/create', { date: props.selectedDate, step: 1 }, { preserveState: false });
+        return;
+    }
+
+    currentStep.value = step;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const returnToDashboard = () => router.get('/contracting-duty-plans');
+
+const finishPlanning = () => {
+    if (!props.plan || props.plan.status === 'published') {
+        returnToDashboard();
+        return;
+    }
+
+    router.post(`/contracting-duty-plans/${props.plan.id}/publish`, {}, { onSuccess: () => returnToDashboard() });
 };
 
 const formatDate = (date: string) => {
@@ -215,12 +248,14 @@ const toggleDutyGroup = (projectId: number) => {
 
 const copyDuties = async () => {
     const text = dutyGroups.value
-        .map((group) => [
-            group.projectName,
-            ...group.assignments.map((assignment) => assignment.employeeCode
-                ? `${assignment.employeeCode} - ${assignment.employeeName}`
-                : assignment.employeeName),
-        ].join('\n'))
+        .map((group) =>
+            [
+                group.projectName,
+                ...group.assignments.map((assignment) =>
+                    assignment.employeeCode ? `${assignment.employeeCode} - ${assignment.employeeName}` : assignment.employeeName,
+                ),
+            ].join('\n'),
+        )
         .join('\n============\n');
 
     if (!text) return;
@@ -250,7 +285,10 @@ const toggleEmployee = (employee: Employee) => {
     addForm.employee_ids = addForm.employee_ids.includes(id)
         ? addForm.employee_ids.filter((employeeId) => employeeId !== id)
         : [...addForm.employee_ids, id];
+    employeeSearch.value = '';
 };
+
+const assignmentIsLocked = (assignment: Assignment) => assignment.attendanceRecordId !== null || (isFinalized.value && !props.extensionMode);
 
 const closeEmployeeDropdown = () => {
     employeeOpen.value = false;
@@ -290,28 +328,6 @@ const removeAssignment = (assignment: Assignment) => {
     router.delete(`/contracting-duty-assignments/${assignment.id}`, { preserveScroll: true });
 };
 
-const deleteRecentPlan = (recent: RecentPlan) => {
-    if (recent.status === 'finalized' || !window.confirm(`Delete the duty plan for ${formatDate(recent.date)}? This will remove all of its assignments.`)) return;
-    router.delete(`/contracting-duty-plans/${recent.id}`, { preserveScroll: true });
-};
-
-const repeatPlan = (planId: number, sourceDate: string, targetDate: string) => {
-    if (!targetDate || sourceDate === targetDate || repeatProcessing.value) return;
-    if (!window.confirm(`Copy the ${formatDate(sourceDate)} duty plan to ${formatDate(targetDate)}? Employee statuses, overtime, and notes will be reset.`)) return;
-
-    repeatProcessing.value = true;
-    router.post(`/contracting-duty-plans/${planId}/repeat`, {
-        target_date: targetDate,
-    }, {
-        preserveScroll: true,
-        onFinish: () => {
-            repeatProcessing.value = false;
-        },
-    });
-};
-
-const repeatRecentPlan = (recent: RecentPlan) => repeatPlan(recent.id, recent.date, selectedDate.value);
-
 const finalizePlan = () => {
     if (!props.plan || !window.confirm('Submit this duty plan as attendance? Please confirm employee status and overtime before continuing.')) return;
     router.post(`/contracting-duty-plans/${props.plan.id}/finalize`, {}, { preserveScroll: true });
@@ -328,16 +344,48 @@ const finalizePlan = () => {
                     <AppLogoIcon class="size-16 shrink-0 sm:size-20" />
                     <div>
                         <p class="text-xs font-semibold uppercase text-primary">Contracting workforce</p>
-                        <h1 class="mt-1 text-2xl font-semibold tracking-normal">Duty Planning</h1>
-                        <p class="mt-1 text-sm text-muted-foreground">Plan tomorrow's projects, review changes, then submit final attendance.</p>
+                        <h1 class="mt-1 text-2xl font-semibold tracking-normal">{{ plan ? 'Edit Duty Plan' : 'Create Duty Plan' }}</h1>
+                        <p class="mt-1 text-sm text-muted-foreground">Choose a date, build project assignments, then review your plan.</p>
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <Button as-child variant="outline">
-                        <Link href="/mark-attendance/contracting"><ArrowLeft class="size-4" />Direct Attendance</Link>
+                        <Link href="/contracting-duty-plans"><LayoutDashboard class="size-4" />Duty Dashboard</Link>
                     </Button>
                 </div>
             </header>
+
+            <section class="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
+                <div class="relative grid grid-cols-3 gap-2">
+                    <div class="absolute left-[16.66%] right-[16.66%] top-4 h-1 rounded-full bg-muted">
+                        <div
+                            class="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+                            :style="{ width: `${((currentStep - 1) / 2) * 100}%` }"
+                        />
+                    </div>
+                    <button
+                        v-for="item in [
+                            { step: 1, label: 'Duty Date' },
+                            { step: 2, label: 'Assignments' },
+                            { step: 3, label: 'Review' },
+                        ]"
+                        :key="item.step"
+                        type="button"
+                        class="relative z-10 grid justify-items-center gap-2 text-xs font-medium sm:text-sm"
+                        :class="currentStep >= item.step ? 'text-foreground' : 'text-muted-foreground'"
+                        @click="item.step < currentStep && goToStep(item.step)"
+                    >
+                        <span
+                            class="grid size-9 place-items-center rounded-full border-2 transition-colors duration-300"
+                            :class="currentStep >= item.step ? 'border-primary bg-primary text-primary-foreground' : 'border-muted bg-background'"
+                        >
+                            <CheckCircle2 v-if="currentStep > item.step" class="size-4" />
+                            <span v-else>{{ item.step }}</span>
+                        </span>
+                        {{ item.label }}
+                    </button>
+                </div>
+            </section>
 
             <div v-if="page.props.flash?.success" class="rounded-md border border-green-600/30 bg-green-600/10 px-4 py-3 text-sm text-green-700">
                 {{ page.props.flash.success }}
@@ -346,23 +394,34 @@ const finalizePlan = () => {
                 {{ globalPlanError }}
             </div>
             <div v-if="pendingOlderPlan" class="rounded-md border border-amber-600/30 bg-amber-600/10 px-4 py-3 text-sm text-amber-800">
-                The {{ formatDate(pendingOlderPlan.date) }} duty plan is still {{ pendingOlderPlan.status }}. You can prepare this draft, but publish it only after completing the older plan.
+                The {{ formatDate(pendingOlderPlan.date) }} duty plan is still {{ pendingOlderPlan.status }}. You can prepare this draft, but publish
+                it only after completing the older plan.
             </div>
 
-            <section class="grid gap-4 rounded-lg border bg-card p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5">
-                <div class="grid gap-2">
-                    <Label for="duty-date">Duty Date</Label>
-                    <Input id="duty-date" v-model="selectedDate" type="date" :min="dateMin || undefined" :max="dateMax" />
-                    <p class="text-xs text-muted-foreground">Select the date employees are expected to work, not the date this plan is created.</p>
-                </div>
-                <Button type="button" class="h-10" @click="openDate"><CalendarDays class="size-4" />Open Duty</Button>
-            </section>
+            <Transition name="duty-step" mode="out-in">
+                <section
+                    v-if="currentStep === 1"
+                    key="date-step"
+                    class="grid gap-4 rounded-lg border bg-card p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5"
+                >
+                    <div class="grid gap-2">
+                        <Label for="duty-date">Duty Date</Label>
+                        <Input id="duty-date" v-model="selectedDate" type="date" :min="dateMin || undefined" :max="dateMax" />
+                        <p class="text-xs text-muted-foreground">
+                            Select the date employees are expected to work, not the date this plan is created.
+                        </p>
+                    </div>
+                    <Button type="button" class="h-11" @click="openDate"><span>Next</span><ArrowRight class="size-4" /></Button>
+                </section>
+            </Transition>
 
-            <section v-if="!isFinalized" class="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+            <section v-if="currentStep === 2 && canAddEmployees" class="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <div>
                         <h2 class="font-medium">Add Employees</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">Employees are Present by default. Change only Absence, Leave, Overtime, or removal when needed.</p>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Employees are Present by default. Change only Absence, Leave, Overtime, or removal when needed.
+                        </p>
                     </div>
                 </div>
 
@@ -371,7 +430,9 @@ const finalizePlan = () => {
                         <Label for="main-project">Project</Label>
                         <select id="main-project" v-model="addForm.project_id" class="h-11 rounded-md border border-input bg-background px-3 text-sm">
                             <option value="">Select project</option>
-                            <option v-for="project in projects" :key="project.id" :value="String(project.id)">{{ project.name }} - {{ project.status }}</option>
+                            <option v-for="project in projects" :key="project.id" :value="String(project.id)">
+                                {{ project.name }} - {{ project.status }}
+                            </option>
                         </select>
                         <InputError :message="addForm.errors.project_id" />
                     </div>
@@ -379,11 +440,15 @@ const finalizePlan = () => {
                     <div class="grid gap-2">
                         <Label>Employees</Label>
                         <div ref="employeeDropdownRef" class="relative">
-                            <button type="button" class="flex h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-left text-sm" @click="employeeOpen = !employeeOpen">
+                            <button
+                                type="button"
+                                class="flex h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-left text-sm"
+                                @click="employeeOpen = !employeeOpen"
+                            >
                                 <span>{{ selectedEmployeeCount ? `${selectedEmployeeCount} employees selected` : 'Select employees' }}</span>
                                 <ChevronDown class="size-4 text-muted-foreground" />
                             </button>
-                            <div v-if="employeeOpen" class="absolute z-30 mt-2 w-full rounded-md border bg-popover p-2 shadow-lg">
+                            <div v-if="employeeOpen" class="absolute z-30 mt-2 w-full rounded-md border bg-popover p-2 shadow-lg" @click.stop>
                                 <div class="relative">
                                     <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input
@@ -399,9 +464,14 @@ const finalizePlan = () => {
                                         placeholder="Search code, name, or profession"
                                     />
                                 </div>
-                                <div v-if="selectedEmployeeCount" class="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
+                                <div
+                                    v-if="selectedEmployeeCount"
+                                    class="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs"
+                                >
                                     <span>{{ selectedEmployeeCount }} selected</span>
-                                    <button type="button" class="flex items-center gap-1 font-medium text-primary" @click="addForm.employee_ids = []"><X class="size-3" />Clear</button>
+                                    <button type="button" class="flex items-center gap-1 font-medium text-primary" @click="addForm.employee_ids = []">
+                                        <X class="size-3" />Clear
+                                    </button>
                                 </div>
                                 <div class="mt-2 max-h-64 overflow-y-auto">
                                     <button
@@ -410,17 +480,28 @@ const finalizePlan = () => {
                                         type="button"
                                         class="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                                         :disabled="employee.onLeave"
-                                        @click="toggleEmployee(employee)"
+                                        @click.stop="toggleEmployee(employee)"
                                     >
-                                        <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border" :class="addForm.employee_ids.includes(String(employee.id)) ? 'border-primary bg-primary text-primary-foreground' : 'border-input'">
+                                        <span
+                                            class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border"
+                                            :class="
+                                                addForm.employee_ids.includes(String(employee.id))
+                                                    ? 'border-primary bg-primary text-primary-foreground'
+                                                    : 'border-input'
+                                            "
+                                        >
                                             <CheckCircle2 v-if="addForm.employee_ids.includes(String(employee.id))" class="size-3" />
                                         </span>
                                         <span class="min-w-0">
                                             <span class="block font-medium">{{ employee.code ? `${employee.code} - ` : '' }}{{ employee.name }}</span>
-                                            <span class="block text-xs text-muted-foreground">{{ employee.profession || '-' }}<template v-if="employee.onLeave"> - On leave</template></span>
+                                            <span class="block text-xs text-muted-foreground"
+                                                >{{ employee.profession || '-' }}<template v-if="employee.onLeave"> - On leave</template></span
+                                            >
                                         </span>
                                     </button>
-                                    <p v-if="!availableEmployees.length" class="px-3 py-6 text-center text-sm text-muted-foreground">No employees found.</p>
+                                    <p v-if="!availableEmployees.length" class="px-3 py-6 text-center text-sm text-muted-foreground">
+                                        No employees found.
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -431,29 +512,21 @@ const finalizePlan = () => {
                 </form>
             </section>
 
-            <section class="rounded-lg border bg-card shadow-sm">
+            <section v-if="currentStep >= 2" class="rounded-lg border bg-card shadow-sm">
                 <div class="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                     <div>
                         <h2 class="font-medium">Duty Plans - {{ formatDate(selectedDate) }}</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">{{ dutyGroups.length }} duties, {{ plan?.assignments.length || 0 }} employees.</p>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            {{ dutyGroups.length }} duties, {{ plan?.assignments.length || 0 }} employees.
+                        </p>
                         <p v-if="plan?.createdBy" class="mt-1 text-xs text-muted-foreground">Created by {{ plan.createdBy }}</p>
                     </div>
-                    <div v-if="plan && dutyGroups.length" class="flex flex-col gap-2 sm:items-end">
-                        <div class="flex flex-col gap-2 sm:flex-row">
-                            <Label for="repeat-target-date" class="sr-only">Repeat duty target date</Label>
-                            <Input id="repeat-target-date" v-model="repeatTargetDate" type="date" :min="dateMin || undefined" :max="dateMax" class="h-10 w-full sm:w-40" />
-                            <Button
-                                type="button"
-                                variant="outline"
-                                :disabled="repeatProcessing || repeatTargetDate === plan.date"
-                                @click="repeatPlan(plan.id, plan.date, repeatTargetDate)"
-                            >
-                                <CopyPlus class="size-4" />{{ repeatProcessing ? 'Repeating...' : 'Repeat Duty' }}
-                            </Button>
-                        </div>
+                    <div v-if="plan && dutyGroups.length && currentStep === 3" class="flex flex-col gap-2 sm:items-end">
                         <div class="flex flex-wrap gap-2">
-                        <Button v-if="dutyGroups.length" type="button" variant="outline" @click="copyDuties"><Clipboard class="size-4" />{{ dutiesCopied ? 'Copied' : 'Copy Duty Text' }}</Button>
-                        <Button v-if="!isFinalized" type="button" @click="finalizePlan"><ClipboardList class="size-4" />Submit Attendance</Button>
+                            <Button v-if="dutyGroups.length" type="button" variant="outline" @click="copyDuties"
+                                ><Clipboard class="size-4" />{{ dutiesCopied ? 'Copied' : 'Copy Duty Text' }}</Button
+                            >
+                            <Button v-if="!isFinalized" type="button" @click="finalizePlan"><ClipboardList class="size-4" />Submit Attendance</Button>
                         </div>
                     </div>
                 </div>
@@ -470,61 +543,120 @@ const finalizePlan = () => {
                                 <span class="block font-medium">Duty Plan - {{ group.projectName }}</span>
                                 <span class="mt-0.5 block text-xs text-muted-foreground">{{ group.assignments.length }} employees</span>
                             </span>
-                            <ChevronDown class="size-5 shrink-0 text-muted-foreground transition-transform" :class="openDutyGroups[String(group.projectId)] ? 'rotate-180' : ''" />
+                            <ChevronDown
+                                class="size-5 shrink-0 text-muted-foreground transition-transform"
+                                :class="openDutyGroups[String(group.projectId)] ? 'rotate-180' : ''"
+                            />
                         </button>
 
                         <div v-if="openDutyGroups[String(group.projectId)]" class="grid gap-3 border-t bg-muted/10 p-3 sm:p-4">
-                    <div v-for="assignment in group.assignments" :key="assignment.id" class="rounded-md border bg-card p-3 sm:p-4">
-                        <div class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.75fr)_minmax(0,1.25fr)_minmax(0,1fr)_auto] lg:items-end lg:gap-2">
-                            <div class="min-w-0 lg:self-center">
-                                <p class="truncate font-medium">{{ assignment.employeeCode ? `${assignment.employeeCode} - ` : '' }}{{ assignment.employeeName }}</p>
-                                <p class="truncate text-xs text-muted-foreground">{{ assignment.profession || '-' }}</p>
-                                <span v-if="isFinalized" class="mt-2 inline-flex rounded-full border px-2 py-1 text-xs" :class="statusClass(assignment.status)">{{ statusLabel(assignment.status) }}</span>
-                            </div>
+                            <div v-for="assignment in group.assignments" :key="assignment.id" class="rounded-md border bg-card p-3 sm:p-4">
+                                <div
+                                    class="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(190px,1.15fr)_minmax(150px,1fr)_minmax(125px,0.75fr)_minmax(180px,1fr)_minmax(170px,1fr)_auto] lg:items-end lg:gap-3"
+                                >
+                                    <div class="col-span-2 min-w-0 lg:col-span-1 lg:self-center">
+                                        <p class="truncate font-medium">
+                                            {{ assignment.employeeCode ? `${assignment.employeeCode} - ` : '' }}{{ assignment.employeeName }}
+                                        </p>
+                                        <p class="truncate text-xs text-muted-foreground">{{ assignment.profession || '-' }}</p>
+                                        <span
+                                            v-if="assignmentIsLocked(assignment)"
+                                            class="mt-2 inline-flex rounded-full border px-2 py-1 text-xs"
+                                            :class="statusClass(assignment.status)"
+                                            >{{ statusLabel(assignment.status) }}</span
+                                        >
+                                    </div>
 
-                            <div class="grid gap-1.5">
-                                <Label :for="`project-${assignment.id}`">Project</Label>
-                                <select :id="`project-${assignment.id}`" v-model="assignmentForms[assignment.id].project_id" :disabled="isFinalized" class="h-10 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60">
-                                    <option v-for="project in projects" :key="project.id" :value="String(project.id)">{{ project.name }}</option>
-                                </select>
-                            </div>
+                                    <div class="grid min-w-0 gap-1.5">
+                                        <Label :for="`project-${assignment.id}`">Project</Label>
+                                        <select
+                                            :id="`project-${assignment.id}`"
+                                            v-model="assignmentForms[assignment.id].project_id"
+                                            :disabled="assignmentIsLocked(assignment)"
+                                            class="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60"
+                                        >
+                                            <option v-for="project in projects" :key="project.id" :value="String(project.id)">
+                                                {{ project.name }}
+                                            </option>
+                                        </select>
+                                    </div>
 
-                            <div class="grid gap-1.5">
-                                <Label :for="`status-${assignment.id}`">Final Status</Label>
-                                <select :id="`status-${assignment.id}`" v-model="assignmentForms[assignment.id].status" :disabled="isFinalized" class="h-10 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60">
-                                    <option v-for="option in statusOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-                                </select>
-                            </div>
+                                    <div class="grid min-w-0 gap-1.5">
+                                        <Label :for="`status-${assignment.id}`">Status</Label>
+                                        <select
+                                            :id="`status-${assignment.id}`"
+                                            v-model="assignmentForms[assignment.id].status"
+                                            :disabled="assignmentIsLocked(assignment)"
+                                            class="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60"
+                                        >
+                                            <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                                                {{ option.label }}
+                                            </option>
+                                        </select>
+                                    </div>
 
-                            <div class="grid gap-2 rounded-md border bg-muted/30 p-2.5">
-                                <label class="flex items-center gap-2 text-sm font-medium" :class="assignmentForms[assignment.id].status !== 'present' ? 'opacity-50' : ''">
-                                    <input v-model="assignmentForms[assignment.id].has_overtime" type="checkbox" :disabled="isFinalized || assignmentForms[assignment.id].status !== 'present'" />
-                                    Overtime applied
-                                </label>
-                                <div v-if="assignmentForms[assignment.id].has_overtime && assignmentForms[assignment.id].status === 'present'" class="grid grid-cols-[90px_1fr] gap-2 lg:grid-cols-2">
-                                    <select v-model="assignmentForms[assignment.id].overtime_hours" :disabled="isFinalized" class="h-9 rounded-md border border-input bg-background px-2 text-sm">
-                                        <option value="">Hours</option>
-                                        <option v-for="hour in 10" :key="hour" :value="String(hour)">{{ hour }}h</option>
-                                    </select>
-                                    <select v-model="assignmentForms[assignment.id].overtime_project_id" :disabled="isFinalized" class="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm">
-                                        <option value="">Same project</option>
-                                        <option v-for="project in projects" :key="project.id" :value="String(project.id)">{{ project.name }}</option>
-                                    </select>
+                                    <div class="grid min-w-0 gap-2 rounded-md border bg-muted/30 p-2.5">
+                                        <label
+                                            class="flex items-center gap-2 text-sm font-medium"
+                                            :class="assignmentForms[assignment.id].status !== 'present' ? 'opacity-50' : ''"
+                                        >
+                                            <input
+                                                v-model="assignmentForms[assignment.id].has_overtime"
+                                                type="checkbox"
+                                                :disabled="assignmentIsLocked(assignment) || assignmentForms[assignment.id].status !== 'present'"
+                                            />
+                                            Overtime
+                                        </label>
+                                        <div
+                                            v-if="assignmentForms[assignment.id].has_overtime && assignmentForms[assignment.id].status === 'present'"
+                                            class="grid gap-2"
+                                        >
+                                            <select
+                                                v-model="assignmentForms[assignment.id].overtime_hours"
+                                                :disabled="assignmentIsLocked(assignment)"
+                                                class="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm"
+                                            >
+                                                <option value="">Hours</option>
+                                                <option v-for="hour in 10" :key="hour" :value="String(hour)">{{ hour }}h</option>
+                                            </select>
+                                            <select
+                                                v-model="assignmentForms[assignment.id].overtime_project_id"
+                                                :disabled="assignmentIsLocked(assignment)"
+                                                class="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm"
+                                            >
+                                                <option value="">Same project</option>
+                                                <option v-for="project in projects" :key="project.id" :value="String(project.id)">
+                                                    {{ project.name }}
+                                                </option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid min-w-0 gap-1.5">
+                                        <Label :for="`note-${assignment.id}`">Note</Label>
+                                        <Input
+                                            :id="`note-${assignment.id}`"
+                                            v-model="assignmentForms[assignment.id].note"
+                                            :disabled="assignmentIsLocked(assignment)"
+                                            class="min-w-0"
+                                            placeholder="Optional note"
+                                        />
+                                    </div>
+
+                                    <div
+                                        v-if="!assignmentIsLocked(assignment)"
+                                        class="col-span-2 grid grid-cols-2 gap-2 lg:col-span-1 lg:flex lg:justify-end"
+                                    >
+                                        <Button type="button" @click="updateAssignment(assignment)"><Save class="size-4" />Save</Button>
+                                        <Button type="button" variant="destructive" @click="removeAssignment(assignment)"
+                                            ><Trash2 class="size-4" />Delete</Button
+                                        >
+                                    </div>
+                                    <div v-else class="col-span-2 flex items-center gap-2 text-xs text-muted-foreground lg:col-span-1">
+                                        <CheckCircle2 class="size-4 text-green-600" />Submitted and locked
+                                    </div>
                                 </div>
                             </div>
-
-                            <div class="grid gap-1.5">
-                                <Label :for="`note-${assignment.id}`">Note</Label>
-                                <Input :id="`note-${assignment.id}`" v-model="assignmentForms[assignment.id].note" :disabled="isFinalized" placeholder="Optional note" />
-                            </div>
-
-                            <div v-if="!isFinalized" class="flex gap-2">
-                                <Button type="button" size="icon" title="Save assignment" @click="updateAssignment(assignment)"><Save class="size-4" /></Button>
-                                <Button type="button" size="icon" variant="destructive" title="Remove assignment" @click="removeAssignment(assignment)"><Trash2 class="size-4" /></Button>
-                            </div>
-                            <div v-else class="flex items-center gap-2 text-xs text-muted-foreground"><CheckCircle2 class="size-4 text-green-600" />Submitted</div>
-                        </div>
-                    </div>
                         </div>
                     </article>
                 </div>
@@ -534,44 +666,39 @@ const finalizePlan = () => {
                 </div>
             </section>
 
-            <section v-if="recentPlans.length" class="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
-                <div class="mb-3 flex items-center gap-2"><Clock3 class="size-4" /><h2 class="font-medium">Recent Duty Plans</h2></div>
-                <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                    <div v-for="recent in recentPlans" :key="recent.id" class="flex items-center rounded-md border transition-colors hover:bg-accent">
-                        <Link :href="`/contracting-duty-plans?date=${recent.date}`" class="min-w-0 flex-1 p-3">
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="text-sm font-medium">{{ formatDate(recent.date) }}</span>
-                                <span class="rounded-full border px-2 py-0.5 text-[11px]" :class="statusClass(recent.status)">{{ statusLabel(recent.status) }}</span>
-                            </div>
-                            <p class="mt-2 text-xs text-muted-foreground">{{ recent.assignmentCount }} employees</p>
-                            <p v-if="recent.createdBy" class="mt-1 truncate text-xs text-muted-foreground">By {{ recent.createdBy }}</p>
-                        </Link>
-                        <Button
-                            v-if="!plan && recent.date !== selectedDate"
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            class="shrink-0 text-primary hover:bg-primary/10 hover:text-primary"
-                            :title="`Copy this duty to ${formatDate(selectedDate)}`"
-                            @click="repeatRecentPlan(recent)"
-                        >
-                            <CopyPlus class="size-4" />
-                            <span class="hidden xl:inline">Repeat</span>
-                        </Button>
-                        <Button
-                            v-if="recent.status !== 'finalized'"
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            class="mr-2 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            title="Delete duty plan"
-                            @click="deleteRecentPlan(recent)"
-                        >
-                            <Trash2 class="size-4" />
-                        </Button>
-                    </div>
+            <footer
+                v-if="currentStep >= 2"
+                class="sticky bottom-3 z-20 flex flex-col-reverse gap-2 rounded-xl border bg-card/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between"
+            >
+                <Button type="button" variant="outline" @click="goToStep(currentStep - 1)"><ArrowLeft class="size-4" />Previous</Button>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <Button type="button" variant="outline" @click="returnToDashboard">Save Draft</Button>
+                    <Button v-if="currentStep === 2" type="button" :disabled="!plan || !pendingAssignmentCount" @click="goToStep(3)"
+                        >Review Duty<ArrowRight class="size-4"
+                    /></Button>
+                    <Button v-else-if="!isFinalized" type="button" @click="finishPlanning"><CheckCircle2 class="size-4" />Finish Planning</Button>
+                    <Button v-else type="button" @click="returnToDashboard"><LayoutDashboard class="size-4" />Back to Dashboard</Button>
                 </div>
-            </section>
+            </footer>
         </div>
     </main>
 </template>
+
+<style scoped>
+.duty-step-enter-active,
+.duty-step-leave-active {
+    transition:
+        opacity 220ms ease,
+        transform 220ms ease;
+}
+
+.duty-step-enter-from {
+    opacity: 0;
+    transform: translateX(14px);
+}
+
+.duty-step-leave-to {
+    opacity: 0;
+    transform: translateX(-14px);
+}
+</style>

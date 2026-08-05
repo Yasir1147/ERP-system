@@ -173,7 +173,11 @@ Contracting duty plans are operational schedules and remain separate from attend
 - Present employees may have overtime hours and an optional different overtime project. The main project is used when no overtime project is selected.
 - Submit Attendance uses one database transaction and stops on duplicate attendance rather than saving a partial result.
 - Submitted plans are locked. Admin corrections continue through the Attendance Report.
+- A submitted plan can be extended with additional attendance for the same date. Employees who already have attendance for that date are excluded, previously submitted assignment rows remain locked, and final submission creates records only for the newly added employees.
 - Contracting attendance users can view, update, repeat, delete, and submit only duty plans they created; admins retain oversight access.
+- `/contracting-duty-plans` is an owner-scoped dashboard with Open, Submitted, and All views. Creating or editing a duty uses a three-step Date, Assignments, and Review workspace; assignment changes are saved immediately while the plan remains open.
+- The duty wizard supports returning to the dashboard as a draft. Submitted duties reopen read-only, and dashboard Review links take open duties directly to the final attendance review step.
+- Employee search clears after each selection. Mobile assignment cards keep Project/Status and Overtime/Note in compact paired rows and use labelled Save/Delete actions.
 - Repeat Duty copies the source plan's employee/project assignments to another allowed date, avoiding manual re-selection of the workforce.
 - When an admin deletes submitted contracting attendance, its linked duty assignment is removed and the employee becomes selectable again; empty duty plans are also removed.
 

@@ -62,6 +62,12 @@ Route::middleware(['attendance.access'])->group(function () {
     Route::get('contracting-duty-plans', [ContractingDutyPlanController::class, 'index'])
         ->defaults('type', 'contracting')
         ->name('contracting-duties.index');
+    Route::get('contracting-duty-plans/create', [ContractingDutyPlanController::class, 'create'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.create');
+    Route::get('contracting-duty-plans/{plan}/edit', [ContractingDutyPlanController::class, 'edit'])
+        ->defaults('type', 'contracting')
+        ->name('contracting-duties.edit');
     Route::post('contracting-duty-plans/assignments', [ContractingDutyPlanController::class, 'storeAssignments'])
         ->defaults('type', 'contracting')
         ->name('contracting-duties.assignments.store');

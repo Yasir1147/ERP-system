@@ -24,23 +24,101 @@ class ContractingDutyPlanController extends Controller
     {
         $this->ensureContractingAccess($request);
 
-        $selectedDate = $this->selectedDate($request);
-        $plan = ContractingDutyPlan::query()
+        $status = $request->string('status')->toString();
+        if (! in_array($status, ['open', 'submitted'], true)) {
+            $status = 'all';
+        }
+
+        $ownerPlans = ContractingDutyPlan::query()
+            ->where('created_by', $request->user()->id);
+        $plansQuery = (clone $ownerPlans)
             ->with([
                 'creator:id,name',
-                'publisher:id,name',
-                'finalizer:id,name',
                 'assignments' => fn ($query) => $query
-                    ->with([
-                        'employee:id,code,name,profession,type,status',
-                        'project:id,name,status,type',
-                        'overtimeProject:id,name,status,type',
-                    ])
-                    ->orderBy('id'),
-            ])
+                    ->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED)
+                    ->with('project:id,name'),
+            ]);
+
+        if ($status === 'open') {
+            $plansQuery->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED);
+        } elseif ($status === 'submitted') {
+            $plansQuery->where('status', ContractingDutyPlan::STATUS_FINALIZED);
+        }
+
+        $plans = $plansQuery
+            ->orderByDesc('duty_date')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(fn (ContractingDutyPlan $plan) => [
+                'id' => $plan->id,
+                'date' => $plan->duty_date->toDateString(),
+                'status' => $plan->status,
+                'createdBy' => $plan->creator?->name,
+                'assignmentCount' => $plan->assignments->count(),
+                'projectCount' => $plan->assignments->pluck('project_id')->unique()->count(),
+                'projectNames' => $plan->assignments->pluck('project.name')->filter()->unique()->values(),
+                'canSubmit' => $plan->status !== ContractingDutyPlan::STATUS_FINALIZED
+                    && ! $plan->duty_date->isFuture(),
+            ]);
+
+        return Inertia::render('ContractingDuties/Dashboard', [
+            'activeStatus' => $status,
+            'dateMin' => $request->user()->attendanceDateRange()['min'],
+            'dateMax' => now()->addDays(30)->toDateString(),
+            'plans' => $plans,
+            'summary' => [
+                'open' => (clone $ownerPlans)->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED)->count(),
+                'submitted' => (clone $ownerPlans)->where('status', ContractingDutyPlan::STATUS_FINALIZED)->count(),
+                'employees' => ContractingDutyAssignment::query()
+                    ->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED)
+                    ->whereHas('plan', fn ($query) => $query
+                        ->where('created_by', $request->user()->id)
+                        ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED))
+                    ->distinct('employee_id')
+                    ->count('employee_id'),
+            ],
+        ]);
+    }
+
+    public function create(Request $request): Response
+    {
+        $this->ensureContractingAccess($request);
+
+        return $this->workspaceResponse($request, $this->selectedDate($request));
+    }
+
+    public function edit(Request $request, ContractingDutyPlan $plan): Response
+    {
+        $this->ensureContractingAccess($request);
+        $this->ensurePlanAccess($request, $plan);
+
+        return $this->workspaceResponse($request, $plan->duty_date->toDateString(), $plan);
+    }
+
+    private function workspaceResponse(Request $request, string $selectedDate, ?ContractingDutyPlan $selectedPlan = null): Response
+    {
+        $selectedPlan ??= ContractingDutyPlan::query()
             ->whereDate('duty_date', $selectedDate)
             ->where('created_by', $request->user()->id)
             ->first();
+
+        $plan = $selectedPlan
+            ? ContractingDutyPlan::query()
+                ->with([
+                    'creator:id,name',
+                    'publisher:id,name',
+                    'finalizer:id,name',
+                    'assignments' => fn ($query) => $query
+                        ->with([
+                            'employee:id,code,name,profession,type,status',
+                            'project:id,name,status,type',
+                            'overtimeProject:id,name,status,type',
+                        ])
+                        ->orderBy('id'),
+                ])
+                ->findOrFail($selectedPlan->id)
+            : null;
 
         $pendingOlderPlan = ContractingDutyPlan::query()
             ->whereDate('duty_date', '<', $selectedDate)
@@ -63,9 +141,19 @@ class ContractingDutyPlanController extends Controller
                     ->orWhereHas('plan', fn ($planQuery) => $planQuery
                         ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED));
             })
-            ->pluck('employee_id');
+            ->pluck('employee_id')
+            ->merge(
+                AttendanceRecord::query()
+                    ->whereDate('attendance_date', $selectedDate)
+                    ->pluck('employee_id'),
+            )
+            ->unique()
+            ->values();
 
         return Inertia::render('ContractingDuties/Index', [
+            'initialStep' => max(1, min(3, $request->integer('step', 1))),
+            'extensionMode' => $request->boolean('extend')
+                && $plan?->status === ContractingDutyPlan::STATUS_FINALIZED,
             'selectedDate' => $selectedDate,
             'dateMin' => $dateRange['min'],
             'dateMax' => now()->addDays(30)->toDateString(),
@@ -96,20 +184,6 @@ class ContractingDutyPlanController extends Controller
                 ->where('type', 'contracting')
                 ->orderBy('name')
                 ->get(['id', 'name', 'status']),
-            'recentPlans' => ContractingDutyPlan::query()
-                ->where('created_by', $request->user()->id)
-                ->with('creator:id,name')
-                ->withCount('assignments')
-                ->orderByDesc('duty_date')
-                ->limit(10)
-                ->get(['id', 'duty_date', 'status', 'created_by'])
-                ->map(fn (ContractingDutyPlan $recentPlan) => [
-                    'id' => $recentPlan->id,
-                    'date' => $recentPlan->duty_date->toDateString(),
-                    'status' => $recentPlan->status,
-                    'createdBy' => $recentPlan->creator?->name,
-                    'assignmentCount' => $recentPlan->assignments_count,
-                ]),
         ]);
     }
 
@@ -119,6 +193,8 @@ class ContractingDutyPlanController extends Controller
         $dateRange = $request->user()->attendanceDateRange();
 
         $data = $request->validate([
+            'workflow' => ['nullable', Rule::in(['wizard'])],
+            'extend_finalized' => ['nullable', 'boolean'],
             'duty_date' => [
                 'required',
                 'date',
@@ -161,7 +237,7 @@ class ContractingDutyPlanController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($data, $employeeIds, $request) {
+        $plan = DB::transaction(function () use ($data, $employeeIds, $request) {
             $this->removeReleasedAssignments($data['duty_date'], $employeeIds);
 
             $plan = ContractingDutyPlan::query()->firstOrCreate(
@@ -170,7 +246,12 @@ class ContractingDutyPlanController extends Controller
             );
 
             $this->ensurePlanAccess($request, $plan);
-            $this->ensureEditable($plan);
+            $isFinalizedExtension = $plan->status === ContractingDutyPlan::STATUS_FINALIZED
+                && (bool) ($data['extend_finalized'] ?? false);
+
+            if ($plan->status === ContractingDutyPlan::STATUS_FINALIZED && ! $isFinalizedExtension) {
+                $this->ensureEditable($plan);
+            }
 
             $existingIds = ContractingDutyAssignment::query()
                 ->whereDate('duty_date', $data['duty_date'])
@@ -188,6 +269,16 @@ class ContractingDutyPlanController extends Controller
                 ]);
             }
 
+            if ($isFinalizedExtension) {
+                $plan->update([
+                    'status' => ContractingDutyPlan::STATUS_DRAFT,
+                    'published_by' => null,
+                    'published_at' => null,
+                    'finalized_by' => null,
+                    'finalized_at' => null,
+                ]);
+            }
+
             foreach ($employeeIds as $employeeId) {
                 $plan->assignments()->create([
                     'duty_date' => $data['duty_date'],
@@ -196,7 +287,14 @@ class ContractingDutyPlanController extends Controller
                     'status' => ContractingDutyAssignment::STATUS_PRESENT,
                 ]);
             }
+
+            return $plan;
         });
+
+        if (($data['workflow'] ?? null) === 'wizard') {
+            return redirect()->route('contracting-duties.edit', ['plan' => $plan, 'step' => 2])
+                ->with('success', 'Employees added to the duty plan.');
+        }
 
         return back()->with('success', 'Employees added to the duty plan.');
     }
@@ -207,6 +305,7 @@ class ContractingDutyPlanController extends Controller
         $assignment->loadMissing('plan');
         $this->ensurePlanAccess($request, $assignment->plan);
         $this->ensureEditable($assignment->plan);
+        $this->ensureAssignmentNotSubmitted($assignment);
 
         $isPresent = $request->input('status') === ContractingDutyAssignment::STATUS_PRESENT;
         $data = $request->validate([
@@ -242,6 +341,7 @@ class ContractingDutyPlanController extends Controller
         $assignment->loadMissing('plan');
         $this->ensurePlanAccess($request, $assignment->plan);
         $this->ensureEditable($assignment->plan);
+        $this->ensureAssignmentNotSubmitted($assignment);
         $assignment->delete();
 
         return back()->with('success', 'Employee removed from the duty plan.');
@@ -264,6 +364,7 @@ class ContractingDutyPlanController extends Controller
         $this->ensureEditable($plan);
 
         $plan->assignments()
+            ->whereNull('attendance_record_id')
             ->where('status', ContractingDutyAssignment::STATUS_PLANNED)
             ->update(['status' => ContractingDutyAssignment::STATUS_PRESENT]);
 
@@ -336,12 +437,17 @@ class ContractingDutyPlanController extends Controller
             }
 
             $lockedPlan->assignments()
+                ->whereNull('attendance_record_id')
                 ->where('status', ContractingDutyAssignment::STATUS_PLANNED)
                 ->update(['status' => ContractingDutyAssignment::STATUS_PRESENT]);
 
-            $assignments = $lockedPlan->assignments()->with('employee:id,code,name')->lockForUpdate()->get();
+            $assignments = $lockedPlan->assignments()
+                ->whereNull('attendance_record_id')
+                ->with('employee:id,code,name')
+                ->lockForUpdate()
+                ->get();
             if ($assignments->isEmpty()) {
-                throw ValidationException::withMessages(['plan' => 'The duty plan has no employees.']);
+                throw ValidationException::withMessages(['plan' => 'There are no new employees to submit.']);
             }
 
             $attendanceAssignments = $assignments->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED);
@@ -488,7 +594,7 @@ class ContractingDutyPlanController extends Controller
             $message .= ' '.$skipped.' unavailable or already assigned employees were skipped.';
         }
 
-        return redirect()->route('contracting-duties.index', ['date' => $newPlan->duty_date->toDateString()])
+        return redirect()->route('contracting-duties.edit', ['plan' => $newPlan, 'step' => 2])
             ->with('success', $message);
     }
 
@@ -550,6 +656,15 @@ class ContractingDutyPlanController extends Controller
     {
         if ($plan->status === ContractingDutyPlan::STATUS_FINALIZED) {
             throw ValidationException::withMessages(['plan' => 'Finalized duty plans cannot be changed.']);
+        }
+    }
+
+    private function ensureAssignmentNotSubmitted(ContractingDutyAssignment $assignment): void
+    {
+        if ($assignment->attendance_record_id) {
+            throw ValidationException::withMessages([
+                'assignment' => 'Submitted attendance cannot be changed from the duty plan.',
+            ]);
         }
     }
 

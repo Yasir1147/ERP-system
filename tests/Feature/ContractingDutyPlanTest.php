@@ -109,7 +109,7 @@ test('deleting finalized contracting attendance releases the employee for duty p
         ->and(ContractingDutyPlan::query()->whereKey($plan->id)->exists())->toBeFalse();
 
     $this->actingAs($attendanceUser)
-        ->get('/contracting-duty-plans?date='.$date)
+        ->get('/contracting-duty-plans/create?date='.$date)
         ->assertInertia(fn (Assert $page) => $page
             ->component('ContractingDuties/Index')
             ->where('employees.0.id', $employee->id));
@@ -152,7 +152,7 @@ test('previously orphaned finalized assignments are released when duty is create
     AttendanceRecord::query()->where('employee_id', $employee->id)->firstOrFail()->delete();
 
     $this->actingAs($secondUser)
-        ->get('/contracting-duty-plans?date='.$date)
+        ->get('/contracting-duty-plans/create?date='.$date)
         ->assertInertia(fn (Assert $page) => $page
             ->component('ContractingDuties/Index')
             ->where('employees.0.id', $employee->id));
@@ -242,18 +242,22 @@ test('contracting attendance users only see and manage their own duty plans', fu
     $assignment = ContractingDutyAssignment::query()->firstOrFail();
 
     $this->actingAs($owner)
-        ->get('/contracting-duty-plans?date='.now()->toDateString())
+        ->get("/contracting-duty-plans/{$plan->id}/edit?step=2")
         ->assertInertia(fn (Assert $page) => $page
             ->component('ContractingDuties/Index')
-            ->where('plan.createdBy', $owner->name)
-            ->where('recentPlans.0.createdBy', $owner->name));
+            ->where('initialStep', 2)
+            ->where('plan.createdBy', $owner->name));
 
     $this->actingAs($otherUser)
-        ->get('/contracting-duty-plans?date='.now()->toDateString())
+        ->get('/contracting-duty-plans')
         ->assertInertia(fn (Assert $page) => $page
-            ->component('ContractingDuties/Index')
-            ->where('plan', null)
-            ->has('recentPlans', 0));
+            ->component('ContractingDuties/Dashboard')
+            ->where('summary.open', 0)
+            ->has('plans', 0));
+
+    $this->actingAs($otherUser)
+        ->get("/contracting-duty-plans/{$plan->id}/edit")
+        ->assertForbidden();
 
     $this->actingAs($otherUser)
         ->put("/contracting-duty-assignments/{$assignment->id}", [
@@ -397,4 +401,79 @@ test('a user can repeat their previous duty with fresh attendance values', funct
         ->and($copied->has_overtime)->toBeFalse()
         ->and($copied->overtime_hours)->toBeNull()
         ->and($copied->note)->toBeNull();
+});
+
+test('a user can add new employees after submitting attendance without resubmitting existing employees', function () {
+    $user = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+    $submittedEmployee = Employee::query()->create([
+        'code' => '910',
+        'name' => 'Already Submitted Employee',
+        'profession' => 'Mason',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    $newEmployee = Employee::query()->create([
+        'code' => '911',
+        'name' => 'Additional Employee',
+        'profession' => 'Helper',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    $project = Project::query()->create([
+        'name' => 'Additional Attendance Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+    ]);
+    $date = now()->toDateString();
+
+    $this->actingAs($user)->post('/contracting-duty-plans/assignments', [
+        'duty_date' => $date,
+        'project_id' => $project->id,
+        'employee_ids' => [$submittedEmployee->id],
+    ])->assertSessionHasNoErrors();
+
+    $plan = ContractingDutyPlan::query()->firstOrFail();
+    $this->actingAs($user)
+        ->post("/contracting-duty-plans/{$plan->id}/finalize")
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($user)
+        ->get("/contracting-duty-plans/{$plan->id}/edit?step=2&extend=1")
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('ContractingDuties/Index')
+            ->where('extensionMode', true)
+            ->where('employees.0.id', $newEmployee->id)
+            ->missing('employees.1'));
+
+    $this->actingAs($user)->post('/contracting-duty-plans/assignments', [
+        'workflow' => 'wizard',
+        'extend_finalized' => true,
+        'duty_date' => $date,
+        'project_id' => $project->id,
+        'employee_ids' => [$newEmployee->id],
+    ])->assertSessionHasNoErrors();
+
+    $submittedAssignment = ContractingDutyAssignment::query()
+        ->where('employee_id', $submittedEmployee->id)
+        ->firstOrFail();
+
+    expect($plan->fresh()->status)->toBe(ContractingDutyPlan::STATUS_DRAFT)
+        ->and($plan->assignments()->count())->toBe(2)
+        ->and($submittedAssignment->attendance_record_id)->not->toBeNull();
+
+    $this->actingAs($user)->put("/contracting-duty-assignments/{$submittedAssignment->id}", [
+        'project_id' => $project->id,
+        'status' => ContractingDutyAssignment::STATUS_ABSENT,
+        'has_overtime' => false,
+    ])->assertSessionHasErrors('assignment');
+
+    $this->actingAs($user)
+        ->post("/contracting-duty-plans/{$plan->id}/finalize")
+        ->assertSessionHasNoErrors();
+
+    expect(AttendanceRecord::query()->whereDate('attendance_date', $date)->count())->toBe(2)
+        ->and($plan->fresh()->status)->toBe(ContractingDutyPlan::STATUS_FINALIZED);
 });
