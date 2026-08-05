@@ -207,7 +207,7 @@ Do not add Urdu or Roman Urdu text in code, Vue pages, Blade views, controllers,
 
 The default appearance is Light. Users may switch to Dark or System from Settings > Appearance.
 
-The admin sidebar uses non-clickable visual section headings to group related modules: Overview, Attendance & Workforce, Operations, Finance, Office Management, and Administration. Existing expandable module menus and route permissions remain unchanged.
+The admin layout uses a full-width sticky icon-based top module bar with the company logo and sidebar trigger. Selecting a main module changes the left sidebar to show only that module's contextual child links. Child arrows appear only when another nested level exists. The top bar scrolls horizontally on smaller screens, while the existing mobile sidebar drawer and route permissions remain unchanged.
 
 Browser favicons must use Al Mohafiz assets only. Use `public/favicon-32x32.png` or `public/favicon.ico` with cache-busting where needed.
 
@@ -816,6 +816,7 @@ Database tables:
 - Office staff attendance board `/office-attendance/staff` and staff profile attendance links are public for reception/tablet use. When a profile submits attendance, `submitted_by` is saved as that staff member's linked user, not the currently logged-in admin or another user.
 - Office staff type display now uses `Remote` and `Office Work`; the existing database value for office staff remains `on_site` for compatibility.
 - Office staff attendance board cards now use a profile-card design with a large rounded photo area, soft shadow, status badge, verified-style indicator, compact work/session stats, and a pill-style attendance action.
+
 # Procurement Phase 1
 
 - Admin-only procurement pages are available at `/suppliers`, `/purchase-bills`, and `/equipment`.

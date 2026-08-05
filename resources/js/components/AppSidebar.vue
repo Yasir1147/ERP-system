@@ -1,235 +1,82 @@
 <script setup lang="ts">
-import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/vue3';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
-    Banknote,
-    BriefcaseBusiness,
-    Building2,
-    CalendarCheck,
-    CircleDollarSign,
-    FileCheck2,
-    FileClock,
-    LayoutGrid,
-    Plane,
-    ReceiptText,
-    ShoppingCart,
-    UserCog,
-    Users,
-} from 'lucide-vue-next';
-import AppLogo from './AppLogo.vue';
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarMenuSub,
+    SidebarMenuSubButton,
+    SidebarMenuSubItem,
+} from '@/components/ui/sidebar';
+import { findActiveModule, pathMatches } from '@/navigation/adminNavigation';
+import { Link, usePage } from '@inertiajs/vue3';
+import { ChevronRight } from 'lucide-vue-next';
+import { computed } from 'vue';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: '/dashboard',
-        icon: LayoutGrid,
-    },
-    {
-        title: 'Attendance',
-        href: '/attendance',
-        icon: CalendarCheck,
-        items: [
-            {
-                title: 'Overview',
-                href: '/attendance',
-            },
-            {
-                title: 'Timesheet',
-                href: '/attendance/timesheet',
-            },
-            {
-                title: 'Contracting Attendance',
-                href: '/mark-attendance/contracting',
-            },
-            {
-                title: 'Rope Access Attendance',
-                href: '/mark-attendance/rope-access',
-            },
-        ],
-    },
-    {
-        title: 'Employees',
-        href: '/employees',
-        icon: Users,
-        items: [
-            {
-                title: 'Rope Access Employee',
-                href: '/employees/rope_access',
-            },
-            {
-                title: 'Contracting Employee',
-                href: '/employees/contracting',
-            },
-        ],
-    },
-    {
-        title: 'Leaves',
-        href: '/employee-leaves',
-        icon: Plane,
-    },
-    {
-        title: 'Fines',
-        href: '/fines',
-        icon: ReceiptText,
-    },
-    {
-        title: 'Expenses',
-        href: '/expenses',
-        icon: CircleDollarSign,
-    },
-    {
-        title: 'Office Staff',
-        href: '/office-staff',
-        icon: Building2,
-        items: [
-            {
-                title: 'Staff List',
-                href: '/office-staff',
-            },
-            {
-                title: 'Attendance Report',
-                href: '/office-attendance/report',
-            },
-        ],
-    },
-    {
-        title: 'Documents',
-        href: '/employee-documents',
-        icon: FileClock,
-    },
-    {
-        title: 'Payroll',
-        href: '/payroll',
-        icon: Banknote,
-        items: [
-            {
-                title: 'Salary Settings',
-                href: '/payroll',
-            },
-            {
-                title: 'Payroll Report',
-                href: '/payroll/report',
-            },
-        ],
-    },
-    {
-        title: 'Cheques',
-        href: '/cheques',
-        icon: FileCheck2,
-        items: [
-            {
-                title: 'Cheque Books & List',
-                href: '/cheques',
-            },
-            {
-                title: 'Prepare Cheque',
-                href: '/cheques/create',
-            },
-            {
-                title: 'Party Master',
-                href: '/cheque-parties',
-            },
-            {
-                title: 'Cheque Formats',
-                href: '/cheque-formats',
-            },
-        ],
-    },
-    {
-        title: 'Projects',
-        href: '/projects',
-        icon: BriefcaseBusiness,
-        items: [
-            {
-                title: 'Overview',
-                href: '/projects/overview',
-            },
-            {
-                title: 'Rope Access Projects',
-                href: '/projects/rope_access',
-            },
-            {
-                title: 'Contracting Projects',
-                href: '/projects/contracting',
-            },
-        ],
-    },
-    {
-        title: 'Procurement',
-        href: '/suppliers',
-        icon: ShoppingCart,
-        items: [
-            {
-                title: 'Suppliers',
-                href: '/suppliers',
-            },
-            {
-                title: 'Purchase Bills',
-                href: '/purchase-bills',
-            },
-            {
-                title: 'Equipment Register',
-                href: '/equipment',
-            },
-        ],
-    },
-    {
-        title: 'Users',
-        href: '/users',
-        icon: UserCog,
-    },
-];
-
-const navGroups = [
-    {
-        label: 'Overview',
-        titles: ['Dashboard'],
-    },
-    {
-        label: 'Attendance & Workforce',
-        titles: ['Attendance', 'Employees', 'Leaves'],
-    },
-    {
-        label: 'Operations',
-        titles: ['Projects', 'Procurement'],
-    },
-    {
-        label: 'Finance',
-        titles: ['Payroll', 'Fines', 'Expenses', 'Cheques'],
-    },
-    {
-        label: 'Office Management',
-        titles: ['Office Staff', 'Documents'],
-    },
-    {
-        label: 'Administration',
-        titles: ['Users'],
-    },
-].map((group) => ({
-    label: group.label,
-    items: group.titles.map((title) => mainNavItems.find((item) => item.title === title)).filter((item): item is NavItem => Boolean(item)),
-}));
+const page = usePage();
+const activeModule = computed(() => findActiveModule(page.url));
+const contextualItems = computed(() => activeModule.value.items ?? [{ title: activeModule.value.title, href: activeModule.value.href }]);
+const activeContextHref = computed(
+    () =>
+        contextualItems.value.filter((item) => pathMatches(page.url, item.href)).sort((first, second) => second.href.length - first.href.length)[0]
+            ?.href,
+);
+const isNestedItemActive = (href: string) => pathMatches(page.url, href);
+const isContextGroupActive = (href: string, items = contextualItems.value) =>
+    pathMatches(page.url, href) || items.some((item) => item.href === href && item.items?.some((child) => isNestedItemActive(child.href)));
 </script>
 
 <template>
-    <Sidebar collapsible="icon" variant="inset">
-        <SidebarHeader>
-            <SidebarMenu>
-                <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child>
-                        <Link :href="route('dashboard')">
-                            <AppLogo />
-                        </Link>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-            </SidebarMenu>
-        </SidebarHeader>
-
+    <Sidebar collapsible="icon" variant="inset" class="top-16 h-[calc(100svh-4rem)]">
         <SidebarContent>
-            <NavMain v-for="group in navGroups" :key="group.label" :label="group.label" :items="group.items" />
+            <SidebarGroup>
+                <SidebarGroupLabel>{{ activeModule.title }}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                    <SidebarMenu>
+                        <template v-for="item in contextualItems" :key="item.href">
+                            <Collapsible v-if="item.items?.length" as-child :default-open="isContextGroupActive(item.href)" class="group/collapsible">
+                                <SidebarMenuItem>
+                                    <CollapsibleTrigger as-child>
+                                        <SidebarMenuButton :tooltip="item.title" :is-active="isContextGroupActive(item.href)">
+                                            <component :is="item.icon ?? activeModule.icon" class="size-4" aria-hidden="true" />
+                                            <span>{{ item.title }}</span>
+                                            <ChevronRight
+                                                class="ml-auto size-3.5 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                                                aria-hidden="true"
+                                            />
+                                        </SidebarMenuButton>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent>
+                                        <SidebarMenuSub>
+                                            <SidebarMenuSubItem v-for="child in item.items" :key="child.href">
+                                                <SidebarMenuSubButton as-child :is-active="isNestedItemActive(child.href)">
+                                                    <Link :href="child.href">{{ child.title }}</Link>
+                                                </SidebarMenuSubButton>
+                                            </SidebarMenuSubItem>
+                                        </SidebarMenuSub>
+                                    </CollapsibleContent>
+                                </SidebarMenuItem>
+                            </Collapsible>
+
+                            <SidebarMenuItem v-else>
+                                <SidebarMenuButton as-child :tooltip="item.title" :is-active="activeContextHref === item.href">
+                                    <Link :href="item.href">
+                                        <component :is="activeModule.icon" class="size-4" aria-hidden="true" />
+                                        <span>{{ item.title }}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        </template>
+                    </SidebarMenu>
+                </SidebarGroupContent>
+            </SidebarGroup>
         </SidebarContent>
 
         <SidebarFooter>

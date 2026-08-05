@@ -14,10 +14,7 @@ export interface NavItem {
     href: string;
     icon?: LucideIcon;
     isActive?: boolean;
-    items?: {
-        title: string;
-        href: string;
-    }[];
+    items?: NavItem[];
 }
 
 export interface SharedData {
