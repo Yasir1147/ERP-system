@@ -12,6 +12,7 @@ import {
     BellOff,
     CheckCircle2,
     ChevronDown,
+    ChevronRight,
     Download,
     FileClock,
     FlaskConical,
@@ -68,8 +69,23 @@ interface Employee {
     status: string;
 }
 
-const props = defineProps<{
+interface EmployeeDocumentGroup {
+    employeeId: number;
+    employeeCode: string | null;
+    employeeName: string;
+    employeeProfession: string | null;
+    employeeType: string;
+    documentCount: number;
+    activeCount: number;
+    expiringCount: number;
+    expiredCount: number;
+    notificationsDisabledCount: number;
+    nearestDocument: DocumentRow | null;
     documents: DocumentRow[];
+}
+
+const props = defineProps<{
+    employeeDocuments: EmployeeDocumentGroup[];
     pagination: { currentPage: number; lastPage: number; perPage: number; total: number; from: number | null; to: number | null };
     summary: { total: number; active: number; expiring: number; expired: number; notificationsDisabled: number };
     categories: Category[];
@@ -112,6 +128,7 @@ const showCategories = ref(false);
 const showWhatsApp = ref(false);
 const showReminderSchedule = ref(false);
 const showNotificationDefaults = ref(false);
+const expandedEmployeeId = ref<number | null>(null);
 const runningReminderMode = ref<'dry-run' | 'send' | null>(null);
 const editingId = ref<number | null>(null);
 const editingCategoryId = ref<number | null>(null);
@@ -172,6 +189,7 @@ const filteredFilterEmployees = computed(() => props.employees.filter((employee)
 const filteredFormEmployees = computed(() => props.employees.filter((employee) => employeeMatches(employee, formEmployeeSearch.value)));
 const selectedFilterEmployee = computed(() => props.employees.find((employee) => String(employee.id) === employeeId.value));
 const selectedFormEmployee = computed(() => props.employees.find((employee) => String(employee.id) === documentForm.employee_id));
+const documents = computed(() => props.employeeDocuments.flatMap((employee) => employee.documents));
 const selectFilterEmployee = (employee?: Employee) => {
     employeeId.value = employee ? String(employee.id) : '';
     filterEmployeeSearch.value = '';
@@ -235,7 +253,7 @@ const resetFilters = () => {
     reload();
 };
 
-const openDocument = (document?: DocumentRow) => {
+const openDocument = (document?: DocumentRow, employee?: EmployeeDocumentGroup) => {
     formEmployeeSearch.value = '';
     formEmployeeOpen.value = false;
     documentForm.transform((data) => data);
@@ -250,6 +268,8 @@ const openDocument = (document?: DocumentRow) => {
         documentForm.expiry_date = document.expiryDate;
         documentForm.notes = document.notes ?? '';
         documentForm.notification_enabled = document.notificationEnabled;
+    } else if (employee) {
+        documentForm.employee_id = String(employee.employeeId);
     }
     showDocumentForm.value = true;
 };
@@ -507,10 +527,158 @@ const formatAutomaticRun = (value: string | null) => {
                 </form>
 
                 <div v-if="!pagination.total" class="flex min-h-60 flex-col items-center justify-center gap-2 text-muted-foreground">
-                    <FileClock class="size-10" /><span>No employee documents found.</span>
+                    <FileClock class="size-10" /><span>No employees with matching documents found.</span>
                 </div>
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full min-w-[1250px] text-sm">
+                    <table class="w-full min-w-[1050px] text-sm">
+                        <thead class="border-b bg-muted/40 text-left text-muted-foreground">
+                            <tr>
+                                <th class="px-4 py-3">Employee</th>
+                                <th class="px-4 py-3">Documents</th>
+                                <th class="px-4 py-3">Nearest Expiry</th>
+                                <th class="px-4 py-3">Expiry Summary</th>
+                                <th class="px-4 py-3">Notifications</th>
+                                <th class="px-4 py-3 text-right">Open</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template v-for="employee in employeeDocuments" :key="employee.employeeId">
+                                <tr
+                                    class="cursor-pointer hover:bg-muted/30"
+                                    :class="expandedEmployeeId === employee.employeeId ? 'bg-muted/30' : ''"
+                                    @click="expandedEmployeeId = expandedEmployeeId === employee.employeeId ? null : employee.employeeId"
+                                >
+                                    <td class="px-4 py-3">
+                                        <div class="font-medium">
+                                            {{ employee.employeeCode ? `${employee.employeeCode} - ` : '' }}{{ employee.employeeName }}
+                                        </div>
+                                        <div class="text-xs text-muted-foreground">{{ employee.employeeProfession || employee.employeeType }}</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-medium">{{ employee.documentCount }} document(s)</div>
+                                        <div class="text-xs text-muted-foreground">Click to manage complete record</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <template v-if="employee.nearestDocument">
+                                            <div class="font-medium">{{ employee.nearestDocument.categoryName }}</div>
+                                            <div class="text-xs">{{ employee.nearestDocument.expiryDateLabel }}</div>
+                                            <span
+                                                class="mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs"
+                                                :class="statusClass(employee.nearestDocument.status)"
+                                                >{{ statusLabel(employee.nearestDocument) }}</span
+                                            >
+                                        </template>
+                                    </td>
+                                    <td class="px-4 py-3 text-xs">
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <span
+                                                v-if="employee.activeCount"
+                                                class="rounded-full border border-green-600/30 bg-green-600/10 px-2 py-0.5 text-green-700"
+                                                >{{ employee.activeCount }} active</span
+                                            >
+                                            <span
+                                                v-if="employee.expiringCount"
+                                                class="rounded-full border border-amber-600/30 bg-amber-600/10 px-2 py-0.5 text-amber-700"
+                                                >{{ employee.expiringCount }} expiring</span
+                                            >
+                                            <span
+                                                v-if="employee.expiredCount"
+                                                class="rounded-full border border-red-600/30 bg-red-600/10 px-2 py-0.5 text-red-700"
+                                                >{{ employee.expiredCount }} expired</span
+                                            >
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-xs">
+                                        <span v-if="!employee.notificationsDisabledCount" class="text-green-700">All enabled</span>
+                                        <span v-else class="text-muted-foreground">{{ employee.notificationsDisabledCount }} stopped</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            @click.stop="expandedEmployeeId = expandedEmployeeId === employee.employeeId ? null : employee.employeeId"
+                                        >
+                                            <ChevronDown v-if="expandedEmployeeId === employee.employeeId" class="size-4" />
+                                            <ChevronRight v-else class="size-4" />
+                                        </Button>
+                                    </td>
+                                </tr>
+                                <tr v-if="expandedEmployeeId === employee.employeeId">
+                                    <td colspan="6" class="bg-muted/15 p-4">
+                                        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                            <div>
+                                                <div class="font-semibold">{{ employee.employeeName }} Documents</div>
+                                                <div class="text-xs text-muted-foreground">
+                                                    Manage documents, expiry dates, files, and reminders for this employee.
+                                                </div>
+                                            </div>
+                                            <Button size="sm" @click="openDocument(undefined, employee)"><Plus class="size-4" />Add Document</Button>
+                                        </div>
+                                        <div class="grid gap-3 lg:grid-cols-2">
+                                            <article
+                                                v-for="document in employee.documents"
+                                                :key="document.id"
+                                                class="rounded-lg border bg-background p-4"
+                                            >
+                                                <div class="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <div class="font-semibold">{{ document.categoryName }}</div>
+                                                        <div class="text-xs text-muted-foreground">
+                                                            {{ document.documentNumber || 'No document number' }}
+                                                        </div>
+                                                    </div>
+                                                    <span
+                                                        class="inline-flex rounded-full border px-2 py-0.5 text-xs"
+                                                        :class="statusClass(document.status)"
+                                                        >{{ statusLabel(document) }}</span
+                                                    >
+                                                </div>
+                                                <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+                                                    <div>
+                                                        <span class="text-muted-foreground">Issued</span>
+                                                        <div>{{ document.issueDate || '-' }}</div>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-muted-foreground">Expires</span>
+                                                        <div>{{ document.expiryDateLabel }}</div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    :aria-checked="document.notificationEnabled"
+                                                    class="mt-3 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium"
+                                                    :class="
+                                                        document.notificationEnabled
+                                                            ? 'border-green-600/30 bg-green-600/10 text-green-700'
+                                                            : 'bg-muted text-muted-foreground'
+                                                    "
+                                                    @click="toggleNotification(document)"
+                                                >
+                                                    <Bell v-if="document.notificationEnabled" class="size-3.5" /><BellOff v-else class="size-3.5" />
+                                                    {{ document.notificationEnabled ? 'Notifications On' : 'Notifications Off' }}
+                                                </button>
+                                                <div class="mt-3 flex justify-end gap-1 border-t pt-3">
+                                                    <Button v-if="document.fileAvailable" as-child size="sm" variant="outline">
+                                                        <Link :href="`/employee-documents/${document.id}/download`"
+                                                            ><Download class="size-4" />Download</Link
+                                                        >
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" @click="openDocument(document)"
+                                                        ><Pencil class="size-4" />Edit</Button
+                                                    >
+                                                    <Button size="sm" variant="outline" class="text-destructive" @click="removeDocument(document)"
+                                                        ><Trash2 class="size-4" />Delete</Button
+                                                    >
+                                                </div>
+                                            </article>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <table v-if="false" class="w-full min-w-[1250px] text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
                                 <th class="px-4 py-3">Employee</th>

@@ -31,52 +31,82 @@ class EmployeeDocumentController extends Controller
         $notificationDefaults = AppSetting::documentNotificationDefaults($request->user()?->email);
         $reminderDays = $notificationDefaults['reminder_days'];
 
-        $query = EmployeeDocument::query()
-            ->with([
-                'employee:id,code,name,profession,type,status',
-                'category:id,name,default_reminder_days,is_active',
-                'notificationLogs' => fn ($query) => $query->latest('notification_date')->latest('id')->limit(4),
-            ])
-            ->when($categoryId, fn ($query) => $query->where('document_category_id', $categoryId))
-            ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
-            ->when($notification === 'enabled', fn ($query) => $query->where('notification_enabled', true))
-            ->when($notification === 'disabled', fn ($query) => $query->where('notification_enabled', false))
-            ->when($status === 'active', fn ($query) => $query->whereDate('expiry_date', '>', today()->addDays($reminderDays)))
-            ->when($status === 'expiring', fn ($query) => $query
-                ->whereDate('expiry_date', '>=', today())
-                ->whereDate('expiry_date', '<=', today()->addDays($reminderDays)))
-            ->when($status === 'expired', fn ($query) => $query->whereDate('expiry_date', '<', today()))
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($query) use ($search) {
-                    $query
-                        ->where('document_number', 'like', '%'.$search.'%')
-                        ->orWhere('notes', 'like', '%'.$search.'%')
-                        ->orWhere('notification_email', 'like', '%'.$search.'%')
-                        ->orWhere('whatsapp_number', 'like', '%'.$search.'%')
-                        ->orWhereHas('employee', fn ($query) => $query
-                            ->where('name', 'like', '%'.$search.'%')
-                            ->orWhere('code', 'like', '%'.$search.'%'))
-                        ->orWhereHas('category', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
+        $documentFilter = function ($query) use ($categoryId, $employeeId, $notification, $status, $reminderDays, $search) {
+            $query
+                ->when($categoryId, fn ($query) => $query->where('document_category_id', $categoryId))
+                ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
+                ->when($notification === 'enabled', fn ($query) => $query->where('notification_enabled', true))
+                ->when($notification === 'disabled', fn ($query) => $query->where('notification_enabled', false))
+                ->when($status === 'active', fn ($query) => $query->whereDate('expiry_date', '>', today()->addDays($reminderDays)))
+                ->when($status === 'expiring', fn ($query) => $query
+                    ->whereDate('expiry_date', '>=', today())
+                    ->whereDate('expiry_date', '<=', today()->addDays($reminderDays)))
+                ->when($status === 'expired', fn ($query) => $query->whereDate('expiry_date', '<', today()))
+                ->when($search !== '', function ($query) use ($search) {
+                    $query->where(function ($query) use ($search) {
+                        $query
+                            ->where('document_number', 'like', '%'.$search.'%')
+                            ->orWhere('notes', 'like', '%'.$search.'%')
+                            ->orWhere('notification_email', 'like', '%'.$search.'%')
+                            ->orWhere('whatsapp_number', 'like', '%'.$search.'%')
+                            ->orWhereHas('employee', fn ($query) => $query
+                                ->where('name', 'like', '%'.$search.'%')
+                                ->orWhere('code', 'like', '%'.$search.'%'))
+                            ->orWhereHas('category', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
+                    });
                 });
-            })
-            ->orderBy('expiry_date')
-            ->orderBy('id');
+        };
 
-        $documents = $query->paginate($perPage)->withQueryString();
+        $employeeDocuments = Employee::query()
+            ->whereHas('documents', fn ($query) => $documentFilter($query))
+            ->with(['documents' => function ($query) {
+                $query
+                    ->with([
+                        'employee:id,code,name,profession,type,status',
+                        'category:id,name,default_reminder_days,is_active',
+                        'notificationLogs' => fn ($query) => $query->latest('notification_date')->latest('id')->limit(4),
+                    ])
+                    ->orderBy('expiry_date')
+                    ->orderBy('id');
+            }])
+            ->orderBy('code')
+            ->orderBy('name')
+            ->paginate($perPage)
+            ->withQueryString();
         $today = today();
 
         $whatsappSettings = AppSetting::whatsappSettings();
         $reminderSchedule = AppSetting::documentReminderSchedule();
 
         return Inertia::render('EmployeeDocuments/Index', [
-            'documents' => $documents->through(fn (EmployeeDocument $document) => $this->documentRow($document, $notificationDefaults))->items(),
+            'employeeDocuments' => $employeeDocuments->through(function (Employee $employee) use ($notificationDefaults) {
+                $documents = $employee->documents
+                    ->map(fn (EmployeeDocument $document) => $this->documentRow($document, $notificationDefaults))
+                    ->values();
+                $nearestDocument = $documents->first();
+
+                return [
+                    'employeeId' => $employee->id,
+                    'employeeCode' => $employee->code,
+                    'employeeName' => $employee->name,
+                    'employeeProfession' => $employee->profession,
+                    'employeeType' => $employee->type,
+                    'documentCount' => $documents->count(),
+                    'activeCount' => $documents->where('status', 'active')->count(),
+                    'expiringCount' => $documents->where('status', 'expiring')->count(),
+                    'expiredCount' => $documents->where('status', 'expired')->count(),
+                    'notificationsDisabledCount' => $documents->where('notificationEnabled', false)->count(),
+                    'nearestDocument' => $nearestDocument,
+                    'documents' => $documents,
+                ];
+            })->items(),
             'pagination' => [
-                'currentPage' => $documents->currentPage(),
-                'lastPage' => $documents->lastPage(),
-                'perPage' => $documents->perPage(),
-                'total' => $documents->total(),
-                'from' => $documents->firstItem(),
-                'to' => $documents->lastItem(),
+                'currentPage' => $employeeDocuments->currentPage(),
+                'lastPage' => $employeeDocuments->lastPage(),
+                'perPage' => $employeeDocuments->perPage(),
+                'total' => $employeeDocuments->total(),
+                'from' => $employeeDocuments->firstItem(),
+                'to' => $employeeDocuments->lastItem(),
             ],
             'summary' => [
                 'total' => EmployeeDocument::query()->count(),

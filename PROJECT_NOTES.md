@@ -830,6 +830,7 @@ Database tables:
 # Employee Document Expiry
 
 - Admin-only document tracking is available at `/employee-documents`.
+- The main register is grouped by employee: each employee appears once and expands to manage all associated documents, expiry dates, files, and reminder controls.
 - Categories include Passport, Emirates ID, IRATA Certificate, Visa, Medical Certificate, and Driving Licence; admins may add or disable categories.
 - Each document stores its employee, document number, issue/expiry dates, optional private attachment, notes, and an optional reminder-day override.
 - Email and official Meta WhatsApp Cloud API delivery can be enabled independently per document.

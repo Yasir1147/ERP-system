@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function expiryTestEmployee(): Employee
 {
@@ -47,6 +48,39 @@ test('administrator can create a private employee document reminder', function (
         'document_number' => 'P-12345',
         'notification_enabled' => true,
     ]);
+});
+
+test('document register groups multiple documents under one employee', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $employee = expiryTestEmployee();
+    $passport = DocumentCategory::query()->where('name', 'Passport')->firstOrFail();
+    $emiratesId = DocumentCategory::query()->where('name', 'Emirates ID')->firstOrFail();
+
+    foreach ([
+        [$passport->id, 'P-100', today()->addMonths(8)],
+        [$emiratesId->id, 'EID-100', today()->addMonths(4)],
+    ] as [$categoryId, $number, $expiryDate]) {
+        EmployeeDocument::query()->create([
+            'employee_id' => $employee->id,
+            'document_category_id' => $categoryId,
+            'document_number' => $number,
+            'expiry_date' => $expiryDate,
+            'notification_enabled' => true,
+            'email_enabled' => false,
+            'whatsapp_enabled' => false,
+        ]);
+    }
+
+    $this->actingAs($admin)
+        ->get('/employee-documents')
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('EmployeeDocuments/Index')
+            ->has('employeeDocuments', 1)
+            ->where('employeeDocuments.0.employeeId', $employee->id)
+            ->where('employeeDocuments.0.documentCount', 2)
+            ->has('employeeDocuments.0.documents', 2)
+            ->where('pagination.total', 1));
 });
 
 test('due email reminders send once per day and repeat on the next day until stopped', function () {
