@@ -9,7 +9,7 @@ use RuntimeException;
 
 class MetaWhatsAppService
 {
-    public function sendExpiryReminder(EmployeeDocument $document, int $daysUntilExpiry): string
+    public function sendExpiryReminder(EmployeeDocument $document, int $daysUntilExpiry, ?string $recipient = null): string
     {
         $settings = AppSetting::whatsappSettings();
 
@@ -29,7 +29,7 @@ class MetaWhatsAppService
             ->post("https://graph.facebook.com/{$settings['graph_version']}/{$settings['phone_number_id']}/messages", [
                 'messaging_product' => 'whatsapp',
                 'recipient_type' => 'individual',
-                'to' => $document->whatsapp_number,
+                'to' => $recipient ?: $document->whatsapp_number,
                 'type' => 'template',
                 'template' => [
                     'name' => $settings['template_name'],

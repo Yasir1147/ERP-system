@@ -833,6 +833,7 @@ Database tables:
 - Categories include Passport, Emirates ID, IRATA Certificate, Visa, Medical Certificate, and Driving Licence; admins may add or disable categories.
 - Each document stores its employee, document number, issue/expiry dates, optional private attachment, notes, and an optional reminder-day override.
 - Email and official Meta WhatsApp Cloud API delivery can be enabled independently per document.
+- Document reminder days, email delivery, multiple email recipients, WhatsApp delivery, and the WhatsApp recipient number are reusable global defaults configured once from the Documents page. Each document retains its own master notification on/off switch.
 - Once the reminder threshold is reached, each enabled channel sends at most once per calendar day and repeats daily, including after expiry, until the document notification is manually stopped.
 - Notification attempts are recorded in `document_notification_logs`; the unique document/channel/date key prevents duplicate same-day sends.
 - Document attachments use the private `local` disk and are downloaded only through the authenticated admin route.

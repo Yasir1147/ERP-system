@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppSetting;
 use App\Models\DocumentCategory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,7 +12,10 @@ class DocumentCategoryController extends Controller
 {
     public function store(Request $request): RedirectResponse
     {
-        DocumentCategory::query()->create($this->validatedData($request));
+        DocumentCategory::query()->create([
+            ...$this->validatedData($request),
+            'default_reminder_days' => AppSetting::documentNotificationDefaults()['reminder_days'],
+        ]);
 
         return back()->with('success', 'Document category created.');
     }
@@ -38,7 +42,6 @@ class DocumentCategoryController extends Controller
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('document_categories', 'name')->ignore($category)],
-            'default_reminder_days' => ['required', 'integer', 'min:0', 'max:365'],
             'is_active' => ['required', 'boolean'],
         ]);
     }

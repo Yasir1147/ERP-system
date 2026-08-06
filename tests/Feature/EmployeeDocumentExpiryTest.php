@@ -59,6 +59,10 @@ test('due email reminders send once per day and repeat on the next day until sto
         'mail_port' => '587',
         'mail_from_address' => 'system@example.com',
         'mail_from_name' => 'Al Mohafiz',
+        'document_default_reminder_days' => '10',
+        'document_default_email_enabled' => '1',
+        'document_notification_emails' => json_encode(['alerts@example.com', 'manager@example.com']),
+        'document_default_whatsapp_enabled' => '0',
     ] as $key => $value) {
         AppSetting::setValue($key, $value);
     }
@@ -80,6 +84,8 @@ test('due email reminders send once per day and repeat on the next day until sto
     $this->artisan('documents:send-expiry-reminders')->assertSuccessful();
 
     Mail::assertSent(DocumentExpiryReminder::class, 1);
+    Mail::assertSent(DocumentExpiryReminder::class, fn (DocumentExpiryReminder $mail) => $mail
+        ->hasTo('alerts@example.com') && $mail->hasTo('manager@example.com'));
     expect(DocumentNotificationLog::query()->where('employee_document_id', $document->id)->count())->toBe(1);
 
     $this->travel(1)->day();
@@ -134,4 +140,27 @@ test('administrator can update the automatic document reminder schedule', functi
     expect($schedule['enabled'])->toBeTrue()
         ->and($schedule['time'])->toBe('09:30')
         ->and($schedule['timezone'])->toBe('Asia/Dubai');
+});
+
+test('administrator can configure reusable document notification defaults', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+    $this->actingAs($admin)
+        ->put('/employee-documents/notification-defaults', [
+            'reminder_days' => 15,
+            'email_enabled' => true,
+            'recipient_emails' => "alerts@example.com\nmanager@example.com, alerts@example.com",
+            'whatsapp_enabled' => true,
+            'whatsapp_number' => '+971501234567',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $defaults = AppSetting::documentNotificationDefaults();
+
+    expect($defaults['reminder_days'])->toBe(15)
+        ->and($defaults['email_enabled'])->toBeTrue()
+        ->and($defaults['emails'])->toBe(['alerts@example.com', 'manager@example.com'])
+        ->and($defaults['whatsapp_enabled'])->toBeTrue()
+        ->and($defaults['whatsapp_number'])->toBe('+971501234567');
 });

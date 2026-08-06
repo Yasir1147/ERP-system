@@ -126,6 +126,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::post('employee-documents', [EmployeeDocumentController::class, 'store'])->name('employee-documents.store');
     Route::put('employee-documents/reminder-schedule', [EmployeeDocumentController::class, 'updateReminderSchedule'])
         ->name('employee-documents.reminder-schedule.update');
+    Route::put('employee-documents/notification-defaults', [EmployeeDocumentController::class, 'updateNotificationDefaults'])
+        ->name('employee-documents.notification-defaults.update');
     Route::post('employee-documents/reminders/run', [EmployeeDocumentController::class, 'runReminders'])
         ->name('employee-documents.reminders.run');
     Route::put('employee-documents/{employeeDocument}', [EmployeeDocumentController::class, 'update'])->name('employee-documents.update');

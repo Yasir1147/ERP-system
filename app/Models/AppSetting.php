@@ -143,4 +143,25 @@ class AppSetting extends Model
             'last_automatic_result' => static::getValue('document_reminders_last_automatic_result'),
         ];
     }
+
+    public static function documentNotificationDefaults(?string $fallbackEmail = null): array
+    {
+        $storedEmails = json_decode(static::getValue('document_notification_emails', '[]') ?: '[]', true);
+        $emails = collect(is_array($storedEmails) ? $storedEmails : [])
+            ->filter(fn ($email) => is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL))
+            ->unique()
+            ->values();
+
+        if ($emails->isEmpty() && filled($fallbackEmail) && filter_var($fallbackEmail, FILTER_VALIDATE_EMAIL)) {
+            $emails->push($fallbackEmail);
+        }
+
+        return [
+            'reminder_days' => max(0, min(365, (int) static::getValue('document_default_reminder_days', '10'))),
+            'email_enabled' => static::getValue('document_default_email_enabled', '1') === '1',
+            'emails' => $emails->all(),
+            'whatsapp_enabled' => static::getValue('document_default_whatsapp_enabled', '0') === '1',
+            'whatsapp_number' => static::getValue('document_default_whatsapp_number', ''),
+        ];
+    }
 }

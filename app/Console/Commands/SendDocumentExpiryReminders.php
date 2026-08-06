@@ -22,6 +22,7 @@ class SendDocumentExpiryReminders extends Command
     public function handle(MetaWhatsAppService $whatsApp): int
     {
         $schedule = AppSetting::documentReminderSchedule();
+        $notificationDefaults = AppSetting::documentNotificationDefaults();
         $now = now(AppSetting::DOCUMENT_REMINDER_TIMEZONE);
 
         if ($this->option('scheduled')) {
@@ -57,11 +58,11 @@ class SendDocumentExpiryReminders extends Command
             ->where('notification_enabled', true)
             ->whereDate('expiry_date', '<=', $today->copy()->addDays(365))
             ->orderBy('id')
-            ->chunkById(100, function ($documents) use ($today, $whatsApp, &$sent, &$failed) {
+            ->chunkById(100, function ($documents) use ($today, $whatsApp, $notificationDefaults, &$sent, &$failed) {
                 foreach ($documents as $document) {
                     $daysUntilExpiry = (int) $today->diffInDays($document->expiry_date, false);
 
-                    if ($daysUntilExpiry > $document->effectiveReminderDays()) {
+                    if ($daysUntilExpiry > $notificationDefaults['reminder_days']) {
                         continue;
                     }
 
@@ -70,31 +71,33 @@ class SendDocumentExpiryReminders extends Command
                         continue;
                     }
 
-                    if ($document->email_enabled && filled($document->notification_email)) {
+                    if ($notificationDefaults['email_enabled'] && count($notificationDefaults['emails']) > 0) {
+                        $emailRecipients = $notificationDefaults['emails'];
                         $this->sendChannel(
                             $document,
                             'email',
-                            $document->notification_email,
+                            str(implode(', ', $emailRecipients))->limit(255)->toString(),
                             $daysUntilExpiry,
-                            function () use ($document, $daysUntilExpiry) {
+                            function () use ($document, $daysUntilExpiry, $emailRecipients) {
                                 if (! AppSetting::configureMailer()) {
                                     throw new \RuntimeException('SMTP mail settings are incomplete or disabled.');
                                 }
 
-                                Mail::to($document->notification_email)->send(new DocumentExpiryReminder($document, $daysUntilExpiry));
+                                Mail::to($emailRecipients)->send(new DocumentExpiryReminder($document, $daysUntilExpiry));
                             },
                             $sent,
                             $failed,
                         );
                     }
 
-                    if ($document->whatsapp_enabled && filled($document->whatsapp_number)) {
+                    if ($notificationDefaults['whatsapp_enabled'] && filled($notificationDefaults['whatsapp_number'])) {
+                        $whatsappNumber = $notificationDefaults['whatsapp_number'];
                         $this->sendChannel(
                             $document,
                             'whatsapp',
-                            $document->whatsapp_number,
+                            $whatsappNumber,
                             $daysUntilExpiry,
-                            fn () => $whatsApp->sendExpiryReminder($document, $daysUntilExpiry),
+                            fn () => $whatsApp->sendExpiryReminder($document, $daysUntilExpiry, $whatsappNumber),
                             $sent,
                             $failed,
                         );

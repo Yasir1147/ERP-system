@@ -54,6 +54,6 @@ class EmployeeDocument extends Model
 
     public function effectiveReminderDays(): int
     {
-        return $this->reminder_days ?? $this->category?->default_reminder_days ?? 10;
+        return AppSetting::documentNotificationDefaults()['reminder_days'];
     }
 }

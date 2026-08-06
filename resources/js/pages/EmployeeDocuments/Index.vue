@@ -90,7 +90,13 @@ const props = defineProps<{
         lastAutomaticRunAt: string | null;
         lastAutomaticResult: string | null;
     };
-    defaultEmail: string | null;
+    notificationDefaults: {
+        reminderDays: number;
+        emailEnabled: boolean;
+        emails: string[];
+        whatsappEnabled: boolean;
+        whatsappNumber: string;
+    };
 }>();
 
 const page = usePage();
@@ -105,6 +111,7 @@ const showDocumentForm = ref(false);
 const showCategories = ref(false);
 const showWhatsApp = ref(false);
 const showReminderSchedule = ref(false);
+const showNotificationDefaults = ref(false);
 const runningReminderMode = ref<'dry-run' | 'send' | null>(null);
 const editingId = ref<number | null>(null);
 const editingCategoryId = ref<number | null>(null);
@@ -123,17 +130,11 @@ const documentForm = useForm({
     expiry_date: '',
     document_file: null as File | null,
     notes: '',
-    reminder_days: '' as number | '',
     notification_enabled: true,
-    email_enabled: true,
-    whatsapp_enabled: false,
-    notification_email: props.defaultEmail ?? '',
-    whatsapp_number: '',
 });
 
 const categoryForm = useForm({
     name: '',
-    default_reminder_days: 10,
     is_active: true,
 });
 
@@ -149,6 +150,14 @@ const whatsappForm = useForm({
 const reminderScheduleForm = useForm({
     enabled: props.reminderSchedule.enabled,
     time: props.reminderSchedule.time,
+});
+
+const notificationDefaultsForm = useForm({
+    reminder_days: props.notificationDefaults.reminderDays,
+    email_enabled: props.notificationDefaults.emailEnabled,
+    recipient_emails: props.notificationDefaults.emails.join('\n'),
+    whatsapp_enabled: props.notificationDefaults.whatsappEnabled,
+    whatsapp_number: props.notificationDefaults.whatsappNumber,
 });
 
 const activeCategories = computed(() =>
@@ -240,14 +249,7 @@ const openDocument = (document?: DocumentRow) => {
         documentForm.issue_date = document.issueDate ?? '';
         documentForm.expiry_date = document.expiryDate;
         documentForm.notes = document.notes ?? '';
-        documentForm.reminder_days = document.reminderDays ?? '';
         documentForm.notification_enabled = document.notificationEnabled;
-        documentForm.email_enabled = document.emailEnabled;
-        documentForm.whatsapp_enabled = document.whatsappEnabled;
-        documentForm.notification_email = document.notificationEmail ?? '';
-        documentForm.whatsapp_number = document.whatsappNumber ?? '';
-    } else {
-        documentForm.notification_email = props.defaultEmail ?? '';
     }
     showDocumentForm.value = true;
 };
@@ -290,7 +292,6 @@ const editCategory = (category?: Category) => {
     editingCategoryId.value = category?.id ?? null;
     if (category) {
         categoryForm.name = category.name;
-        categoryForm.default_reminder_days = category.default_reminder_days;
         categoryForm.is_active = category.is_active;
     }
 };
@@ -323,6 +324,12 @@ const saveReminderSchedule = () =>
     reminderScheduleForm.put('/employee-documents/reminder-schedule', {
         preserveScroll: true,
         onSuccess: () => (showReminderSchedule.value = false),
+    });
+
+const saveNotificationDefaults = () =>
+    notificationDefaultsForm.put('/employee-documents/notification-defaults', {
+        preserveScroll: true,
+        onSuccess: () => (showNotificationDefaults.value = false),
     });
 
 const runReminders = (dryRun: boolean) => {
@@ -363,6 +370,7 @@ const formatAutomaticRun = (value: string | null) => {
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <Button variant="outline" @click="showCategories = true"><Settings2 class="size-4" />Categories</Button>
+                    <Button variant="outline" @click="showNotificationDefaults = true"><Bell class="size-4" />Notification Defaults</Button>
                     <Button variant="outline" @click="showReminderSchedule = true"><AlarmClock class="size-4" />Reminder Schedule</Button>
                     <Button variant="outline" @click="showWhatsApp = true"><MessageCircle class="size-4" />WhatsApp Setup</Button>
                     <Button @click="openDocument()"><Plus class="size-4" />Add Document</Button>
@@ -387,7 +395,7 @@ const formatAutomaticRun = (value: string | null) => {
                     v-for="item in [
                         ['Total Documents', summary.total],
                         ['Active', summary.active],
-                        ['Expiring in 10 Days', summary.expiring],
+                        [`Expiring in ${notificationDefaults.reminderDays} Days`, summary.expiring],
                         ['Expired', summary.expired],
                         ['Notifications Off', summary.notificationsDisabled],
                     ]"
@@ -693,34 +701,18 @@ const formatAutomaticRun = (value: string | null) => {
                             :message="documentForm.errors.expiry_date"
                         />
                     </div>
-                    <div class="grid gap-1.5">
-                        <Label>Reminder Starts (days before expiry)</Label>
-                        <Input v-model="documentForm.reminder_days" type="number" min="0" max="365" placeholder="Leave blank for category default" />
-                        <p class="text-xs text-muted-foreground">After this point, enabled channels send once every day until stopped.</p>
-                    </div>
                     <div class="grid gap-2">
                         <label class="flex items-center gap-2 rounded-md border p-3 text-sm"
                             ><input v-model="documentForm.notification_enabled" type="checkbox" />Enable this document's notifications</label
                         >
                     </div>
-                    <div class="grid gap-2 rounded-md border p-3">
-                        <label class="flex items-center gap-2 text-sm"
-                            ><input v-model="documentForm.email_enabled" type="checkbox" />Send daily email</label
-                        >
-                        <Input
-                            v-model="documentForm.notification_email"
-                            type="email"
-                            placeholder="alerts@example.com"
-                            :disabled="!documentForm.email_enabled"
-                        />
-                        <InputError :message="documentForm.errors.notification_email" />
-                    </div>
-                    <div class="grid gap-2 rounded-md border p-3">
-                        <label class="flex items-center gap-2 text-sm"
-                            ><input v-model="documentForm.whatsapp_enabled" type="checkbox" />Send daily WhatsApp template</label
-                        >
-                        <Input v-model="documentForm.whatsapp_number" placeholder="+971501234567" :disabled="!documentForm.whatsapp_enabled" />
-                        <InputError :message="documentForm.errors.whatsapp_number" />
+                    <div class="rounded-md border bg-muted/30 p-3 text-sm">
+                        <div class="font-medium">Global notification defaults apply</div>
+                        <div class="mt-1 text-xs text-muted-foreground">
+                            Daily from {{ notificationDefaults.reminderDays }} days before expiry. Email
+                            {{ notificationDefaults.emailEnabled ? `to ${notificationDefaults.emails.length} recipient(s)` : 'is off' }}; WhatsApp
+                            {{ notificationDefaults.whatsappEnabled ? `to ${notificationDefaults.whatsappNumber}` : 'is off' }}.
+                        </div>
                     </div>
                     <div class="grid gap-1.5 md:col-span-2">
                         <Label>Notes</Label>
@@ -740,9 +732,8 @@ const formatAutomaticRun = (value: string | null) => {
                     <h2 class="text-lg font-semibold">Document Categories</h2>
                     <Button size="icon" variant="ghost" @click="showCategories = false"><X class="size-4" /></Button>
                 </div>
-                <form class="grid gap-3 border-b p-4 md:grid-cols-[1fr_160px_auto_auto]" @submit.prevent="saveCategory">
+                <form class="grid gap-3 border-b p-4 md:grid-cols-[1fr_auto_auto]" @submit.prevent="saveCategory">
                     <div><Label>Name *</Label><Input v-model="categoryForm.name" /><InputError :message="categoryForm.errors.name" /></div>
-                    <div><Label>Reminder Days *</Label><Input v-model="categoryForm.default_reminder_days" type="number" min="0" max="365" /></div>
                     <label class="flex items-end gap-2 pb-2 text-sm"><input v-model="categoryForm.is_active" type="checkbox" />Active</label>
                     <Button class="self-end">{{ editingCategoryId ? 'Update' : 'Add Category' }}</Button>
                 </form>
@@ -751,8 +742,7 @@ const formatAutomaticRun = (value: string | null) => {
                         <div>
                             <div class="font-medium">{{ category.name }}</div>
                             <div class="text-xs text-muted-foreground">
-                                {{ category.default_reminder_days }} days · {{ category.documents_count }} document(s) ·
-                                {{ category.is_active ? 'Active' : 'Inactive' }}
+                                {{ category.documents_count }} document(s) · {{ category.is_active ? 'Active' : 'Inactive' }}
                             </div>
                         </div>
                         <div class="flex gap-1">
@@ -768,6 +758,78 @@ const formatAutomaticRun = (value: string | null) => {
                         </div>
                     </div>
                 </div>
+            </section>
+        </div>
+
+        <div
+            v-if="showNotificationDefaults"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
+            @click.self="showNotificationDefaults = false"
+        >
+            <section class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-background shadow-xl">
+                <div class="flex items-center justify-between border-b p-4">
+                    <div>
+                        <h2 class="text-lg font-semibold">Document Notification Defaults</h2>
+                        <p class="text-xs text-muted-foreground">Configure recipients and reminder timing once for every employee document.</p>
+                    </div>
+                    <Button size="icon" variant="ghost" @click="showNotificationDefaults = false"><X class="size-4" /></Button>
+                </div>
+                <form class="grid gap-4 p-4" @submit.prevent="saveNotificationDefaults">
+                    <div class="grid gap-1.5">
+                        <Label>Reminder starts (days before expiry) *</Label>
+                        <Input v-model="notificationDefaultsForm.reminder_days" type="number" min="0" max="365" required />
+                        <p class="text-xs text-muted-foreground">Due documents will repeat once daily from this point until individually stopped.</p>
+                        <InputError :message="notificationDefaultsForm.errors.reminder_days" />
+                    </div>
+
+                    <div class="grid gap-3 rounded-md border p-3">
+                        <label class="flex items-center gap-2 text-sm font-medium">
+                            <input v-model="notificationDefaultsForm.email_enabled" type="checkbox" />
+                            Send document reminders by email
+                        </label>
+                        <div class="grid gap-1.5">
+                            <Label>Recipient emails</Label>
+                            <textarea
+                                v-model="notificationDefaultsForm.recipient_emails"
+                                rows="4"
+                                class="rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                                placeholder="alerts@example.com&#10;manager@example.com"
+                                :disabled="!notificationDefaultsForm.email_enabled"
+                            />
+                            <p class="text-xs text-muted-foreground">Enter one email per line, or separate addresses with commas.</p>
+                            <InputError :message="notificationDefaultsForm.errors.recipient_emails" />
+                        </div>
+                    </div>
+
+                    <div class="grid gap-3 rounded-md border p-3">
+                        <label class="flex items-center gap-2 text-sm font-medium">
+                            <input v-model="notificationDefaultsForm.whatsapp_enabled" type="checkbox" />
+                            Send document reminders by WhatsApp
+                        </label>
+                        <div class="grid gap-1.5">
+                            <Label>WhatsApp recipient number</Label>
+                            <Input
+                                v-model="notificationDefaultsForm.whatsapp_number"
+                                placeholder="+971501234567"
+                                :disabled="!notificationDefaultsForm.whatsapp_enabled"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                Use one international number. Meta Cloud API credentials remain in WhatsApp Setup.
+                            </p>
+                            <InputError :message="notificationDefaultsForm.errors.whatsapp_number" />
+                        </div>
+                    </div>
+
+                    <div class="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                        These defaults apply to all existing and future documents. Use each document's notification switch to stop only that document.
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <Button type="button" variant="outline" @click="showNotificationDefaults = false">Cancel</Button>
+                        <Button :disabled="notificationDefaultsForm.processing">
+                            {{ notificationDefaultsForm.processing ? 'Saving...' : 'Save Notification Defaults' }}
+                        </Button>
+                    </div>
+                </form>
             </section>
         </div>
 
