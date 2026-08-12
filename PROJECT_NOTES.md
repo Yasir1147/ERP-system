@@ -198,12 +198,29 @@ Live domain currently uses a Laravel app folder and a public web folder. The pub
 After pulling/uploading code on server:
 
 ```bash
+/opt/cpanel/ea-php82/root/usr/bin/php composer.phar install --no-dev --optimize-autoloader
 /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate
 /opt/cpanel/ea-php82/root/usr/bin/php artisan optimize:clear
 /opt/cpanel/ea-php82/root/usr/bin/php artisan storage:link
 ```
 
+`composer install` is required whenever `composer.json` changed, because `vendor/` is not in git. Skipping it is what caused the Excel export to return a 500 on staging with `Class "PhpOffice\PhpSpreadsheet\Spreadsheet" not found`. Always run `composer install` before `artisan migrate`, so any new package a migration might rely on is present.
+
+`composer` is not on the server PATH. Either use the cPanel copy at `/opt/cpanel/composer/bin/composer`, or install `composer.phar` once into the app folder:
+
+```bash
+curl -sS https://getcomposer.org/installer | /opt/cpanel/ea-php82/root/usr/bin/php
+```
+
+Use the full `ea-php82` path for every command. The default `php` on the server may be an older version.
+
 If frontend assets changed, build locally and upload/copy `public/build` to the server public folder.
+
+PHP extensions required by the Excel export (PhpSpreadsheet): `zip`, `gd`, `xml`, `xmlwriter`, `xmlreader`, `simplexml`, `dom`, `mbstring`, `iconv`, `fileinfo`, `zlib`, `ctype`. Enable missing ones from cPanel > Select PHP Version > Extensions. Check with:
+
+```bash
+/opt/cpanel/ea-php82/root/usr/bin/php -r 'foreach(["zip","gd","xmlwriter","simplexml","mbstring","iconv","fileinfo"] as $e) echo str_pad($e,12).(extension_loaded($e)?"YES":"MISSING").PHP_EOL;'
+```
 
 Server `.env` must include:
 
