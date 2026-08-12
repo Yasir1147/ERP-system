@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { Banknote, BookOpen, BriefcaseBusiness, LoaderCircle, Search, Users, X } from 'lucide-vue-next';
+import { Banknote, BookOpen, BriefcaseBusiness, FileSpreadsheet, LoaderCircle, Printer, Search, Users, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface ProjectOption {
@@ -66,6 +66,7 @@ interface TypeOption {
 
 interface ProjectHistoryEmployeeSummary {
     employeeId: number | null;
+    employeeCode: string;
     employeeName: string;
     profession: string;
     entries: number;
@@ -74,6 +75,8 @@ interface ProjectHistoryEmployeeSummary {
     basicCost: number;
     overtimeCost: number;
     totalCost: number;
+    costShare: number;
+    missingPayrollSetting: boolean;
     submittedBy: string;
 }
 
@@ -177,6 +180,26 @@ const historyTotals = ref<ProjectHistoryTotals>({
     totalCost: 0,
 });
 const selectedProject = computed(() => (props.filters.projectId !== 'all' ? (props.overviewRows[0] ?? null) : null));
+
+/// Export links carry the same date filter the modal is showing, so the file
+/// always matches what the user is looking at.
+const historyQuery = computed(() => {
+    const params = new URLSearchParams();
+    if (historyFrom.value) params.set('from', historyFrom.value);
+    if (historyTo.value) params.set('to', historyTo.value);
+
+    const query = params.toString();
+
+    return query ? `?${query}` : '';
+});
+
+const historyExportUrl = computed(() =>
+    historyProject.value ? `/projects/${historyProject.value.id}/employee-history/export${historyQuery.value}` : '#',
+);
+
+const historyPrintUrl = computed(() =>
+    historyProject.value ? `/projects/${historyProject.value.id}/employee-history/print${historyQuery.value}` : '#',
+);
 
 const filteredProjectOptions = computed(() => props.projects.filter((project) => filterType.value === 'all' || project.type === filterType.value));
 
@@ -787,30 +810,49 @@ const closeProjectHistory = () => {
                                 >
                             </p>
                         </div>
-                        <div class="grid gap-2 sm:grid-cols-[160px_160px_auto_auto]">
+                        <div class="flex flex-wrap items-center gap-2">
                             <input
                                 v-model="historyFrom"
                                 type="date"
-                                class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                class="h-10 w-[150px] shrink-0 rounded-md border border-input bg-background px-3 text-sm"
                                 aria-label="From date"
                             />
                             <input
                                 v-model="historyTo"
                                 type="date"
-                                class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                class="h-10 w-[150px] shrink-0 rounded-md border border-input bg-background px-3 text-sm"
                                 aria-label="To date"
                             />
                             <button
                                 type="button"
-                                class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                                class="h-10 shrink-0 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60"
                                 :disabled="historyLoading"
                                 @click="loadProjectHistory()"
                             >
                                 Filter
                             </button>
+                            <a
+                                :href="historyExportUrl"
+                                class="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-medium"
+                                :class="historyEmployeeSummary.length === 0 ? 'pointer-events-none opacity-50' : ''"
+                            >
+                                <FileSpreadsheet class="size-4" />
+                                Excel
+                            </a>
+                            <a
+                                :href="historyPrintUrl"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-medium"
+                                :class="historyEmployeeSummary.length === 0 ? 'pointer-events-none opacity-50' : ''"
+                            >
+                                <Printer class="size-4" />
+                                PDF
+                            </a>
                             <button
                                 type="button"
-                                class="inline-flex h-10 items-center justify-center rounded-md border px-3"
+                                class="inline-flex h-10 shrink-0 items-center justify-center rounded-md border px-3"
+                                aria-label="Close"
                                 @click="closeProjectHistory"
                             >
                                 <X class="size-4" />
@@ -872,14 +914,16 @@ const closeProjectHistory = () => {
                                 <table class="w-full min-w-[1080px] table-fixed text-sm">
                                     <thead class="border-b bg-muted/40 text-left text-xs text-muted-foreground">
                                         <tr>
-                                            <th class="w-[220px] px-3 py-2 font-medium">Employee</th>
-                                            <th class="w-[180px] px-3 py-2 font-medium">Profession</th>
+                                            <th class="w-[90px] px-3 py-2 font-medium">Code</th>
+                                            <th class="w-[210px] px-3 py-2 font-medium">Employee</th>
+                                            <th class="w-[170px] px-3 py-2 font-medium">Profession</th>
                                             <th class="w-[90px] px-3 py-2 text-right font-medium">Entries</th>
                                             <th class="w-[110px] px-3 py-2 text-right font-medium">Worked Days</th>
                                             <th class="w-[90px] px-3 py-2 text-right font-medium">OT Hrs</th>
                                             <th class="w-[120px] px-3 py-2 text-right font-medium">Basic Cost</th>
                                             <th class="w-[120px] px-3 py-2 text-right font-medium">OT Cost</th>
                                             <th class="w-[120px] px-3 py-2 text-right font-medium">Total Cost</th>
+                                            <th class="w-[130px] px-3 py-2 text-right font-medium">Share</th>
                                             <th class="w-[180px] px-3 py-2 font-medium">Submitted By</th>
                                         </tr>
                                     </thead>
@@ -889,7 +933,17 @@ const closeProjectHistory = () => {
                                             :key="summaryRow.employeeId || summaryRow.employeeName"
                                             class="border-b last:border-b-0"
                                         >
-                                            <td class="px-3 py-3 font-medium">{{ summaryRow.employeeName }}</td>
+                                            <td class="px-3 py-3 text-xs text-muted-foreground">{{ summaryRow.employeeCode }}</td>
+                                            <td class="px-3 py-3 font-medium">
+                                                {{ summaryRow.employeeName }}
+                                                <span
+                                                    v-if="summaryRow.missingPayrollSetting"
+                                                    class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+                                                    title="No salary setting, so this employee's cost is counted as zero"
+                                                >
+                                                    No salary
+                                                </span>
+                                            </td>
                                             <td class="px-3 py-3 text-muted-foreground">{{ summaryRow.profession }}</td>
                                             <td class="px-3 py-3 text-right">{{ summaryRow.entries }}</td>
                                             <td class="px-3 py-3 text-right">{{ summaryRow.workedDays }}</td>
@@ -897,6 +951,15 @@ const closeProjectHistory = () => {
                                             <td class="px-3 py-3 text-right">{{ money(summaryRow.basicCost) }}</td>
                                             <td class="px-3 py-3 text-right">{{ money(summaryRow.overtimeCost) }}</td>
                                             <td class="px-3 py-3 text-right font-semibold">{{ money(summaryRow.totalCost) }}</td>
+                                            <td class="px-3 py-3 text-right">
+                                                <span class="text-xs font-medium">{{ summaryRow.costShare }}%</span>
+                                                <span class="mt-1 block h-1 rounded bg-muted">
+                                                    <span
+                                                        class="block h-1 rounded bg-primary"
+                                                        :style="{ width: `${Math.min(100, summaryRow.costShare)}%` }"
+                                                    />
+                                                </span>
+                                            </td>
                                             <td class="px-3 py-3 text-muted-foreground">{{ summaryRow.submittedBy }}</td>
                                         </tr>
                                     </tbody>

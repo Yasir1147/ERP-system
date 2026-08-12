@@ -297,6 +297,21 @@ Projects with linked attendance, purchase bills, expenses, equipment, or contrac
 
 Project employee history is available from each project row. The current desired modal focuses on Employee Summary, not detailed attendance rows.
 
+Employee history rows show employee code with name, are ordered by cost, and carry a Share column showing each employee's percentage of the project's labour cost.
+
+Employees without a payroll setting are costed at zero, which understates the project total. Those rows are flagged in the modal, the Excel file, and the print view, so a reader is never shown an incomplete total as if it were final.
+
+The history can be exported from the modal:
+
+```text
+/projects/{project}/employee-history/export   formatted .xlsx
+/projects/{project}/employee-history/print    print/PDF view
+```
+
+Both carry the modal's current date filter, so the file always matches what is on screen. Excel export uses PhpSpreadsheet: frozen header, auto-filter, currency and percentage formats, and a bold totals row that foots to the summary. The print view is A4 portrait and is saved as PDF from the browser print dialog, matching payslips and timesheets.
+
+History data is built by `app/Services/Projects/ProjectEmployeeHistoryService.php` and shared by the modal, the Excel export, and the print view, so the three can never disagree about a project's labour cost.
+
 ## Attendance
 
 Statuses:
@@ -728,7 +743,6 @@ When continuing this project:
 
 - Add admin activity log for payroll, attendance, leave, fine, expense, and project changes.
 - Add database backup button or scheduled backup script.
-- Add export PDF/Excel for Project Employee History.
 - Add stricter role middleware and route permission checks.
 - Add tests for payroll carry-forward balance logic.
 - Add tests for duplicate attendance prevention.

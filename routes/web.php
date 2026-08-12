@@ -162,6 +162,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::resource('employees', EmployeeController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::get('projects/overview', [ProjectController::class, 'overview'])->name('projects.overview');
     Route::get('projects/{project}/employee-history', [ProjectController::class, 'employeeHistory'])->name('projects.employee-history');
+    Route::get('projects/{project}/employee-history/export', [ProjectController::class, 'employeeHistoryExport'])->name('projects.employee-history.export');
+    Route::get('projects/{project}/employee-history/print', [ProjectController::class, 'employeeHistoryPrint'])->name('projects.employee-history.print');
     Route::get('projects/{type}', [ProjectController::class, 'index'])
         ->whereIn('type', ['rope_access', 'contracting'])
         ->name('projects.type.index');
