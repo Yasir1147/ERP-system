@@ -35,6 +35,8 @@ return new class extends Migration
 
     private function indexExists(string $indexName): bool
     {
-        return count(DB::select('SHOW INDEX FROM employees WHERE Key_name = ?', [$indexName])) > 0;
+        // SHOW INDEX is MySQL-only; the schema builder works on every driver.
+        return collect(Schema::getIndexes('employees'))
+            ->contains(fn (array $index) => $index['name'] === $indexName);
     }
 };
