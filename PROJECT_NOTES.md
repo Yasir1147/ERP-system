@@ -343,6 +343,21 @@ Employee records should remain in admin history even after an employee leaves. E
 
 Employee-facing admin/report lists should show employee code with employee name where available. Search should include employee code.
 
+Employee search is deliberately forgiving, because worker names reach the system through inconsistent transliteration (RUHUL/RAHUL, MOHAMMAD/MUHAMMAD/MD). `resources/js/lib/employee-search.ts` matches near spellings as well as exact ones.
+
+Because that matching is generous, results are ranked rather than only filtered: an exact word scores highest, then a prefix, then a substring, then a near spelling. Searching "Amir" lists Amir before Amin, and both remain visible. Use `sortByEmployeeSearch` wherever the list has no other ordering, such as the duty plan employee dropdown. Lists with clickable sortable headers, such as the Employees page, keep the user's chosen column sort instead.
+
+The employee register can be exported from each employee type page:
+
+```text
+/employees/{type}/export   formatted .xlsx
+/employees/{type}/print    print/PDF view
+```
+
+`{type}` is `rope_access` or `contracting`. Both list Code, Name, Profession, Status, and Added On with a status count strip, ordered by employee code numerically. Employee codes are written as text in Excel so leading zeros survive.
+
+Shared workbook styling for every Excel export lives in `app/Services/Excel/FormatsWorkbook.php`.
+
 ## Projects
 
 Project categories:

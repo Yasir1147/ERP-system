@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Check, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
+import { Check, FileSpreadsheet, Pencil, Plus, Printer, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Employee {
@@ -189,9 +189,29 @@ const deleteEmployee = (employee: Employee) => {
                         <h2 class="text-base font-medium">Employee List</h2>
                         <p class="text-sm text-muted-foreground">{{ filteredEmployees.length }} of {{ employees.length }} employees</p>
                     </div>
-                    <div class="relative w-full md:max-w-sm">
-                        <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input v-model="search" type="search" class="pl-9" placeholder="Search by code, name, profession, or status" />
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative w-full sm:w-64">
+                            <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input v-model="search" type="search" class="pl-9" placeholder="Search by code, name, profession, or status" />
+                        </div>
+                        <a
+                            :href="`/employees/${employeeType}/export`"
+                            class="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-medium"
+                            :class="employees.length === 0 ? 'pointer-events-none opacity-50' : ''"
+                        >
+                            <FileSpreadsheet class="size-4" />
+                            Excel
+                        </a>
+                        <a
+                            :href="`/employees/${employeeType}/print`"
+                            target="_blank"
+                            rel="noopener"
+                            class="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-medium"
+                            :class="employees.length === 0 ? 'pointer-events-none opacity-50' : ''"
+                        >
+                            <Printer class="size-4" />
+                            PDF
+                        </a>
                     </div>
                 </div>
 

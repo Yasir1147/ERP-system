@@ -4,7 +4,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { matchesEmployeeSearch } from '@/lib/employee-search';
+import { sortByEmployeeSearch } from '@/lib/employee-search';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     ArrowLeft,
@@ -145,14 +145,11 @@ const dutyGroups = computed<DutyGroup[]>(() => {
 });
 const availableEmployees = computed(() => {
     const assignedIds = new Set(props.plan?.assignments.map((assignment) => assignment.employeeId) ?? []);
-    const query = employeeSearch.value.trim();
+    const unassigned = props.employees.filter((employee) => !assignedIds.has(employee.id));
 
-    return props.employees.filter((employee) => {
-        if (assignedIds.has(employee.id)) return false;
-        if (!query) return true;
-
-        return matchesEmployeeSearch([employee.code, employee.name, employee.profession], query);
-    });
+    // Ranked, not just filtered: the fuzzy match also finds near spellings,
+    // so what the user actually typed has to sort above them.
+    return sortByEmployeeSearch(unassigned, employeeSearch.value, (employee) => [employee.code, employee.name, employee.profession]);
 });
 
 const globalPlanError = computed(() => {

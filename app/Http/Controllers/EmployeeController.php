@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
+use App\Services\Employees\EmployeeListExporter;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController extends Controller
 {
@@ -26,6 +29,43 @@ class EmployeeController extends Controller
             'employeeStatuses' => Employee::STATUSES,
             'nextEmployeeCode' => $this->nextEmployeeCode($type),
         ]);
+    }
+
+    /**
+     * Employee register as a formatted .xlsx.
+     */
+    public function export(string $type, EmployeeListExporter $exporter): StreamedResponse
+    {
+        return $exporter->download($this->listData($type));
+    }
+
+    /**
+     * Print view for the same register, saved as PDF from the browser.
+     */
+    public function print(string $type): View
+    {
+        return view('employees.list-print', [
+            'data' => $this->listData($type),
+            'generatedAt' => now()->format('d/m/Y h:i A'),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function listData(string $type): array
+    {
+        abort_unless(array_key_exists($type, Employee::TYPES), 404);
+
+        // Ordered by code the way a person reads a register, rather than by
+        // creation date as the on-screen list defaults to.
+        $employees = Employee::query()
+            ->where('type', $type)
+            ->orderByRaw('CAST(code AS UNSIGNED) asc')
+            ->orderBy('name')
+            ->get();
+
+        return EmployeeListExporter::present($employees, $type);
     }
 
     public function store(Request $request): RedirectResponse

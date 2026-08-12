@@ -156,6 +156,12 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('cheques/{cheque}/voucher', [ChequeController::class, 'voucher'])->name('cheques.voucher');
     Route::post('cheques/{cheque}/mark-printed', [ChequeController::class, 'markPrinted'])->name('cheques.mark-printed');
     Route::resource('cheques', ChequeController::class)->except('show');
+    Route::get('employees/{type}/export', [EmployeeController::class, 'export'])
+        ->whereIn('type', ['rope_access', 'contracting'])
+        ->name('employees.type.export');
+    Route::get('employees/{type}/print', [EmployeeController::class, 'print'])
+        ->whereIn('type', ['rope_access', 'contracting'])
+        ->name('employees.type.print');
     Route::get('employees/{type}', [EmployeeController::class, 'index'])
         ->whereIn('type', ['rope_access', 'contracting'])
         ->name('employees.type.index');

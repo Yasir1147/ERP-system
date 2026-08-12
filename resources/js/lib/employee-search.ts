@@ -77,15 +77,84 @@ function wordMatches(word: string, term: string): boolean {
  * still narrows the list.
  */
 export function matchesEmployeeSearch(fields: Array<string | null | undefined>, query: string): boolean {
+    return scoreEmployeeSearch(fields, query) > 0;
+}
+
+/**
+ * How well a term matches one word. Higher is a better match.
+ *
+ * The tiers matter because the fuzzy matching above is deliberately
+ * generous: searching "Amir" also finds "Amin". Both should be listed, but
+ * the one the user actually typed has to come first.
+ */
+function wordScore(word: string, term: string): number {
+    if (word === term) return 100; // whole word is exactly what was typed
+    if (word.startsWith(term)) return 80; // "amir" in "amirul"
+    if (word.includes(term)) return 60; // term sits inside the word
+    if (term.includes(word)) return 40; // typed more than the word holds
+
+    const allowed = tolerance(term.length);
+
+    if (allowed > 0) {
+        const distance = editDistance(word, term, allowed);
+
+        // Closer spellings rank above looser ones, all below a real match.
+        if (distance <= allowed) return 20 - distance;
+    }
+
+    return 0;
+}
+
+/**
+ * Relevance of `fields` for `query`, or 0 when it does not match at all.
+ *
+ * Every term must match something. The result is the total of each term's
+ * best word score, so a row matching two terms strongly outranks one that
+ * matches both weakly.
+ */
+export function scoreEmployeeSearch(fields: Array<string | null | undefined>, query: string): number {
     const terms = normalize(query).split(' ').filter(Boolean);
 
-    if (terms.length === 0) return true;
+    if (terms.length === 0) return 1;
 
     const haystack = normalize(fields.filter(Boolean).join(' '));
 
-    if (!haystack) return false;
+    if (!haystack) return 0;
 
     const words = haystack.split(' ');
+    let total = 0;
 
-    return terms.every((term) => haystack.includes(term) || words.some((word) => wordMatches(word, term)));
+    for (const term of terms) {
+        let best = 0;
+
+        for (const word of words) {
+            best = Math.max(best, wordScore(word, term));
+            if (best === 100) break;
+        }
+
+        // A term spanning several words, e.g. "shah jalal" against a name.
+        if (best === 0 && haystack.includes(term)) best = 60;
+
+        if (best === 0) return 0;
+
+        total += best;
+    }
+
+    return total;
+}
+
+/**
+ * Filters and orders a list by search relevance.
+ *
+ * Rows keep their original order when they score the same, so an empty
+ * search leaves the caller's sorting untouched.
+ */
+export function sortByEmployeeSearch<T>(items: T[], query: string, fieldsOf: (item: T) => Array<string | null | undefined>): T[] {
+    if (!query.trim()) return items;
+
+    return items
+        .map((item, index) => ({ item, index, score: scoreEmployeeSearch(fieldsOf(item), query) }))
+        .filter((entry) => entry.score > 0)
+        .sort((first, second) => second.score - first.score || first.index - second.index)
+        .map((entry) => entry.item);
 }
