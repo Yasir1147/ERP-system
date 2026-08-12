@@ -96,6 +96,78 @@ Replace `attendance-system` if the actual database name is different.
 
 ## Git Workflow
 
+### Branches
+
+Two branches, two kinds of work. They must not be mixed in one commit.
+
+| Branch | What belongs there |
+| --- | --- |
+| `main` | The web system. This is what gets deployed to hrm.almohafiz.org. |
+| `mobile-app` | The Flutter app in `mobile/`, plus the `/api/v1` layer it needs. |
+
+**Always check which branch you are on before starting work:**
+
+```powershell
+git branch --show-current
+```
+
+Web work:
+
+```powershell
+git checkout main
+# ... make the change ...
+git add .
+git commit -m "Clear description of the web change"
+git push origin main
+```
+
+Mobile work:
+
+```powershell
+git checkout mobile-app
+# ... make the change ...
+git add .
+git commit -m "Clear description of the mobile change"
+```
+
+### Why they are separate
+
+A web fix must be deployable on its own. If mobile work sits in the same commit, the web fix cannot go live without dragging unfinished app code with it.
+
+### If backend code is needed by both
+
+Shared code (a service used by both a web controller and the mobile API) goes to `main` first as its own commit, then `mobile-app` picks it up:
+
+```powershell
+git checkout mobile-app
+git merge main
+```
+
+### Moving one finished feature from mobile-app to main
+
+Do not merge the whole branch. Take only that feature's files:
+
+```powershell
+git checkout main
+git checkout mobile-app -- path/to/file.php path/to/other.vue
+git add .
+git commit -m "..."
+```
+
+Then check that nothing mobile-only came along:
+
+```powershell
+git diff --cached --stat
+```
+
+### Checking before you commit
+
+```powershell
+git status --short          # what changed
+git diff --stat             # how much
+git log --oneline -5        # recent history
+```
+
 Before starting changes:
 
 ```powershell
