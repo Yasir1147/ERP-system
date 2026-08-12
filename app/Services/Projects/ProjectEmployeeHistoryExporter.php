@@ -105,8 +105,8 @@ class ProjectEmployeeHistoryExporter
         $totals = $history['totals'];
 
         $pairs = [
-            ['Employees', $totals['uniqueEmployees'], false],
-            ['Attendance Entries', $totals['entries'], false],
+            ['Number of Person', $totals['uniqueEmployees'], false],
+            ['Head Count', $totals['entries'], false],
             ['Worked Days', $totals['workedDays'], false],
             ['Overtime Hours', $totals['overtimeHours'], false],
             ['Basic Cost', $totals['basicCost'], true],

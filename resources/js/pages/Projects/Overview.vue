@@ -867,11 +867,11 @@ const closeProjectHistory = () => {
 
                         <div class="grid gap-3 md:grid-cols-4 xl:grid-cols-7">
                             <div class="rounded-md border p-3">
-                                <p class="text-xs text-muted-foreground">Employees</p>
+                                <p class="text-xs text-muted-foreground">Number of Person</p>
                                 <p class="mt-1 text-xl font-semibold">{{ historyTotals.uniqueEmployees }}</p>
                             </div>
                             <div class="rounded-md border p-3">
-                                <p class="text-xs text-muted-foreground">Entries</p>
+                                <p class="text-xs text-muted-foreground">Head Count</p>
                                 <p class="mt-1 text-xl font-semibold">{{ historyTotals.entries }}</p>
                             </div>
                             <div class="rounded-md border p-3">
