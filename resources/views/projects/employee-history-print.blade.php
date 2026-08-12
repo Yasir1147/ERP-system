@@ -249,8 +249,8 @@
         </div>
 
         <div class="stats">
-            <div class="stat"><span>Employees</span><strong>{{ $totals['uniqueEmployees'] }}</strong></div>
-            <div class="stat"><span>Attendance Entries</span><strong>{{ $totals['entries'] }}</strong></div>
+            <div class="stat"><span>Number of Person</span><strong>{{ $totals['uniqueEmployees'] }}</strong></div>
+            <div class="stat"><span>Head Count</span><strong>{{ $totals['entries'] }}</strong></div>
             <div class="stat"><span>Worked Days</span><strong>{{ $totals['workedDays'] }}</strong></div>
             <div class="stat"><span>Overtime Hours</span><strong>{{ $totals['overtimeHours'] }}</strong></div>
             <div class="stat"><span>Basic Cost</span><strong>{{ $money($totals['basicCost']) }}</strong></div>
