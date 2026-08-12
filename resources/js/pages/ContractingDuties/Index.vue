@@ -4,6 +4,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { matchesEmployeeSearch } from '@/lib/employee-search';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     ArrowLeft,
@@ -144,13 +145,13 @@ const dutyGroups = computed<DutyGroup[]>(() => {
 });
 const availableEmployees = computed(() => {
     const assignedIds = new Set(props.plan?.assignments.map((assignment) => assignment.employeeId) ?? []);
-    const query = employeeSearch.value.trim().toLowerCase();
+    const query = employeeSearch.value.trim();
 
     return props.employees.filter((employee) => {
         if (assignedIds.has(employee.id)) return false;
         if (!query) return true;
 
-        return [employee.code, employee.name, employee.profession].filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
+        return matchesEmployeeSearch([employee.code, employee.name, employee.profession], query);
     });
 });
 
