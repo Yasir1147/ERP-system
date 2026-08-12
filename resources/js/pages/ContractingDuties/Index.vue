@@ -246,14 +246,28 @@ const toggleDutyGroup = (projectId: number) => {
     openDutyGroups[key] = !openDutyGroups[key];
 };
 
+// Present is the default, so only the exceptions are labelled. Without this
+// an absent worker reads as on duty in the shared WhatsApp list.
+const copyStatusSuffix = (status: string) => {
+    if (status === 'present' || status === 'planned') return '';
+
+    const label = statusOptions.find((option) => option.value === status)?.label || status;
+
+    return ` (${label})`;
+};
+
 const copyDuties = async () => {
     const text = dutyGroups.value
         .map((group) =>
             [
                 group.projectName,
-                ...group.assignments.map((assignment) =>
-                    assignment.employeeCode ? `${assignment.employeeCode} - ${assignment.employeeName}` : assignment.employeeName,
-                ),
+                ...group.assignments.map((assignment) => {
+                    const name = assignment.employeeCode
+                        ? `${assignment.employeeCode} - ${assignment.employeeName}`
+                        : assignment.employeeName;
+
+                    return `${name}${copyStatusSuffix(assignment.status)}`;
+                }),
             ].join('\n'),
         )
         .join('\n============\n');

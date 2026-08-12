@@ -888,6 +888,7 @@ Database tables:
 
 - Contracting duty workflow is simplified for field users: new duty employees default to Present, Planned/Mark Planned Present/Publish controls are hidden, and one Submit Attendance action performs the protected final submission. Legacy Planned assignments are treated as Present when submitted.
 - Contracting duty assignments are now displayed as project-wise Duty Plan accordions. A date can contain multiple project duties, each accordion contains only that project's employees, and users can copy all duties as project-grouped text for WhatsApp sharing.
+- Copy Duty Text labels every non-Present employee with their status, for example `137 - Tasbur Ali (Absent)`. Present employees stay unlabelled because Present is the default. Without the label an absent worker reads as on duty in the shared list.
 
 - Office staff attendance now has a reception/tablet staff list at `/office-attendance/staff`.
 - Office staff users are redirected to the staff list after login, and each active staff card opens that staff member's attendance form.
