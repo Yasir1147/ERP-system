@@ -20,3 +20,6 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# WhatsApp chat exports hold phone numbers and private messages
+/storage/app/imports
