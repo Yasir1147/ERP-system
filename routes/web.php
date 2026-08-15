@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AttendanceImportController;
 use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AttendanceTimesheetController;
 use App\Http\Controllers\BankController;
@@ -54,6 +55,9 @@ Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verifi
 Route::get('attendance', AttendanceReportController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.index');
 Route::put('attendance/{attendanceRecord}', [AttendanceReportController::class, 'update'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.update');
 Route::delete('attendance/{attendanceRecord}', [AttendanceReportController::class, 'destroy'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.destroy');
+Route::get('attendance/import', [AttendanceImportController::class, 'create'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.import');
+Route::post('attendance/import/preview', [AttendanceImportController::class, 'preview'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.import.preview');
+Route::post('attendance/import', [AttendanceImportController::class, 'store'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.import.store');
 Route::get('attendance/timesheet', AttendanceTimesheetController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet');
 Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.export');
 Route::get('attendance/timesheet-print', [AttendanceTimesheetController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.print');

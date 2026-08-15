@@ -461,6 +461,38 @@ The same-day submitted attendance review list is capped with an internal scroll 
 
 Employees on active leave should not be selectable for attendance marking.
 
+## Importing Historical Attendance
+
+Months of site attendance exist only as WhatsApp messages. Two steps bring them in, and they are deliberately separate so a person checks the mapping before anything is written.
+
+**Step 1 — build a reviewable workbook from the chat export:**
+
+```powershell
+php artisan attendance:parse-chat storage/app/imports/chat.txt `
+    --match=opulence `
+    --project="Sobha Opulence" `
+    --to=2026-07-05 `
+    --skip-supply `
+    --out=storage/app/imports/sobha-opulence.xlsx
+```
+
+`--match` filters on the project heading written in the message, `--from`/`--to` cut the file to the range the system is missing, and `--skip-supply` drops days the worker was supplied to another company.
+
+The workbook has two sheets. **Attendance** holds one row per person per day, keyed on the name exactly as the chat wrote it. **Employee Map** holds each distinct name once with a blank Employee Code for a person to fill. Filling codes per name rather than per row is roughly fifteen edits instead of a hundred and fifty, and a name cannot then be mapped two ways in one file.
+
+**Step 2 — import the reviewed workbook** at `/attendance/import` (admin only). Upload always previews first and reports what it would do; writing needs a second, deliberate action, because this creates attendance and therefore pay for past months.
+
+Import rules:
+
+- A day already recorded for that employee is skipped and reported. Existing attendance is the record of what was paid and is never replaced.
+- The same employee and date appearing twice in one file imports once.
+- Present rows need a project that exists; Absent and Leave store no project.
+- A name with no code, an unknown code, or an unknown project is an error and blocks only its own row.
+
+The parser is forgiving about message shape and strict about meaning. It reads `1.`, `1=` and `1 ` numbering, dates as `9/5/2026` or `02.06.2016`, and status written as `(absent)`, `(Absent)`, `(sick)` or `(p)`. A marker it does not recognise becomes a flag on the row rather than an assumption, because assuming Present writes a day's pay that was never worked.
+
+Chat exports are gitignored under `storage/app/imports`; they contain phone numbers and private messages.
+
 ## Timesheet
 
 Monthly attendance timesheet:
