@@ -283,3 +283,51 @@ it('lets an admin open the import page and blocks everyone else', function () {
 
     $this->actingAs($attendanceUser)->get('/attendance/import')->assertForbidden();
 });
+
+it('previews a workbook uploaded through the screen', function () {
+    $admin = importAdmin();
+    importEmployee('101', 'Asghar Ali');
+    importProject();
+
+    $path = importWorkbook(
+        [['2026-05-13', 'Asghar', 'Sobha Opulence', 'Present']],
+        ['Asghar' => '101'],
+    );
+
+    $upload = new \Illuminate\Http\UploadedFile($path, 'sobha.xlsx', null, null, true);
+
+    $response = $this->actingAs($admin)
+        ->post('/attendance/import/preview', ['file' => $upload]);
+
+    $response->assertRedirect();
+    $response->assertSessionHas('import_token');
+
+    $preview = session('import_preview');
+    expect($preview['fatal'])->toBeNull();
+    expect($preview['summary']['create'])->toBe(1);
+    expect(AttendanceRecord::count())->toBe(0);
+});
+
+it('imports the uploaded workbook after confirmation', function () {
+    $admin = importAdmin();
+    importEmployee('101', 'Asghar Ali');
+    importProject();
+
+    $path = importWorkbook(
+        [['2026-05-13', 'Asghar', 'Sobha Opulence', 'Present']],
+        ['Asghar' => '101'],
+    );
+
+    $upload = new \Illuminate\Http\UploadedFile($path, 'sobha.xlsx', null, null, true);
+
+    $this->actingAs($admin)->post('/attendance/import/preview', ['file' => $upload]);
+
+    $token = session('import_token');
+    expect($token)->not->toBeNull();
+
+    $this->actingAs($admin)
+        ->post('/attendance/import', ['token' => $token])
+        ->assertRedirect();
+
+    expect(AttendanceRecord::count())->toBe(1);
+});

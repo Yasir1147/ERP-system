@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Attendance\AttendanceImportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,8 +17,20 @@ use Inertia\Response;
  */
 class AttendanceImportController extends Controller
 {
+    private const UPLOAD_DISK = 'local';
+    private const UPLOAD_DIRECTORY = 'imports';
+
     public function __construct(private readonly AttendanceImportService $import)
     {
+    }
+
+    /**
+     * Resolves the upload through the disk rather than building a path by
+     * hand: the local disk is rooted at storage/app/private, not storage/app.
+     */
+    private function uploadPath(string $token): string
+    {
+        return Storage::disk(self::UPLOAD_DISK)->path(self::UPLOAD_DIRECTORY.'/'.$token);
     }
 
     public function create(): Response
@@ -38,9 +51,9 @@ class AttendanceImportController extends Controller
         ]);
 
         $token = 'import-'.$request->user()->id.'-'.now()->format('YmdHis').'.xlsx';
-        $request->file('file')->storeAs('imports', $token);
+        $request->file('file')->storeAs(self::UPLOAD_DIRECTORY, $token, self::UPLOAD_DISK);
 
-        $result = $this->import->preview(storage_path('app/imports/'.$token));
+        $result = $this->import->preview($this->uploadPath($token));
 
         return back()
             ->with('import_preview', $result)
@@ -56,7 +69,7 @@ class AttendanceImportController extends Controller
             'token' => ['required', 'string'],
         ]);
 
-        $path = storage_path('app/imports/'.basename($data['token']));
+        $path = $this->uploadPath(basename($data['token']));
 
         if (! is_file($path)) {
             return back()->withErrors(['file' => 'The uploaded file is no longer available. Upload it again.']);
