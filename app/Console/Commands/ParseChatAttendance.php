@@ -31,6 +31,7 @@ class ParseChatAttendance extends Command
         {--from= : Skip rows before this date, Y-m-d}
         {--to= : Skip rows after this date, Y-m-d}
         {--skip-supply : Leave out days marked as supplied to another company}
+        {--map= : Text file of "chat name = employee code" lines to fill the map sheet}
         {--out= : Where to write the workbook}';
 
     protected $description = 'Build a reviewable attendance sheet from a WhatsApp chat export';
@@ -111,6 +112,17 @@ class ParseChatAttendance extends Command
      */
     private function addSuggestions(array $rows): array
     {
+        $known = $this->readMapFile();
+
+        if ($known !== []) {
+            return array_map(fn (array $row) => $row + [
+                'matchStatus' => isset($known[mb_strtolower($row['sourceName'])]) ? 'mapped' : 'unmapped',
+                'employeeCode' => $known[mb_strtolower($row['sourceName'])] ?? null,
+                'employeeName' => null,
+                'candidates' => '',
+            ], $rows);
+        }
+
         $matcher = null;
 
         if ($type = $this->option('type')) {
@@ -131,6 +143,44 @@ class ParseChatAttendance extends Command
                 'candidates' => implode(' | ', $result['candidates'] ?? []),
             ];
         }, $rows);
+    }
+
+    /**
+     * Reads a prepared "chat name = employee code" list.
+     *
+     * The codes come from wherever the real employee records live, which is
+     * usually not the machine building the file, so they are supplied as a
+     * plain text list rather than looked up here.
+     *
+     * @return array<string, string>
+     */
+    private function readMapFile(): array
+    {
+        $file = $this->option('map');
+
+        if (! $file || ! is_file($file)) {
+            if ($file) {
+                $this->warn("Map file not found: {$file}");
+            }
+
+            return [];
+        }
+
+        $map = [];
+
+        foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
+                continue;
+            }
+
+            [$name, $code] = explode('=', $line, 2);
+
+            $map[mb_strtolower(trim($name))] = trim($code);
+        }
+
+        return $map;
     }
 
     /**
