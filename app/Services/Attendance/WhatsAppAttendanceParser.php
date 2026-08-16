@@ -118,6 +118,12 @@ class WhatsAppAttendanceParser
                 $date = $parsed['date'];
                 $rawDate = $parsed['raw'];
 
+                // A heading before the date is complete. Without this, a
+                // sub-heading further down ("Rebellion staff") would be glued
+                // onto the project name in some messages and stand alone in
+                // others, depending on where the date happened to sit.
+                $headingRunning = false;
+
                 continue;
             }
 
@@ -177,8 +183,10 @@ class WhatsAppAttendanceParser
      */
     private function readDate(string $line): ?array
     {
-        // A date line may carry a trailing word, e.g. "24/5/2026 Sunday Off".
-        if (! preg_match('#^(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{2,4})#', $line, $match)) {
+        // The date is not always at the start: "( Attendance) 18.05 2026" and
+        // "24/5/2026 Sunday Off" both appear. Searching the whole line keeps
+        // those blocks, whose heading sits on the line above.
+        if (! preg_match('#\b(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.\- ]\s*(\d{2,4})\b#', $line, $match)) {
             return null;
         }
 

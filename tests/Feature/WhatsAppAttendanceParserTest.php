@@ -195,3 +195,17 @@ it('joins a heading that runs over two lines', function () {
     expect($rows)->toHaveCount(2);
     expect($rows[0]['project'])->toBe('Sobha opulence Over time');
 });
+
+it('finds a date sitting inside a heading line', function () {
+    $rows = parseChat(<<<'CHAT'
+    [5/20/26, 10:57:28 AM] Ansar Abbas: Site: Jewel of the Creek
+     ( Attendance) 18.05 2026
+
+    1.Ansar Abbas
+    2.Younas
+    CHAT);
+
+    expect($rows)->toHaveCount(2);
+    expect($rows[0]['date'])->toBe('2026-05-18');
+    expect($rows[0]['project'])->toBe('Site: Jewel of the Creek');
+});
