@@ -32,6 +32,7 @@ interface Preview {
         lastDate: string | null;
     };
     created?: number;
+    createdByProject?: Record<string, number>;
 }
 
 const props = defineProps<{
@@ -149,13 +150,36 @@ const actionClass = (action: string) =>
 
                 <div
                     v-if="wasImported"
-                    class="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800"
+                    class="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800"
                 >
-                    <CheckCircle2 class="mt-0.5 size-4 shrink-0" />
-                    {{ preview.created }} record(s) imported. Rows listed below were not imported.
+                    <div class="flex items-start gap-2">
+                        <CheckCircle2 class="mt-0.5 size-4 shrink-0" />
+                        <div>
+                            <p class="font-medium">Saved. {{ preview.created }} record(s) imported.</p>
+                            <ul v-if="preview.createdByProject" class="mt-1 space-y-0.5">
+                                <li v-for="(count, project) in preview.createdByProject" :key="project">
+                                    {{ project }} — {{ count }} record{{ count === 1 ? '' : 's' }}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
 
-                <div v-else-if="preview.summary.error" class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <div
+                    v-if="!wasImported"
+                    class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                >
+                    <AlertTriangle class="mt-0.5 size-4 shrink-0" />
+                    <span>
+                        <b>Nothing has been saved yet.</b> This is only a check of the file. Press the Import button below
+                        to write these records.
+                    </span>
+                </div>
+
+                <div
+                    v-if="!wasImported && preview.summary.error"
+                    class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                >
                     <AlertTriangle class="mt-0.5 size-4 shrink-0" />
                     Fix the errors below and upload again. The other rows can still be imported now.
                 </div>

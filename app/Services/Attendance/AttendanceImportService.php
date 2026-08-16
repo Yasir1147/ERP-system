@@ -115,7 +115,22 @@ class AttendanceImportService
             }
         });
 
-        return $preview + ['created' => count($importable)];
+        // Reported per project so a person can see what was actually written,
+        // rather than a single number that looks the same whichever file was
+        // uploaded.
+        $byProject = [];
+
+        foreach ($importable as $row) {
+            $name = $row['projectName'] ?: 'No project';
+            $byProject[$name] = ($byProject[$name] ?? 0) + 1;
+        }
+
+        arsort($byProject);
+
+        return $preview + [
+            'created' => count($importable),
+            'createdByProject' => $byProject,
+        ];
     }
 
     /**
