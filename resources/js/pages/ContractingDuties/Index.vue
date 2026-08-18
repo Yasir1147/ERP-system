@@ -152,6 +152,34 @@ const availableEmployees = computed(() => {
     return sortByEmployeeSearch(unassigned, employeeSearch.value, (employee) => [employee.code, employee.name, employee.profession]);
 });
 
+
+const assignmentSearch = ref('');
+
+/// Duties are split across many project accordions, so finding one worker
+/// meant opening each one in turn. Searching filters every accordion at
+/// once and leaves only the people who match.
+const visibleDutyGroups = computed<DutyGroup[]>(() => {
+    const query = assignmentSearch.value.trim();
+
+    if (!query) return dutyGroups.value;
+
+    return dutyGroups.value
+        .map((group) => ({
+            ...group,
+            assignments: sortByEmployeeSearch(group.assignments, query, (assignment) => [
+                assignment.employeeCode,
+                assignment.employeeName,
+                assignment.profession,
+            ]),
+        }))
+        .filter((group) => group.assignments.length > 0);
+});
+
+const searchMatchCount = computed(() => visibleDutyGroups.value.reduce((total, group) => total + group.assignments.length, 0));
+
+/// While searching, every group holding a match is open: collapsing them
+/// again would hide the very rows the search just found.
+const isGroupOpen = (projectId: number) => (assignmentSearch.value.trim() ? true : openDutyGroups[String(projectId)]);
 const globalPlanError = computed(() => {
     const errors = page.props.errors as Record<string, string>;
     return errors.plan || errors.target_date;
@@ -255,7 +283,9 @@ const copyStatusSuffix = (status: string) => {
 };
 
 const copyDuties = async () => {
-    const text = dutyGroups.value
+    // The message is read on its own in WhatsApp, away from this screen, so
+    // it has to say which day it is for.
+    const body = dutyGroups.value
         .map((group) =>
             [
                 group.projectName,
@@ -270,7 +300,9 @@ const copyDuties = async () => {
         )
         .join('\n============\n');
 
-    if (!text) return;
+    if (!body) return;
+
+    const text = `Duty ${formatDate(selectedDate.value)}\n\n${body}`;
 
     try {
         await navigator.clipboard.writeText(text);
@@ -538,17 +570,32 @@ const finalizePlan = () => {
                             <Button v-if="dutyGroups.length" type="button" variant="outline" @click="copyDuties"
                                 ><Clipboard class="size-4" />{{ dutiesCopied ? 'Copied' : 'Copy Duty Text' }}</Button
                             >
-                            <Button v-if="!isFinalized" type="button" @click="finalizePlan"><ClipboardList class="size-4" />Submit Attendance</Button>
                         </div>
                     </div>
                 </div>
 
-                <div v-if="dutyGroups.length" class="grid gap-3 p-3 sm:p-4">
-                    <article v-for="group in dutyGroups" :key="group.projectId" class="overflow-hidden rounded-md border bg-background">
+                <div v-if="dutyGroups.length" class="border-b p-3 sm:px-5 sm:py-4">
+                    <div class="relative w-full sm:max-w-md">
+                        <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            v-model="assignmentSearch"
+                            type="search"
+                            class="pl-9"
+                            placeholder="Find a worker across all duties by code or name"
+                        />
+                    </div>
+                    <p v-if="assignmentSearch.trim()" class="mt-2 text-sm text-muted-foreground">
+                        {{ searchMatchCount }} of {{ plan?.assignments.length || 0 }} employees match.
+                        <button type="button" class="ml-1 font-medium text-foreground underline" @click="assignmentSearch = ''">Clear</button>
+                    </p>
+                </div>
+
+                <div v-if="visibleDutyGroups.length" class="grid gap-3 p-3 sm:p-4">
+                    <article v-for="group in visibleDutyGroups" :key="group.projectId" class="overflow-hidden rounded-md border bg-background">
                         <button
                             type="button"
                             class="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-accent"
-                            :aria-expanded="openDutyGroups[String(group.projectId)]"
+                            :aria-expanded="isGroupOpen(group.projectId)"
                             @click="toggleDutyGroup(group.projectId)"
                         >
                             <span class="min-w-0">
@@ -557,11 +604,11 @@ const finalizePlan = () => {
                             </span>
                             <ChevronDown
                                 class="size-5 shrink-0 text-muted-foreground transition-transform"
-                                :class="openDutyGroups[String(group.projectId)] ? 'rotate-180' : ''"
+                                :class="isGroupOpen(group.projectId) ? 'rotate-180' : ''"
                             />
                         </button>
 
-                        <div v-if="openDutyGroups[String(group.projectId)]" class="grid gap-3 border-t bg-muted/10 p-3 sm:p-4">
+                        <div v-if="isGroupOpen(group.projectId)" class="grid gap-3 border-t bg-muted/10 p-3 sm:p-4">
                             <div v-for="assignment in group.assignments" :key="assignment.id" class="rounded-md border bg-card p-3 sm:p-4">
                                 <div
                                     class="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(190px,1.15fr)_minmax(150px,1fr)_minmax(125px,0.75fr)_minmax(180px,1fr)_minmax(170px,1fr)_auto] lg:items-end lg:gap-3"
@@ -673,6 +720,12 @@ const finalizePlan = () => {
                     </article>
                 </div>
 
+                <div v-else-if="assignmentSearch.trim()" class="p-8 text-center text-sm text-muted-foreground">
+                    <Search class="mx-auto mb-3 size-8" />
+                    No worker matches "{{ assignmentSearch }}" in this duty.
+                    <button type="button" class="ml-1 font-medium text-foreground underline" @click="assignmentSearch = ''">Clear search</button>
+                </div>
+
                 <div v-else class="p-8 text-center text-sm text-muted-foreground">
                     <ClipboardList class="mx-auto mb-3 size-8" />No duty plan has been created for this date.
                 </div>
@@ -684,11 +737,20 @@ const finalizePlan = () => {
             >
                 <Button type="button" variant="outline" @click="goToStep(currentStep - 1)"><ArrowLeft class="size-4" />Previous</Button>
                 <div class="flex flex-col gap-2 sm:flex-row">
-                    <Button type="button" variant="outline" @click="returnToDashboard">Save Draft</Button>
                     <Button v-if="currentStep === 2" type="button" :disabled="!plan || !pendingAssignmentCount" @click="goToStep(3)"
                         >Review Duty<ArrowRight class="size-4"
                     /></Button>
-                    <Button v-else-if="!isFinalized" type="button" @click="finishPlanning"><CheckCircle2 class="size-4" />Finish Planning</Button>
+                    <template v-else-if="!isFinalized">
+                        <Button type="button" variant="outline" @click="finishPlanning"><CheckCircle2 class="size-4" />Finish Planning</Button>
+                        <Button
+                            v-if="plan && dutyGroups.length"
+                            type="button"
+                            class="bg-green-600 text-white hover:bg-green-700"
+                            @click="finalizePlan"
+                        >
+                            <ClipboardList class="size-4" />Submit Attendance
+                        </Button>
+                    </template>
                     <Button v-else type="button" @click="returnToDashboard"><LayoutDashboard class="size-4" />Back to Dashboard</Button>
                 </div>
             </footer>
