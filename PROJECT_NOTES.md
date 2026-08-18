@@ -334,6 +334,11 @@ Admin can temporarily allow an attendance user to enter older attendance from th
 
 Future dates remain blocked for Present and Absent.
 
+That backdate window guards the *start* of a duty plan. Adding people to a plan
+that already exists is not held to it: the plan's date was permitted when it was
+created, and the same plan can still be submitted, so blocking the addition only
+stopped a user from editing last week's duty while its attendance stayed open.
+
 ## Employees
 
 Employee categories:

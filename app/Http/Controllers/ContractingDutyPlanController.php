@@ -191,16 +191,26 @@ class ContractingDutyPlanController extends Controller
     {
         $this->ensureContractingAccess($request);
         $dateRange = $request->user()->attendanceDateRange();
+        // Adding people to a duty that already exists is not the same as
+        // backdating a new one. The plan's date was allowed when it was
+        // created, and that same plan can already be submitted, so holding
+        // the addition to the user's backdate window only blocked editing
+        // last week's duty while still permitting its attendance.
+        $existingPlan = ContractingDutyPlan::query()
+            ->whereDate('duty_date', (string) $request->input('duty_date'))
+            ->where('created_by', $request->user()->id)
+            ->exists();
+
+        $dutyDateRules = ['required', 'date', 'before_or_equal:'.now()->addDays(30)->toDateString()];
+
+        if (! $existingPlan && $dateRange['min']) {
+            $dutyDateRules[] = 'after_or_equal:'.$dateRange['min'];
+        }
 
         $data = $request->validate([
             'workflow' => ['nullable', Rule::in(['wizard'])],
             'extend_finalized' => ['nullable', 'boolean'],
-            'duty_date' => [
-                'required',
-                'date',
-                ...($dateRange['min'] ? ['after_or_equal:'.$dateRange['min']] : []),
-                'before_or_equal:'.now()->addDays(30)->toDateString(),
-            ],
+            'duty_date' => $dutyDateRules,
             'project_id' => [
                 'required',
                 'integer',

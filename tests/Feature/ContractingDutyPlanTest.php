@@ -544,3 +544,70 @@ it('reports a duty date outside the user allowed range instead of failing silent
 
     expect(ContractingDutyPlan::count())->toBe(0);
 });
+
+test('people can be added to an existing duty dated before the user backdate window', function () {
+    $user = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+    $employee = Employee::query()->create([
+        'code' => '941',
+        'name' => 'Late Addition',
+        'profession' => 'Helper',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    $project = Project::query()->create([
+        'name' => 'Old Duty Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+    ]);
+
+    $oldDate = now()->subDays(10)->toDateString();
+
+    // The plan was allowed when it was made, and it can still be submitted,
+    // so adding a worker to it must not be held to today's backdate window.
+    $plan = ContractingDutyPlan::query()->create([
+        'duty_date' => $oldDate,
+        'created_by' => $user->id,
+        'status' => ContractingDutyPlan::STATUS_DRAFT,
+    ]);
+
+    $this->actingAs($user)->post('/contracting-duty-plans/assignments', [
+        'duty_date' => $oldDate,
+        'project_id' => $project->id,
+        'employee_ids' => [$employee->id],
+    ])->assertSessionHasNoErrors();
+
+    expect(ContractingDutyAssignment::query()
+        ->where('contracting_duty_plan_id', $plan->id)
+        ->where('employee_id', $employee->id)
+        ->exists())->toBeTrue();
+});
+
+test('a new duty cannot be started before the user backdate window', function () {
+    $user = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+    $employee = Employee::query()->create([
+        'code' => '942',
+        'name' => 'Out Of Range',
+        'profession' => 'Helper',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    $project = Project::query()->create([
+        'name' => 'Out Of Range Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+    ]);
+
+    $this->actingAs($user)->post('/contracting-duty-plans/assignments', [
+        'duty_date' => now()->subDays(10)->toDateString(),
+        'project_id' => $project->id,
+        'employee_ids' => [$employee->id],
+    ])->assertSessionHasErrors('duty_date');
+
+    expect(ContractingDutyPlan::query()->count())->toBe(0);
+});
