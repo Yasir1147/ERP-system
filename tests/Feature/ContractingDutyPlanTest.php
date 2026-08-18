@@ -477,3 +477,44 @@ test('a user can add new employees after submitting attendance without resubmitt
     expect(AttendanceRecord::query()->whereDate('attendance_date', $date)->count())->toBe(2)
         ->and($plan->fresh()->status)->toBe(ContractingDutyPlan::STATUS_FINALIZED);
 });
+
+it('adds more employees on a second project to an existing draft duty', function () {
+    $user = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+
+    $firstProject = Project::create(['name' => 'PR 240', 'status' => 'ongoing', 'type' => 'contracting']);
+    $secondProject = Project::create(['name' => 'PR 264', 'status' => 'ongoing', 'type' => 'contracting']);
+
+    $employees = collect(['132', '150', '168'])->map(fn (string $code) => Employee::create([
+        'code' => $code,
+        'name' => 'Worker '.$code,
+        'profession' => 'Mason',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]));
+
+    $date = now()->addDay()->toDateString();
+
+    $this->actingAs($user)->post('/contracting-duty-plans/assignments', [
+        'workflow' => 'wizard',
+        'duty_date' => $date,
+        'project_id' => $firstProject->id,
+        'employee_ids' => $employees->take(2)->pluck('id')->all(),
+    ])->assertRedirect();
+
+    $plan = ContractingDutyPlan::query()->firstOrFail();
+
+    // Adding to the same day must reuse that plan, not attempt a second one.
+    $this->actingAs($user)->post('/contracting-duty-plans/assignments', [
+        'workflow' => 'wizard',
+        'duty_date' => $date,
+        'project_id' => $secondProject->id,
+        'employee_ids' => [$employees->last()->id],
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(ContractingDutyPlan::count())->toBe(1);
+    expect($plan->fresh()->assignments()->count())->toBe(3);
+    expect($plan->fresh()->assignments()->where('project_id', $secondProject->id)->count())->toBe(1);
+});

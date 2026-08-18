@@ -240,10 +240,21 @@ class ContractingDutyPlanController extends Controller
         $plan = DB::transaction(function () use ($data, $employeeIds, $request) {
             $this->removeReleasedAssignments($data['duty_date'], $employeeIds);
 
-            $plan = ContractingDutyPlan::query()->firstOrCreate(
-                ['duty_date' => $data['duty_date'], 'created_by' => $request->user()->id],
-                ['status' => ContractingDutyPlan::STATUS_DRAFT],
-            );
+            // Matched with whereDate rather than firstOrCreate: duty_date is
+            // date-cast, so the stored value can carry a time component. An
+            // exact match then misses the existing plan and the insert hits
+            // the unique index, which is what made "add more people to this
+            // duty" fail with a server error instead of adding them.
+            $plan = ContractingDutyPlan::query()
+                ->whereDate('duty_date', $data['duty_date'])
+                ->where('created_by', $request->user()->id)
+                ->first();
+
+            $plan ??= ContractingDutyPlan::query()->create([
+                'duty_date' => $data['duty_date'],
+                'created_by' => $request->user()->id,
+                'status' => ContractingDutyPlan::STATUS_DRAFT,
+            ]);
 
             $this->ensurePlanAccess($request, $plan);
             $isFinalizedExtension = $plan->status === ContractingDutyPlan::STATUS_FINALIZED
