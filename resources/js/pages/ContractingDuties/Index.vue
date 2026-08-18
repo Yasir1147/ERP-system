@@ -180,9 +180,14 @@ const searchMatchCount = computed(() => visibleDutyGroups.value.reduce((total, g
 /// While searching, every group holding a match is open: collapsing them
 /// again would hide the very rows the search just found.
 const isGroupOpen = (projectId: number) => (assignmentSearch.value.trim() ? true : openDutyGroups[String(projectId)]);
+/// Every error that has no field of its own on this page.
+///
+/// duty_date belongs here: the date is chosen in step 1 and has no input in
+/// step 2, so a rejected date used to fail silently — the user pressed Add
+/// to Duty and nothing at all happened.
 const globalPlanError = computed(() => {
     const errors = page.props.errors as Record<string, string>;
-    return errors.plan || errors.target_date;
+    return errors.plan || errors.target_date || errors.duty_date || errors.assignment;
 });
 
 const initializeAssignmentForms = () => {

@@ -262,6 +262,7 @@ Contracting duty plans are operational schedules and remain separate from attend
 - Present employees may have overtime hours and an optional different overtime project. The main project is used when no overtime project is selected.
 - Submit Attendance uses one database transaction and stops on duplicate attendance rather than saving a partial result.
 - Adding employees to a date reuses that date's existing plan, matched with `whereDate`. An exact match on `duty_date` can miss a stored value carrying a time component, and the insert then hits the unique index on (duty_date, created_by) — which surfaced as a 500 when adding more people to a duty that already existed.
+- Errors with no field of their own on the duty screen — `duty_date`, `plan`, `target_date`, `assignment` — are shown in the page-level red banner. The duty date is picked in step 1 and has no input in step 2, so a date outside the user's allowed range previously rejected the request with nothing at all appearing on screen.
 - Submitted plans are locked. Admin corrections continue through the Attendance Report.
 - A submitted plan can be extended with additional attendance for the same date. Employees who already have attendance for that date are excluded, previously submitted assignment rows remain locked, and final submission creates records only for the newly added employees.
 - Contracting attendance users can view, update, repeat, delete, and submit only duty plans they created; admins retain oversight access.

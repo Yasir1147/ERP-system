@@ -518,3 +518,29 @@ it('adds more employees on a second project to an existing draft duty', function
     expect($plan->fresh()->assignments()->count())->toBe(3);
     expect($plan->fresh()->assignments()->where('project_id', $secondProject->id)->count())->toBe(1);
 });
+
+it('reports a duty date outside the user allowed range instead of failing silently', function () {
+    $user = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+
+    $project = Project::create(['name' => 'PR 240', 'status' => 'ongoing', 'type' => 'contracting']);
+    $employee = Employee::create([
+        'code' => '132',
+        'name' => 'Worker 132',
+        'profession' => 'Mason',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+
+    // Attendance users may only work today and the two days before it.
+    $this->actingAs($user)->post('/contracting-duty-plans/assignments', [
+        'workflow' => 'wizard',
+        'duty_date' => now()->subDays(10)->toDateString(),
+        'project_id' => $project->id,
+        'employee_ids' => [$employee->id],
+    ])->assertSessionHasErrors('duty_date');
+
+    expect(ContractingDutyPlan::count())->toBe(0);
+});
