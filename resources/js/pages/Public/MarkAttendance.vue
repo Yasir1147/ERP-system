@@ -4,8 +4,9 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, Search, X } from 'lucide-vue-next';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, LogOut, Search, UserCircle2, X } from 'lucide-vue-next';
+import type { User } from '@/types';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 interface Project {
@@ -62,6 +63,11 @@ const props = defineProps<{
     historyDate: string;
     historyRecords: SubmittedRecord[];
 }>();
+
+const page = usePage();
+/// This form is the landing page for attendance accounts and sits outside the
+/// admin layout, so it carries its own account line and logout.
+const authUser = computed(() => page.props.auth?.user as User | undefined);
 
 const today = props.attendanceDateMax;
 const overtimeHours = Array.from({ length: 10 }, (_, index) => index + 1);
@@ -416,6 +422,24 @@ const submit = () => {
 
     <main class="min-h-svh bg-background px-4 py-5 text-foreground sm:px-6">
         <div class="mx-auto flex w-full max-w-xl flex-col gap-5">
+            <div v-if="authUser" class="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2">
+                <div class="flex min-w-0 items-center gap-2">
+                    <UserCircle2 class="size-5 shrink-0 text-muted-foreground" />
+                    <div class="min-w-0 text-sm leading-tight">
+                        <p class="truncate font-medium">{{ authUser.name }}</p>
+                        <p class="truncate text-xs text-muted-foreground">{{ authUser.email }}</p>
+                    </div>
+                </div>
+                <Link
+                    href="/logout"
+                    method="post"
+                    as="button"
+                    class="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border px-3 text-sm font-medium hover:bg-muted"
+                >
+                    <LogOut class="size-4" />Log out
+                </Link>
+            </div>
+
             <header class="flex flex-col items-center gap-3 py-2 text-center">
                 <AppLogoIcon class="size-24" />
                 <div>

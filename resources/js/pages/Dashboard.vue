@@ -360,15 +360,15 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                             {{ option.label }}
                         </button>
                     </div>
-                    <div class="inline-flex rounded-md border p-1">
-                        <button
-                            type="button"
-                            class="rounded px-3 py-1.5 text-sm"
-                            :class="dutyDateScope === 'date' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
+                    <div class="inline-flex items-center gap-1 rounded-md border p-1">
+                        <input
+                            v-model="filterDate"
+                            type="date"
+                            class="h-8 rounded bg-background px-2 text-sm"
+                            :class="dutyDateScope === 'date' ? 'text-foreground' : 'text-muted-foreground'"
                             @click="dutyDateScope = 'date'"
-                        >
-                            {{ selectedDateLabel }}
-                        </button>
+                            @change="applyFilters"
+                        />
                         <button
                             type="button"
                             class="rounded px-3 py-1.5 text-sm"
@@ -409,15 +409,19 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                             <div class="group relative rounded-md border p-3" tabindex="0">
                                 <p class="text-xs text-muted-foreground">Projects</p>
                                 <p class="mt-1 font-semibold">{{ plan.projectCount }}</p>
+                                <!-- The gap sits inside the popup as padding, not as a margin: a real
+                                     gap drops the hover the moment the cursor leaves the tile. -->
                                 <div
                                     v-if="plan.projects.length"
-                                    class="invisible absolute left-0 top-full z-30 mt-1 w-72 max-w-[calc(100vw-3rem)] rounded-md border bg-card p-2 opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                                    class="invisible absolute left-0 top-full z-30 w-72 max-w-[calc(100vw-3rem)] pt-2 opacity-0 transition-all delay-200 duration-150 group-hover:visible group-hover:opacity-100 group-hover:delay-0 group-focus-within:visible group-focus-within:opacity-100 group-focus-within:delay-0"
                                 >
-                                    <p class="px-2 pb-1 text-xs font-medium text-muted-foreground">Projects on {{ plan.dateLabel }}</p>
-                                    <div class="max-h-56 overflow-auto">
-                                        <div v-for="project in plan.projects" :key="project.name" class="flex items-center justify-between gap-3 rounded px-2 py-1">
-                                            <span class="truncate">{{ project.name }}</span>
-                                            <span class="shrink-0 text-xs text-muted-foreground">{{ project.employeeCount }}</span>
+                                    <div class="rounded-md border bg-card p-2 shadow-lg">
+                                        <p class="px-2 pb-1 text-xs font-medium text-muted-foreground">Projects on {{ plan.dateLabel }}</p>
+                                        <div class="max-h-56 overflow-auto">
+                                            <div v-for="project in plan.projects" :key="project.name" class="flex items-center justify-between gap-3 rounded px-2 py-1">
+                                                <span class="truncate">{{ project.name }}</span>
+                                                <span class="shrink-0 text-xs text-muted-foreground">{{ project.employeeCount }}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -427,18 +431,20 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                                 <p class="mt-1 font-semibold">{{ plan.employeeCount }}</p>
                                 <div
                                     v-if="plan.people.length"
-                                    class="invisible absolute right-0 top-full z-30 mt-1 w-80 max-w-[calc(100vw-3rem)] rounded-md border bg-card p-2 opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                                    class="invisible absolute right-0 top-full z-30 w-80 max-w-[calc(100vw-3rem)] pt-2 opacity-0 transition-all delay-200 duration-150 group-hover:visible group-hover:opacity-100 group-hover:delay-0 group-focus-within:visible group-focus-within:opacity-100 group-focus-within:delay-0"
                                 >
-                                    <p class="px-2 pb-1 text-xs font-medium text-muted-foreground">Employees on {{ plan.dateLabel }}</p>
-                                    <div class="max-h-56 overflow-auto">
-                                        <div v-for="person in plan.people" :key="person.id" class="flex items-center justify-between gap-3 rounded px-2 py-1">
-                                            <div class="min-w-0">
-                                                <p class="truncate">{{ personDisplayName(person) }}</p>
-                                                <p class="truncate text-xs text-muted-foreground">{{ person.projectName ?? 'No project' }}</p>
+                                    <div class="rounded-md border bg-card p-2 shadow-lg">
+                                        <p class="px-2 pb-1 text-xs font-medium text-muted-foreground">Employees on {{ plan.dateLabel }}</p>
+                                        <div class="max-h-56 overflow-auto">
+                                            <div v-for="person in plan.people" :key="person.id" class="flex items-center justify-between gap-3 rounded px-2 py-1">
+                                                <div class="min-w-0">
+                                                    <p class="truncate">{{ personDisplayName(person) }}</p>
+                                                    <p class="truncate text-xs text-muted-foreground">{{ person.projectName ?? 'No project' }}</p>
+                                                </div>
+                                                <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize" :class="personStatusClass(person.status)">
+                                                    {{ person.status }}
+                                                </span>
                                             </div>
-                                            <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize" :class="personStatusClass(person.status)">
-                                                {{ person.status }}
-                                            </span>
                                         </div>
                                     </div>
                                 </div>

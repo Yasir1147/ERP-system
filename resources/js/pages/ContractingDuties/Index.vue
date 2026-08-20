@@ -14,13 +14,16 @@ import {
     Clipboard,
     ClipboardList,
     LayoutDashboard,
+    LogOut,
     Save,
     Search,
     Trash2,
+    UserCircle2,
     Users,
     X,
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import type { User } from '@/types';
 
 interface Employee {
     id: number;
@@ -86,6 +89,9 @@ const props = defineProps<{
 }>();
 
 const page = usePage();
+/// This wizard sits outside the admin layout, so it carries its own account
+/// line and logout.
+const authUser = computed(() => page.props.auth?.user as User | undefined);
 const currentStep = ref(props.initialStep);
 const selectedDate = ref(props.selectedDate);
 const employeeSearch = ref('');
@@ -397,7 +403,22 @@ const finalizePlan = () => {
                         <p class="mt-1 text-sm text-muted-foreground">Choose a date, build project assignments, then review your plan.</p>
                     </div>
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-col items-start gap-3 sm:items-end">
+                    <div class="flex items-center gap-2">
+                        <UserCircle2 class="size-5 text-muted-foreground" />
+                        <div class="text-sm leading-tight">
+                            <p class="font-medium">{{ authUser?.name ?? 'Signed in' }}</p>
+                            <p class="text-xs text-muted-foreground">{{ authUser?.email }}</p>
+                        </div>
+                        <Link
+                            href="/logout"
+                            method="post"
+                            as="button"
+                            class="inline-flex h-9 items-center gap-1 rounded-md border px-3 text-sm font-medium hover:bg-muted"
+                        >
+                            <LogOut class="size-4" />Log out
+                        </Link>
+                    </div>
                     <Button as-child variant="outline">
                         <Link href="/contracting-duty-plans"><LayoutDashboard class="size-4" />Duty Dashboard</Link>
                     </Button>

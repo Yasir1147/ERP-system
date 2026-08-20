@@ -3,7 +3,8 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { CalendarCheck2, CalendarPlus2, CheckCircle2, ClipboardList, CopyPlus, Edit3, Search, Trash2, Users, X } from 'lucide-vue-next';
+import { CalendarCheck2, CalendarPlus2, CheckCircle2, ClipboardList, CopyPlus, Edit3, LogOut, Search, Trash2, UserCircle2, Users, X } from 'lucide-vue-next';
+import type { User } from '@/types';
 import { computed, ref } from 'vue';
 
 interface DutyPlanSummary {
@@ -26,6 +27,10 @@ const props = defineProps<{
 }>();
 
 const page = usePage();
+/// These duty pages sit outside the admin layout, so they carry their own
+/// account line. Without it a field user has no way to see whose account they
+/// are on, and no way to leave it.
+const authUser = computed(() => page.props.auth?.user as User | undefined);
 const search = ref('');
 const repeatPlan = ref<DutyPlanSummary | null>(null);
 const repeatDate = ref('');
@@ -104,9 +109,26 @@ const deletePlan = (plan: DutyPlanSummary) => {
                         <p class="mt-1 text-sm text-muted-foreground">Create, review, repeat, and submit only the duties assigned to your account.</p>
                     </div>
                 </div>
-                <Button as-child class="h-11">
-                    <Link :href="`/contracting-duty-plans/create?date=${tomorrow()}`"> <CalendarPlus2 class="size-4" />Create New Duty </Link>
-                </Button>
+                <div class="flex flex-col items-start gap-3 sm:items-end">
+                    <div class="flex items-center gap-2">
+                        <UserCircle2 class="size-5 text-muted-foreground" />
+                        <div class="text-sm leading-tight">
+                            <p class="font-medium">{{ authUser?.name ?? 'Signed in' }}</p>
+                            <p class="text-xs text-muted-foreground">{{ authUser?.email }}</p>
+                        </div>
+                        <Link
+                            href="/logout"
+                            method="post"
+                            as="button"
+                            class="inline-flex h-9 items-center gap-1 rounded-md border px-3 text-sm font-medium hover:bg-muted"
+                        >
+                            <LogOut class="size-4" />Log out
+                        </Link>
+                    </div>
+                    <Button as-child class="h-11">
+                        <Link :href="`/contracting-duty-plans/create?date=${tomorrow()}`"> <CalendarPlus2 class="size-4" />Create New Duty </Link>
+                    </Button>
+                </div>
             </header>
 
             <div v-if="page.props.flash?.success" class="rounded-md border border-green-600/30 bg-green-600/10 px-4 py-3 text-sm text-green-700">
