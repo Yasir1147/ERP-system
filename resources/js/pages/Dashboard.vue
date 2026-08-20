@@ -482,18 +482,10 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                     </article>
                 </div>
 
-                <div v-else class="mt-4 flex min-h-40 flex-col items-center justify-center gap-3 rounded-md border border-dashed text-sm text-muted-foreground">
-                    <p v-if="dutySearch.trim()">No duty matches this search.</p>
-                    <p v-else-if="dutyDateScope === 'date'">No contracting duty for {{ selectedDateLabel }}.</p>
-                    <p v-else>No contracting duty plans yet.</p>
-                    <button
-                        v-if="dutyDateScope === 'date'"
-                        type="button"
-                        class="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium text-foreground hover:bg-muted"
-                        @click="dutyDateScope = 'all'"
-                    >
-                        Show all recent duties
-                    </button>
+                <div v-else class="mt-4 flex min-h-40 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+                    <template v-if="dutySearch.trim()">No duty matches this search.</template>
+                    <template v-else-if="dutyDateScope === 'date'">No contracting duty for {{ selectedDateLabel }}.</template>
+                    <template v-else>No contracting duty plans yet.</template>
                 </div>
             </section>
 
