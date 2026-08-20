@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceRecord;
+use App\Models\ContractingDutyAssignment;
+use App\Models\ContractingDutyPlan;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use Carbon\Carbon;
@@ -214,6 +216,7 @@ class DashboardController extends Controller
             ],
             'monthlySummary' => $monthlySummary,
             'completedLongLeaves' => $completedLongLeaves,
+            'contractingDuty' => $this->contractingDutyOverview(),
             'selectedDate' => $selectedDate,
             'selectedDateLabel' => $selectedDay->format('d/m/Y'),
             'selectedMonthLabel' => $selectedDay->format('F Y'),
@@ -225,6 +228,71 @@ class DashboardController extends Controller
         ]);
     }
 
+
+    /**
+     * Every planner's contracting duties in one place, with the people on each
+     * one, so an admin can answer "where is this worker booked?" without
+     * opening each planner's own duty dashboard.
+     */
+    private function contractingDutyOverview(): array
+    {
+        $plans = ContractingDutyPlan::query()
+            ->with([
+                'creator:id,name',
+                'assignments' => fn ($query) => $query
+                    ->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED)
+                    ->with(['employee:id,code,name,profession', 'project:id,name']),
+            ])
+            ->orderByDesc('duty_date')
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get()
+            ->map(fn (ContractingDutyPlan $plan) => [
+                'id' => $plan->id,
+                'date' => $plan->duty_date->toDateString(),
+                'dateLabel' => $plan->duty_date->format('d/m/Y'),
+                'status' => $plan->status,
+                'submitted' => $plan->status === ContractingDutyPlan::STATUS_FINALIZED,
+                'createdBy' => $plan->creator?->name,
+                'employeeCount' => $plan->assignments->count(),
+                'projectCount' => $plan->assignments->pluck('project_id')->filter()->unique()->count(),
+                'projectNames' => $plan->assignments->pluck('project.name')->filter()->unique()->values(),
+                'people' => $plan->assignments
+                    ->sortBy(fn (ContractingDutyAssignment $assignment) => $assignment->employee?->name)
+                    ->map(fn (ContractingDutyAssignment $assignment) => [
+                        'id' => $assignment->id,
+                        'employeeCode' => $assignment->employee?->code,
+                        'employeeName' => $assignment->employee?->name,
+                        'employeeProfession' => $assignment->employee?->profession,
+                        'projectName' => $assignment->project?->name,
+                        'status' => $assignment->status,
+                        'overtimeHours' => $assignment->overtime_hours,
+                    ])
+                    ->values(),
+            ])
+            ->values();
+
+        return [
+            'plans' => $plans,
+            'summary' => [
+                'open' => ContractingDutyPlan::query()
+                    ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED)
+                    ->count(),
+                'submitted' => ContractingDutyPlan::query()
+                    ->where('status', ContractingDutyPlan::STATUS_FINALIZED)
+                    ->count(),
+                'employees' => ContractingDutyAssignment::query()
+                    ->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED)
+                    ->whereHas('plan', fn ($query) => $query
+                        ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED))
+                    ->distinct('employee_id')
+                    ->count('employee_id'),
+                'planners' => ContractingDutyPlan::query()
+                    ->distinct('created_by')
+                    ->count('created_by'),
+            ],
+        ];
+    }
     private function monthlyStatusCount(string $employeeType, string $status, string $monthStart, string $monthEnd): int
     {
         return AttendanceRecord::query()

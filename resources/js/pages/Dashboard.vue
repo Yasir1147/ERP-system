@@ -2,7 +2,8 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { AlertTriangle, CalendarCheck, ClipboardX, Plane, Search, Users } from 'lucide-vue-next';
+import { AlertTriangle, CalendarCheck, ClipboardList, ClipboardX, Plane, Search, UserCog, Users } from 'lucide-vue-next';
+import { matchesEmployeeSearch } from '@/lib/employee-search';
 import { computed, ref } from 'vue';
 
 interface Summary {
@@ -58,6 +59,39 @@ interface CompletedLongLeave {
     reason: string | null;
 }
 
+interface DutyPerson {
+    id: number;
+    employeeCode: string | null;
+    employeeName: string | null;
+    employeeProfession: string | null;
+    projectName: string | null;
+    status: string;
+    overtimeHours: number | null;
+}
+
+interface DutyPlan {
+    id: number;
+    date: string;
+    dateLabel: string;
+    status: string;
+    submitted: boolean;
+    createdBy: string | null;
+    employeeCount: number;
+    projectCount: number;
+    projectNames: string[];
+    people: DutyPerson[];
+}
+
+interface ContractingDuty {
+    plans: DutyPlan[];
+    summary: {
+        open: number;
+        submitted: number;
+        employees: number;
+        planners: number;
+    };
+}
+
 interface TypeOption {
     value: string;
     label: string;
@@ -72,6 +106,7 @@ const props = defineProps<{
     };
     monthlySummary: MonthlySummary[];
     completedLongLeaves: CompletedLongLeave[];
+    contractingDuty: ContractingDuty;
     selectedDate: string;
     selectedDateLabel: string;
     selectedMonthLabel: string;
@@ -90,6 +125,54 @@ const filterDate = ref(props.selectedDate);
 const filterType = ref(props.selectedType);
 const ropeSearch = ref('');
 const contractingSearch = ref('');
+const dutySearch = ref('');
+const dutyStatusFilter = ref<'all' | 'open' | 'submitted'>('all');
+
+/// A duty is worth showing when the searched person is on it. The same search
+/// also accepts a project or a planner's name, because an admin scanning the
+/// board asks both "where is Bilal?" and "what went to PR 264?".
+const personFields = (person: DutyPerson) => [person.employeeName, person.employeeCode, person.employeeProfession, person.projectName];
+
+const matchedPeople = (plan: DutyPlan) => {
+    if (!dutySearch.value.trim()) {
+        return [];
+    }
+
+    return plan.people.filter((person) => matchesEmployeeSearch(personFields(person), dutySearch.value));
+};
+
+const dutyPlanMatches = (plan: DutyPlan) => {
+    const query = dutySearch.value.trim();
+
+    if (!query) {
+        return true;
+    }
+
+    return matchedPeople(plan).length > 0 || matchesEmployeeSearch([plan.createdBy, plan.dateLabel, ...plan.projectNames], query);
+};
+
+const filteredDutyPlans = computed(() =>
+    props.contractingDuty.plans
+        .filter((plan) => (dutyStatusFilter.value === 'all' ? true : dutyStatusFilter.value === 'submitted' ? plan.submitted : !plan.submitted))
+        .filter(dutyPlanMatches),
+);
+
+const matchedPeopleTotal = computed(() => filteredDutyPlans.value.reduce((total, plan) => total + matchedPeople(plan).length, 0));
+
+const dutyStatusOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'open', label: 'Open' },
+    { value: 'submitted', label: 'Submitted' },
+] as const;
+
+const personStatusClass = (status: string) => {
+    if (status === 'present') return 'border-green-600/30 bg-green-600/10 text-green-700';
+    if (status === 'absent') return 'border-red-600/30 bg-red-600/10 text-red-700';
+    if (status === 'leave') return 'border-amber-600/30 bg-amber-600/10 text-amber-700';
+    return 'border-border bg-muted text-muted-foreground';
+};
+
+const personDisplayName = (person: DutyPerson) => (person.employeeCode ? `${person.employeeCode} - ${person.employeeName}` : person.employeeName);
 
 const maxProjectCount = computed(() => Math.max(1, ...props.projectAttendance.map((project) => project.employeeCount)));
 const showRopeAccess = computed(() => filterType.value === 'all' || filterType.value === 'rope_access');
@@ -173,6 +256,152 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                             </div>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <section v-if="showContracting" class="border-b pb-5">
+                <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                    <div>
+                        <h2 class="text-xl font-semibold tracking-normal">Contracting Duty Plans</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Duties from every planner, newest first. Search a person to see which duties they are on.
+                        </p>
+                    </div>
+                    <div class="relative w-full xl:w-80">
+                        <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                            v-model="dutySearch"
+                            type="search"
+                            class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
+                            placeholder="Search person, project or planner"
+                        />
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm text-muted-foreground">Open Duties</p>
+                                <p class="mt-2 text-3xl font-semibold">{{ contractingDuty.summary.open }}</p>
+                            </div>
+                            <ClipboardList class="size-6 text-amber-600" />
+                        </div>
+                    </div>
+                    <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm text-muted-foreground">Submitted Duties</p>
+                                <p class="mt-2 text-3xl font-semibold">{{ contractingDuty.summary.submitted }}</p>
+                            </div>
+                            <CalendarCheck class="size-6 text-green-600" />
+                        </div>
+                    </div>
+                    <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm text-muted-foreground">Employees Scheduled</p>
+                                <p class="mt-2 text-3xl font-semibold">{{ contractingDuty.summary.employees }}</p>
+                            </div>
+                            <Users class="size-6 text-muted-foreground" />
+                        </div>
+                    </div>
+                    <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm text-muted-foreground">Planners</p>
+                                <p class="mt-2 text-3xl font-semibold">{{ contractingDuty.summary.planners }}</p>
+                            </div>
+                            <UserCog class="size-6 text-muted-foreground" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <div class="inline-flex rounded-md border p-1">
+                        <button
+                            v-for="option in dutyStatusOptions"
+                            :key="option.value"
+                            type="button"
+                            class="rounded px-3 py-1.5 text-sm"
+                            :class="dutyStatusFilter === option.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
+                            @click="dutyStatusFilter = option.value"
+                        >
+                            {{ option.label }}
+                        </button>
+                    </div>
+                    <p class="text-sm text-muted-foreground">
+                        Showing {{ filteredDutyPlans.length }} of {{ contractingDuty.plans.length }} duties<template v-if="dutySearch.trim()">
+                            - {{ matchedPeopleTotal }} matching {{ matchedPeopleTotal === 1 ? 'person' : 'people' }}</template
+                        >.
+                    </p>
+                    <button v-if="dutySearch" type="button" class="text-sm text-muted-foreground underline" @click="dutySearch = ''">Clear search</button>
+                </div>
+
+                <div v-if="filteredDutyPlans.length" class="mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                    <article
+                        v-for="plan in filteredDutyPlans"
+                        :key="plan.id"
+                        class="flex flex-col rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="font-medium">{{ plan.dateLabel }}</p>
+                                <p class="truncate text-xs text-muted-foreground">Created by {{ plan.createdBy ?? 'Unknown' }}</p>
+                            </div>
+                            <span
+                                class="shrink-0 rounded-full border px-2 py-1 text-xs font-medium"
+                                :class="plan.submitted ? 'border-green-600/30 bg-green-600/10 text-green-700' : 'border-amber-600/30 bg-amber-600/10 text-amber-700'"
+                            >
+                                {{ plan.submitted ? 'Submitted' : 'Open' }}
+                            </span>
+                        </div>
+
+                        <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Projects</p>
+                                <p class="mt-1 font-semibold">{{ plan.projectCount }}</p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Employees</p>
+                                <p class="mt-1 font-semibold">{{ plan.employeeCount }}</p>
+                            </div>
+                        </div>
+
+                        <div v-if="matchedPeople(plan).length" class="mt-3 grid gap-2">
+                            <div
+                                v-for="person in matchedPeople(plan)"
+                                :key="person.id"
+                                class="flex items-center justify-between gap-3 rounded-md border bg-background/60 px-3 py-2 text-sm"
+                            >
+                                <div class="min-w-0">
+                                    <p class="truncate font-medium">{{ personDisplayName(person) }}</p>
+                                    <p class="truncate text-xs text-muted-foreground">
+                                        {{ person.projectName ?? 'No project' }}<template v-if="person.overtimeHours"> - {{ person.overtimeHours }} hrs OT</template>
+                                    </p>
+                                </div>
+                                <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium capitalize" :class="personStatusClass(person.status)">
+                                    {{ person.status }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <p v-else-if="plan.projectNames.length" class="mt-3 truncate text-xs text-muted-foreground">
+                            {{ plan.projectNames.join(', ') }}
+                        </p>
+
+                        <a
+                            :href="`/contracting-duty-plans/${plan.id}/edit`"
+                            class="mt-3 inline-flex h-9 w-fit items-center rounded-md border px-3 text-sm font-medium hover:bg-muted"
+                        >
+                            Open duty
+                        </a>
+                    </article>
+                </div>
+
+                <div v-else class="mt-4 flex min-h-40 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+                    <template v-if="dutySearch.trim()">No duty matches this search.</template>
+                    <template v-else>No contracting duty plans yet.</template>
                 </div>
             </section>
 
