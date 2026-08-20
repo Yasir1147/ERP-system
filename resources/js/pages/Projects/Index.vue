@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { CalendarDays, Eye, MapPin, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
+import { AlertTriangle, CalendarDays, Eye, MapPin, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Project {
@@ -29,6 +29,7 @@ interface Project {
     healthStatus: string;
     healthLabel: string;
     totalCost: number;
+    expectedProfit: number | null;
     budgetRemaining: number | null;
     budgetUsedPercent: number | null;
 }
@@ -139,6 +140,11 @@ const deleteProject = (project: Project) => {
         router.delete(`/projects/${project.id}`, { preserveScroll: true });
     }
 };
+
+/// A project that has spent more than it was sold for is a loss, and that
+/// has to be visible from the list rather than found by comparing two
+/// numbers by eye. Projects with no contract value are not judged.
+const overContract = (project: Project) => project.contractValue !== null && project.totalCost > project.contractValue;
 
 const money = (value: number | null) => {
     if (value === null) return 'Not set';
@@ -269,7 +275,15 @@ const healthClass = (status: string) => {
                                     <MapPin class="size-3.5" />{{ project.location || 'Location not set' }}
                                 </p>
                             </div>
-                            <span class="rounded-full border px-2 py-1 text-xs">{{ statusLabels[project.status] }}</span>
+                            <div class="flex shrink-0 flex-col items-end gap-1">
+                                <span class="rounded-full border px-2 py-1 text-xs">{{ statusLabels[project.status] }}</span>
+                                <span
+                                    v-if="overContract(project)"
+                                    class="inline-flex items-center gap-1 rounded-full border border-red-600/40 bg-red-600/10 px-2 py-1 text-xs font-medium text-red-700"
+                                >
+                                    <AlertTriangle class="size-3.5" />Loss
+                                </span>
+                            </div>
                         </div>
 
                         <div class="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
@@ -287,7 +301,12 @@ const healthClass = (status: string) => {
                             </div>
                             <div>
                                 <p class="text-xs text-muted-foreground">Actual Cost</p>
-                                <p class="font-medium tabular-nums">{{ money(project.totalCost) }}</p>
+                                <p class="font-medium tabular-nums" :class="overContract(project) ? 'text-red-700' : ''">
+                                    {{ money(project.totalCost) }}
+                                </p>
+                                <p v-if="overContract(project)" class="text-xs font-medium text-red-700">
+                                    {{ money(Math.abs(project.expectedProfit ?? 0)) }} over contract
+                                </p>
                             </div>
                             <div>
                                 <p class="text-xs text-muted-foreground">Cost Budget</p>

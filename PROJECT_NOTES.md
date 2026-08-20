@@ -423,7 +423,11 @@ Projects Overview should show:
 - budget remaining and expected profit when planning values are available
 - project progress and calculated health
 
-Project health is calculated as Completed, Delayed, Over Budget, At Risk, or On Track from status, schedule, progress, and budget usage.
+Project health is calculated as Loss, Completed, Delayed, Over Budget, At Risk, or On Track from status, schedule, progress, contract value, and budget usage.
+
+**Loss** is checked first, ahead of Completed. A project whose actual cost has passed its contract value is a loss whether or not it is finished, and showing "Completed" over a loss hides the one fact worth knowing. Most projects carry no cost budget, so the Over Budget and At Risk rules never fire for them — contract value is the signal that actually exists. Projects with no contract value are never judged.
+
+The project cards carry the same signal: a red **Loss** badge beside the status, the actual cost in red, and the amount it has run over the contract underneath.
 
 Projects with linked attendance, purchase bills, expenses, equipment, or contracting duty assignments cannot be deleted. Mark them completed instead.
 

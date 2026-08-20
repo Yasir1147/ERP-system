@@ -295,7 +295,7 @@ class ProjectController extends Controller
         $expectedProfit = $contractValue !== null ? round($contractValue - $actualCost, 2) : null;
         $budgetUsedPercent = $costBudget && $costBudget > 0 ? round(($actualCost / $costBudget) * 100, 1) : null;
         $profitMarginPercent = $contractValue && $contractValue > 0 ? round(($expectedProfit / $contractValue) * 100, 1) : null;
-        [$healthStatus, $healthLabel] = $this->projectHealth($project, $budgetUsedPercent);
+        [$healthStatus, $healthLabel] = $this->projectHealth($project, $budgetUsedPercent, $contractValue, $actualCost);
 
         return [
             'id' => $project->id,
@@ -389,8 +389,17 @@ class ProjectController extends Controller
         ];
     }
 
-    private function projectHealth(Project $project, ?float $budgetUsedPercent): array
+    private function projectHealth(Project $project, ?float $budgetUsedPercent, ?float $contractValue = null, float $actualCost = 0): array
     {
+        // Checked before anything else, completion included: a project that
+        // spent more than it was sold for is a loss whether or not it is
+        // finished, and reading "Completed" over a loss hides the one fact
+        // that matters. Most projects carry no cost budget, so the budget
+        // rules below never fire for them.
+        if ($contractValue !== null && $contractValue > 0 && $actualCost > $contractValue) {
+            return ['loss', 'Loss'];
+        }
+
         if ($project->status === 'completed') {
             return ['completed', 'Completed'];
         }

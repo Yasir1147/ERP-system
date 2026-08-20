@@ -227,3 +227,93 @@ test('the employee history total agrees with the overview once overhead is on', 
         ->and((float) $history['employeeSummary'][0]['overheadCost'])->toBe(100.0)
         ->and((float) $history['employeeSummary'][0]['costShare'])->toBe(100.0);
 });
+
+test('a project that spends more than its contract value reads as a loss', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $project = Project::query()->create([
+        'name' => 'Loss Project',
+        'status' => 'completed',
+        'type' => 'contracting',
+        'contract_value' => 1000,
+        'progress_percentage' => 100,
+    ]);
+    $supplier = Supplier::query()->create(['name' => 'Loss Supplier']);
+
+    PurchaseBill::query()->create([
+        'supplier_id' => $supplier->id,
+        'project_id' => $project->id,
+        'bill_number' => 'LOSS-001',
+        'bill_date' => '2026-07-20',
+        'subtotal' => 1500,
+        'vat_rate' => 0,
+        'vat_amount' => 0,
+        'total_amount' => 1500,
+        'status' => 'unpaid',
+    ]);
+
+    // Completed must not mask it. A finished project at a loss is still a
+    // loss, and that is the one thing worth seeing from the list.
+    $this->actingAs($admin)
+        ->get("/projects/overview?type=contracting&project_id={$project->id}")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('overviewRows.0.healthStatus', 'loss')
+            ->where('overviewRows.0.healthLabel', 'Loss')
+            ->where('overviewRows.0.expectedProfit', -500));
+});
+
+test('a project inside its contract value is not called a loss', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $project = Project::query()->create([
+        'name' => 'Healthy Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+        'contract_value' => 5000,
+        'progress_percentage' => 50,
+    ]);
+    $supplier = Supplier::query()->create(['name' => 'Healthy Supplier']);
+
+    PurchaseBill::query()->create([
+        'supplier_id' => $supplier->id,
+        'project_id' => $project->id,
+        'bill_number' => 'OK-001',
+        'bill_date' => '2026-07-20',
+        'subtotal' => 1000,
+        'vat_rate' => 0,
+        'vat_amount' => 0,
+        'total_amount' => 1000,
+        'status' => 'unpaid',
+    ]);
+
+    $this->actingAs($admin)
+        ->get("/projects/overview?type=contracting&project_id={$project->id}")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('overviewRows.0.healthStatus', 'on_track'));
+});
+
+test('a project with no contract value is never judged a loss', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $project = Project::query()->create([
+        'name' => 'Unpriced Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+        'progress_percentage' => 10,
+    ]);
+    $supplier = Supplier::query()->create(['name' => 'Unpriced Supplier']);
+
+    PurchaseBill::query()->create([
+        'supplier_id' => $supplier->id,
+        'project_id' => $project->id,
+        'bill_number' => 'UNPRICED-001',
+        'bill_date' => '2026-07-20',
+        'subtotal' => 9000,
+        'vat_rate' => 0,
+        'vat_amount' => 0,
+        'total_amount' => 9000,
+        'status' => 'unpaid',
+    ]);
+
+    $this->actingAs($admin)
+        ->get("/projects/overview?type=contracting&project_id={$project->id}")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('overviewRows.0.healthStatus', 'on_track'));
+});
