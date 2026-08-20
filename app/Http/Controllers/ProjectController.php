@@ -90,7 +90,7 @@ class ProjectController extends Controller
     {
         $data = $request->validate([
             'enabled' => ['required', 'boolean'],
-            'multiplier' => ['required', 'numeric', 'min:0', 'max:10'],
+            'multiplier' => ['required', 'numeric', 'min:1', 'max:10'],
         ]);
 
         AppSetting::setValue('project_overhead_enabled', $data['enabled'] ? '1' : '0');
@@ -279,13 +279,16 @@ class ProjectController extends Controller
 
         $labourIds = $records->pluck('employee_id')->unique();
         $workedDates = $records->pluck('attendance_date')->map(fn ($date) => Carbon::parse($date)->toDateString())->unique();
-        $labourCost = round($basicCost + $overtimeCost, 2);
-        $overheadCost = $overhead['enabled'] ? round($basicCost * $overhead['multiplier'], 2) : 0.0;
+        // The loaded figure replaces basic salary; it does not sit beside it.
+        // Basic 1,000 at 2x is a cost of 2,000, not 3,000.
+        $costedBasicCost = $overhead['enabled'] ? $basicCost * $overhead['multiplier'] : $basicCost;
+        $overheadCost = round($costedBasicCost - $basicCost, 2);
+        $labourCost = round($costedBasicCost + $overtimeCost, 2);
         $purchaseCost = (float) ($costMaps['purchases'][$project->id] ?? 0);
         $purchaseVat = (float) ($costMaps['purchaseVat'][$project->id] ?? 0);
         $supplierPaid = (float) ($costMaps['supplierPaid'][$project->id] ?? 0);
         $expenseCost = (float) ($costMaps['expenses'][$project->id] ?? 0);
-        $actualCost = round($labourCost + $overheadCost + $purchaseCost + $expenseCost, 2);
+        $actualCost = round($labourCost + $purchaseCost + $expenseCost, 2);
         $contractValue = $project->contract_value !== null ? (float) $project->contract_value : null;
         $costBudget = $project->cost_budget !== null ? (float) $project->cost_budget : null;
         $budgetRemaining = $costBudget !== null ? round($costBudget - $actualCost, 2) : null;

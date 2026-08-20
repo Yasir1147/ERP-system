@@ -106,9 +106,10 @@ class ProjectEmployeeHistoryService
             ? 0
             : $overtimeHours * ($dailySalary / $standardHours);
 
-        // Overhead rides on basic pay only, and it belongs in this row's total
-        // so employee shares and the footing total match the Overview page.
-        $overheadCost = $overhead['enabled'] ? $basicCost * $overhead['multiplier'] : 0.0;
+        // The loaded figure replaces basic salary rather than sitting beside
+        // it, matching the Overview page: basic 1,000 at 2x costs 2,000.
+        $costedBasicCost = $overhead['enabled'] ? $basicCost * $overhead['multiplier'] : $basicCost;
+        $overheadCost = $costedBasicCost - $basicCost;
 
         return [
             'id' => $record->id,
@@ -125,7 +126,7 @@ class ProjectEmployeeHistoryService
             'basicCost' => round($basicCost, 2),
             'overtimeCost' => round($overtimeCost, 2),
             'overheadCost' => round($overheadCost, 2),
-            'totalCost' => round($basicCost + $overtimeCost + $overheadCost, 2),
+            'totalCost' => round($costedBasicCost + $overtimeCost, 2),
             'submittedBy' => $record->submitter?->name ?? '-',
             'submittedByRole' => $record->submitter?->role,
             'missingPayrollSetting' => ! $setting,

@@ -172,12 +172,15 @@ test('overhead multiplies basic salary into actual cost when it is switched on',
         ->post('/projects/overhead-settings', ['enabled' => true, 'multiplier' => 2])
         ->assertSessionHasNoErrors();
 
-    // Overhead is 2 x basic (200), never 2 x overtime.
+    // Basic 100 at 2x is a labour cost of 200, not 300 - the loaded figure
+    // replaces basic pay. Overtime stays at its own 50.
     $this->actingAs($admin)
         ->get("/projects/overview?type=contracting&project_id={$project->id}")
         ->assertInertia(fn (Assert $page) => $page
-            ->where('overviewRows.0.overheadCost', 200)
-            ->where('overviewRows.0.totalCost', 350));
+            ->where('overviewRows.0.basicCost', 100)
+            ->where('overviewRows.0.overheadCost', 100)
+            ->where('overviewRows.0.labourCost', 250)
+            ->where('overviewRows.0.totalCost', 250));
 });
 
 test('the employee history total agrees with the overview once overhead is on', function () {
@@ -219,8 +222,8 @@ test('the employee history total agrees with the overview once overhead is on', 
         ->assertOk()
         ->json();
 
-    expect((float) $history['totals']['overheadCost'])->toBe(200.0)
-        ->and((float) $history['totals']['totalCost'])->toBe(350.0)
-        ->and((float) $history['employeeSummary'][0]['overheadCost'])->toBe(200.0)
+    expect((float) $history['totals']['overheadCost'])->toBe(100.0)
+        ->and((float) $history['totals']['totalCost'])->toBe(250.0)
+        ->and((float) $history['employeeSummary'][0]['overheadCost'])->toBe(100.0)
         ->and((float) $history['employeeSummary'][0]['costShare'])->toBe(100.0);
 });

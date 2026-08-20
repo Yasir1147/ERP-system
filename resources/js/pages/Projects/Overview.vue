@@ -417,14 +417,14 @@ const closeProjectHistory = () => {
                     <div class="min-w-0">
                         <h2 class="text-base font-medium">Labour Overhead</h2>
                         <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-                            A worked day costs more than the day's wage - accommodation, visa, transport, food, insurance. This adds that
-                            burden to every project's actual cost as a multiple of basic salary. Overtime, purchases, and expenses are left
-                            at their own cost.
+                            A worked day costs more than the day's wage - accommodation, visa, transport, food, insurance. This prices basic
+                            salary at its real cost in every project. It replaces basic salary rather than being added beside it. Overtime,
+                            purchases, and expenses stay at their own cost.
                         </p>
                         <p v-if="overheadForm.errors.multiplier" class="mt-2 text-sm text-red-600">{{ overheadForm.errors.multiplier }}</p>
                         <p v-else-if="overheadForm.enabled" class="mt-2 max-w-2xl text-sm text-muted-foreground">
-                            A worker on AED 100 a day carries AED {{ (100 * Number(overheadForm.multiplier || 0)).toFixed(2) }} of overhead,
-                            so that day costs the project AED {{ (100 + 100 * Number(overheadForm.multiplier || 0)).toFixed(2) }}.
+                            A worker on AED 100 a day costs the project AED {{ (100 * Number(overheadForm.multiplier || 0)).toFixed(2) }} a
+                            day, of which AED {{ (100 * Number(overheadForm.multiplier || 0) - 100).toFixed(2) }} is overhead.
                         </p>
                     </div>
                     <div class="flex shrink-0 flex-wrap items-end gap-3 lg:flex-nowrap">
@@ -474,6 +474,9 @@ const closeProjectHistory = () => {
                         <div>
                             <p class="text-sm text-muted-foreground">Labour Cost</p>
                             <p class="mt-2 text-xl font-semibold">{{ money(summary.labourCost) }}</p>
+                            <p v-if="overheadSettings.enabled" class="mt-1 text-xs text-muted-foreground">
+                                Basic at {{ overheadSettings.multiplier }}x, plus overtime
+                            </p>
                         </div>
                         <Users class="size-6 text-muted-foreground" />
                     </div>
@@ -481,8 +484,9 @@ const closeProjectHistory = () => {
                 <div v-if="overheadSettings.enabled" class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <div class="flex items-center justify-between gap-3">
                         <div>
-                            <p class="text-sm text-muted-foreground">Overhead ({{ overheadSettings.multiplier }}x basic)</p>
+                            <p class="text-sm text-muted-foreground">Overhead Inside Labour</p>
                             <p class="mt-2 text-xl font-semibold">{{ money(summary.overheadCost) }}</p>
+                            <p class="mt-1 text-xs text-muted-foreground">Already counted above</p>
                         </div>
                         <Users class="size-6 text-violet-700" />
                     </div>

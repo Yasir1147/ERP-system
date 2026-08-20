@@ -438,11 +438,15 @@ Employees without a payroll setting are costed at zero, which understates the pr
 A worked day costs the company more than that day's wage — accommodation, visa, transport, food, insurance. Projects Overview carries an admin control that adds this burden to actual cost as a multiple of **basic salary**:
 
 ```text
-overhead = basic salary x multiplier
-actual cost = basic + overtime + overhead + purchases + approved expenses
+costed basic = basic salary x multiplier
+overhead     = costed basic - basic salary
+labour cost  = costed basic + overtime
+actual cost  = labour cost + purchases + approved expenses
 ```
 
-Overtime, purchases, and expenses are excluded from the multiplier because they already sit at their true cost. The setting lives in `app_settings` as `project_overhead_enabled` and `project_overhead_multiplier` (default 2), read by `AppSetting::projectOverheadSettings()`.
+The loaded figure **replaces** basic salary; it is not added beside it. A worker on 1,000 at 2x costs the project 2,000, not 3,000. The Overhead figure is reported separately only so a reader can see how much of labour cost is overhead — it is already inside labour cost and must never be added again.
+
+Overtime, purchases, and expenses are excluded from the multiplier because they already sit at their true cost. The setting lives in `app_settings` as `project_overhead_enabled` and `project_overhead_multiplier` (default 2, floor 1), read by `AppSetting::projectOverheadSettings()`. The floor is 1 because a lower multiplier would price a worked day below the wage actually paid for it.
 
 It ships **off**. Switching it on is an admin decision, so no existing project's reported cost moves on its own.
 
