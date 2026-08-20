@@ -7,6 +7,7 @@ use App\Models\ContractingDutyAssignment;
 use App\Models\ContractingDutyPlan;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -216,7 +217,7 @@ class DashboardController extends Controller
             ],
             'monthlySummary' => $monthlySummary,
             'completedLongLeaves' => $completedLongLeaves,
-            'contractingDuty' => $this->contractingDutyOverview(),
+            'contractingDuty' => $this->contractingDutyOverview($selectedDate),
             'selectedDate' => $selectedDate,
             'selectedDateLabel' => $selectedDay->format('d/m/Y'),
             'selectedMonthLabel' => $selectedDay->format('F Y'),
@@ -234,19 +235,33 @@ class DashboardController extends Controller
      * one, so an admin can answer "where is this worker booked?" without
      * opening each planner's own duty dashboard.
      */
-    private function contractingDutyOverview(): array
+    private function contractingDutyOverview(string $selectedDate): array
     {
-        $plans = ContractingDutyPlan::query()
-            ->with([
-                'creator:id,name',
-                'assignments' => fn ($query) => $query
-                    ->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED)
-                    ->with(['employee:id,code,name,profession', 'project:id,name']),
-            ])
+        $withDutyDetail = fn ($query) => $query->with([
+            'creator:id,name',
+            'assignments' => fn ($assignments) => $assignments
+                ->where('status', '!=', ContractingDutyAssignment::STATUS_REMOVED)
+                ->with(['employee:id,code,name,profession', 'project:id,name']),
+        ]);
+
+        // The recent list is what the person search sweeps. The selected date is
+        // fetched as well, because an admin can page back to a day older than
+        // the recent window and still expects that day's duties in the section.
+        $recentPlans = $withDutyDetail(ContractingDutyPlan::query())
             ->orderByDesc('duty_date')
             ->orderByDesc('id')
             ->limit(30)
-            ->get()
+            ->get();
+
+        $selectedDatePlans = $withDutyDetail(ContractingDutyPlan::query())
+            ->whereDate('duty_date', $selectedDate)
+            ->get();
+
+        $plans = $recentPlans
+            ->concat($selectedDatePlans)
+            ->unique('id')
+            ->sortByDesc(fn (ContractingDutyPlan $plan) => [$plan->duty_date->toDateString(), $plan->id])
+            ->values()
             ->map(fn (ContractingDutyPlan $plan) => [
                 'id' => $plan->id,
                 'date' => $plan->duty_date->toDateString(),
@@ -254,9 +269,18 @@ class DashboardController extends Controller
                 'status' => $plan->status,
                 'submitted' => $plan->status === ContractingDutyPlan::STATUS_FINALIZED,
                 'createdBy' => $plan->creator?->name,
+                'createdById' => $plan->created_by,
                 'employeeCount' => $plan->assignments->count(),
                 'projectCount' => $plan->assignments->pluck('project_id')->filter()->unique()->count(),
-                'projectNames' => $plan->assignments->pluck('project.name')->filter()->unique()->values(),
+                'projects' => $plan->assignments
+                    ->filter(fn (ContractingDutyAssignment $assignment) => $assignment->project)
+                    ->groupBy('project_id')
+                    ->map(fn ($assignments) => [
+                        'name' => $assignments->first()->project->name,
+                        'employeeCount' => $assignments->count(),
+                    ])
+                    ->sortBy('name')
+                    ->values(),
                 'people' => $plan->assignments
                     ->sortBy(fn (ContractingDutyAssignment $assignment) => $assignment->employee?->name)
                     ->map(fn (ContractingDutyAssignment $assignment) => [
@@ -272,8 +296,27 @@ class DashboardController extends Controller
             ])
             ->values();
 
+        // Duties only ever come from contracting accounts, so those are the
+        // names worth offering. Anyone who already owns a plan is kept in the
+        // list even if their access has changed since.
+        $planners = User::query()
+            ->where(fn ($query) => $query
+                ->where(fn ($contracting) => $contracting
+                    ->where('role', User::ROLE_ATTENDANCE)
+                    ->where(fn ($type) => $type
+                        ->whereNull('attendance_employee_type')
+                        ->orWhere('attendance_employee_type', 'contracting')))
+                ->orWhereIn('id', ContractingDutyPlan::query()->select('created_by')))
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+            ]);
+
         return [
             'plans' => $plans,
+            'planners' => $planners,
             'summary' => [
                 'open' => ContractingDutyPlan::query()
                     ->where('status', '!=', ContractingDutyPlan::STATUS_FINALIZED)

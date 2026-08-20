@@ -69,6 +69,11 @@ interface DutyPerson {
     overtimeHours: number | null;
 }
 
+interface DutyProject {
+    name: string;
+    employeeCount: number;
+}
+
 interface DutyPlan {
     id: number;
     date: string;
@@ -76,14 +81,21 @@ interface DutyPlan {
     status: string;
     submitted: boolean;
     createdBy: string | null;
+    createdById: number | null;
     employeeCount: number;
     projectCount: number;
-    projectNames: string[];
+    projects: DutyProject[];
     people: DutyPerson[];
+}
+
+interface Planner {
+    id: number;
+    name: string;
 }
 
 interface ContractingDuty {
     plans: DutyPlan[];
+    planners: Planner[];
     summary: {
         open: number;
         submitted: number;
@@ -127,6 +139,11 @@ const ropeSearch = ref('');
 const contractingSearch = ref('');
 const dutySearch = ref('');
 const dutyStatusFilter = ref<'all' | 'open' | 'submitted'>('all');
+const dutyPlannerFilter = ref('all');
+/// Duties open on the date the dashboard is already showing, because that is
+/// the day the admin came to review. Widening to the recent window stays one
+/// click away, which is what the person search needs.
+const dutyDateScope = ref<'date' | 'all'>('date');
 
 /// A duty is worth showing when the searched person is on it. The same search
 /// also accepts a project or a planner's name, because an admin scanning the
@@ -148,14 +165,21 @@ const dutyPlanMatches = (plan: DutyPlan) => {
         return true;
     }
 
-    return matchedPeople(plan).length > 0 || matchesEmployeeSearch([plan.createdBy, plan.dateLabel, ...plan.projectNames], query);
+    return (
+        matchedPeople(plan).length > 0 ||
+        matchesEmployeeSearch([plan.createdBy, plan.dateLabel, ...plan.projects.map((project) => project.name)], query)
+    );
 };
 
 const filteredDutyPlans = computed(() =>
     props.contractingDuty.plans
+        .filter((plan) => dutyDateScope.value === 'all' || plan.date === props.selectedDate)
+        .filter((plan) => dutyPlannerFilter.value === 'all' || String(plan.createdById) === dutyPlannerFilter.value)
         .filter((plan) => (dutyStatusFilter.value === 'all' ? true : dutyStatusFilter.value === 'submitted' ? plan.submitted : !plan.submitted))
         .filter(dutyPlanMatches),
 );
+
+const dutiesInScope = computed(() => props.contractingDuty.plans.filter((plan) => dutyDateScope.value === 'all' || plan.date === props.selectedDate).length);
 
 const matchedPeopleTotal = computed(() => filteredDutyPlans.value.reduce((total, plan) => total + matchedPeople(plan).length, 0));
 
@@ -267,14 +291,20 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                             Duties from every planner, newest first. Search a person to see which duties they are on.
                         </p>
                     </div>
-                    <div class="relative w-full xl:w-80">
-                        <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            v-model="dutySearch"
-                            type="search"
-                            class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
-                            placeholder="Search person, project or planner"
-                        />
+                    <div class="grid w-full gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(160px,200px)] xl:w-[34rem]">
+                        <div class="relative">
+                            <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                                v-model="dutySearch"
+                                type="search"
+                                class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
+                                placeholder="Search person, project or planner"
+                            />
+                        </div>
+                        <select v-model="dutyPlannerFilter" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                            <option value="all">All planners</option>
+                            <option v-for="planner in contractingDuty.planners" :key="planner.id" :value="String(planner.id)">{{ planner.name }}</option>
+                        </select>
                     </div>
                 </div>
 
@@ -330,8 +360,26 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                             {{ option.label }}
                         </button>
                     </div>
+                    <div class="inline-flex rounded-md border p-1">
+                        <button
+                            type="button"
+                            class="rounded px-3 py-1.5 text-sm"
+                            :class="dutyDateScope === 'date' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
+                            @click="dutyDateScope = 'date'"
+                        >
+                            {{ selectedDateLabel }}
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded px-3 py-1.5 text-sm"
+                            :class="dutyDateScope === 'all' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
+                            @click="dutyDateScope = 'all'"
+                        >
+                            All recent
+                        </button>
+                    </div>
                     <p class="text-sm text-muted-foreground">
-                        Showing {{ filteredDutyPlans.length }} of {{ contractingDuty.plans.length }} duties<template v-if="dutySearch.trim()">
+                        Showing {{ filteredDutyPlans.length }} of {{ dutiesInScope }} duties<template v-if="dutySearch.trim()">
                             - {{ matchedPeopleTotal }} matching {{ matchedPeopleTotal === 1 ? 'person' : 'people' }}</template
                         >.
                     </p>
@@ -358,13 +406,42 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                         </div>
 
                         <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-                            <div class="rounded-md border p-3">
+                            <div class="group relative rounded-md border p-3" tabindex="0">
                                 <p class="text-xs text-muted-foreground">Projects</p>
                                 <p class="mt-1 font-semibold">{{ plan.projectCount }}</p>
+                                <div
+                                    v-if="plan.projects.length"
+                                    class="invisible absolute left-0 top-full z-30 mt-1 w-72 max-w-[calc(100vw-3rem)] rounded-md border bg-card p-2 opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                                >
+                                    <p class="px-2 pb-1 text-xs font-medium text-muted-foreground">Projects on {{ plan.dateLabel }}</p>
+                                    <div class="max-h-56 overflow-auto">
+                                        <div v-for="project in plan.projects" :key="project.name" class="flex items-center justify-between gap-3 rounded px-2 py-1">
+                                            <span class="truncate">{{ project.name }}</span>
+                                            <span class="shrink-0 text-xs text-muted-foreground">{{ project.employeeCount }}</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="rounded-md border p-3">
+                            <div class="group relative rounded-md border p-3" tabindex="0">
                                 <p class="text-xs text-muted-foreground">Employees</p>
                                 <p class="mt-1 font-semibold">{{ plan.employeeCount }}</p>
+                                <div
+                                    v-if="plan.people.length"
+                                    class="invisible absolute right-0 top-full z-30 mt-1 w-80 max-w-[calc(100vw-3rem)] rounded-md border bg-card p-2 opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                                >
+                                    <p class="px-2 pb-1 text-xs font-medium text-muted-foreground">Employees on {{ plan.dateLabel }}</p>
+                                    <div class="max-h-56 overflow-auto">
+                                        <div v-for="person in plan.people" :key="person.id" class="flex items-center justify-between gap-3 rounded px-2 py-1">
+                                            <div class="min-w-0">
+                                                <p class="truncate">{{ personDisplayName(person) }}</p>
+                                                <p class="truncate text-xs text-muted-foreground">{{ person.projectName ?? 'No project' }}</p>
+                                            </div>
+                                            <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize" :class="personStatusClass(person.status)">
+                                                {{ person.status }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -386,8 +463,8 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                             </div>
                         </div>
 
-                        <p v-else-if="plan.projectNames.length" class="mt-3 truncate text-xs text-muted-foreground">
-                            {{ plan.projectNames.join(', ') }}
+                        <p v-else-if="plan.projects.length" class="mt-3 truncate text-xs text-muted-foreground">
+                            {{ plan.projects.map((project) => project.name).join(', ') }}
                         </p>
 
                         <a
@@ -399,9 +476,18 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                     </article>
                 </div>
 
-                <div v-else class="mt-4 flex min-h-40 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-                    <template v-if="dutySearch.trim()">No duty matches this search.</template>
-                    <template v-else>No contracting duty plans yet.</template>
+                <div v-else class="mt-4 flex min-h-40 flex-col items-center justify-center gap-3 rounded-md border border-dashed text-sm text-muted-foreground">
+                    <p v-if="dutySearch.trim()">No duty matches this search.</p>
+                    <p v-else-if="dutyDateScope === 'date'">No contracting duty for {{ selectedDateLabel }}.</p>
+                    <p v-else>No contracting duty plans yet.</p>
+                    <button
+                        v-if="dutyDateScope === 'date'"
+                        type="button"
+                        class="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium text-foreground hover:bg-muted"
+                        @click="dutyDateScope = 'all'"
+                    >
+                        Show all recent duties
+                    </button>
                 </div>
             </section>
 

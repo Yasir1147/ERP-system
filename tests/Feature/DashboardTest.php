@@ -112,3 +112,84 @@ test('removed duty people are left out of the dashboard overview', function () {
             ->where('contractingDuty.plans.0.employeeCount', 0)
             ->where('contractingDuty.plans.0.people', []));
 });
+
+test('the duty overview groups people by project and lists contracting planners', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $contractingPlanner = User::factory()->create([
+        'name' => 'Contracting Planner',
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+    User::factory()->create([
+        'name' => 'Rope Only User',
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'rope_access',
+    ]);
+
+    $project = Project::query()->create([
+        'name' => 'Shared Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+    ]);
+    $plan = ContractingDutyPlan::query()->create([
+        'duty_date' => now()->toDateString(),
+        'created_by' => $contractingPlanner->id,
+        'status' => ContractingDutyPlan::STATUS_DRAFT,
+    ]);
+
+    foreach (['981', '982'] as $code) {
+        $employee = Employee::query()->create([
+            'code' => $code,
+            'name' => 'Worker '.$code,
+            'profession' => 'Mason',
+            'type' => 'contracting',
+            'status' => Employee::STATUS_ACTIVE,
+        ]);
+        ContractingDutyAssignment::query()->create([
+            'contracting_duty_plan_id' => $plan->id,
+            'duty_date' => now()->toDateString(),
+            'employee_id' => $employee->id,
+            'project_id' => $project->id,
+            'status' => ContractingDutyAssignment::STATUS_PLANNED,
+            'has_overtime' => false,
+        ]);
+    }
+
+    $this->actingAs($admin)
+        ->get('/dashboard')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('contractingDuty.plans.0.projectCount', 1)
+            ->where('contractingDuty.plans.0.projects.0.name', 'Shared Project')
+            ->where('contractingDuty.plans.0.projects.0.employeeCount', 2)
+            ->where('contractingDuty.planners', fn ($planners) => collect($planners)->pluck('name')->contains('Contracting Planner')
+                && ! collect($planners)->pluck('name')->contains('Rope Only User')));
+});
+
+test('a duty on the selected date is listed even when it is older than the recent window', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $planner = User::factory()->create([
+        'role' => User::ROLE_ATTENDANCE,
+        'attendance_employee_type' => 'contracting',
+    ]);
+
+    $oldDate = now()->subDays(200)->toDateString();
+    ContractingDutyPlan::query()->create([
+        'duty_date' => $oldDate,
+        'created_by' => $planner->id,
+        'status' => ContractingDutyPlan::STATUS_FINALIZED,
+    ]);
+
+    // Thirty newer plans, so the old one falls outside the recent window.
+    foreach (range(1, 30) as $day) {
+        ContractingDutyPlan::query()->create([
+            'duty_date' => now()->subDays($day)->toDateString(),
+            'created_by' => $planner->id,
+            'status' => ContractingDutyPlan::STATUS_DRAFT,
+        ]);
+    }
+
+    $this->actingAs($admin)
+        ->get('/dashboard?date='.$oldDate)
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('contractingDuty.plans', fn ($plans) => collect($plans)->pluck('date')->contains($oldDate)));
+});

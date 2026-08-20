@@ -272,6 +272,9 @@ Contracting duty plans are operational schedules and remain separate from attend
 - Repeat Duty copies the source plan's employee/project assignments to another allowed date, avoiding manual re-selection of the workforce.
 - When an admin deletes submitted contracting attendance, its linked duty assignment is removed and the employee becomes selectable again; empty duty plans are also removed.
 - The admin Dashboard carries a read-only Contracting Duty Plans section covering every planner's last 30 duties, with Open/Submitted/All chips and one search box. Searching a person shows which duties they are on and the project and status they carry there, so an admin does not have to open each planner's own duty dashboard to find one worker. Removed assignments are excluded. The section hides when the dashboard type filter is set to Rope Access.
+- That section opens on the dashboard's own selected date and switches to All recent with one click. The selected date's duties are queried separately from the recent thirty, so paging back to an older day still shows that day's duties.
+- A planner dropdown sits beside the search. It lists contracting attendance users — the accounts that actually raise duties — plus anyone who already owns a plan, so a planner whose access changed later does not vanish from the filter.
+- The Projects and Employees tiles on each duty card reveal the full list on hover or keyboard focus: projects with their head count, employees with their project and status. The counts stay readable at a glance and the detail costs no click.
 
 Admin modules:
 
