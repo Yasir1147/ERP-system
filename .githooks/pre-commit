@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# Refuses a commit that carries a broken PHP file.
+#
+# Voice typing has more than once dropped a paragraph of dictated speech into
+# an open editor and been saved over real code. routes/console.php was left
+# unparseable that way, which takes every artisan command down with it. A
+# syntax check on the staged files catches that before it reaches a commit.
+
+fail=0
+
+for file in $(git diff --cached --name-only --diff-filter=ACM); do
+    case "$file" in
+        *.php)
+            # The staged copy, not the working tree: those can differ.
+            if ! git show ":$file" | php -l > /dev/null 2>&1; then
+                echo "PHP syntax error in staged file: $file"
+                git show ":$file" | php -l 2>&1 | head -3
+                fail=1
+            fi
+            ;;
+    esac
+done
+
+if [ "$fail" -ne 0 ]; then
+    echo ""
+    echo "Commit stopped. Fix the file above, or restore it with:"
+    echo "  git checkout -- <file>"
+    echo "To commit anyway: git commit --no-verify"
+    exit 1
+fi
+
+exit 0

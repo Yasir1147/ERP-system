@@ -96,6 +96,22 @@ Replace `attendance-system` if the actual database name is different.
 
 ## Git Workflow
 
+### Pre-commit Syntax Guard
+
+`.githooks/pre-commit` runs `php -l` over every staged PHP file and refuses the
+commit if one does not parse. Windows voice typing (Win+H) has twice dropped a
+paragraph of dictated speech into an open editor and had it saved over real
+code — once leaving `routes/console.php` unparseable, which takes every artisan
+command down with it. The hook catches that before it can be committed.
+
+Git does not carry the hook path in a clone, so enable it once per machine:
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+To commit past it deliberately: `git commit --no-verify`.
+
 ### Branches
 
 Two branches, two kinds of work. They must not be mixed in one commit.
