@@ -2,6 +2,7 @@
 
 namespace App\Services\Projects;
 
+use App\Models\AppSetting;
 use App\Models\AttendanceRecord;
 use App\Models\Project;
 use Illuminate\Support\Carbon;
@@ -20,6 +21,11 @@ class ProjectEmployeeHistoryService
      */
     public function build(Project $project, ?string $from = null, ?string $to = null): array
     {
+        // Read per build, never cached on the service: it is injected into a
+        // controller the router keeps alive, so a cached value would outlive
+        // the request that changed the setting.
+        $overhead = AppSetting::projectOverheadSettings();
+
         $records = AttendanceRecord::query()
             ->with(['employee.payrollSetting', 'submitter'])
             ->where('status', AttendanceRecord::STATUS_PRESENT)
@@ -33,7 +39,7 @@ class ProjectEmployeeHistoryService
             ->orderBy('employee_id')
             ->get();
 
-        $rows = $records->map(fn (AttendanceRecord $record) => $this->rowFor($record, $project));
+        $rows = $records->map(fn (AttendanceRecord $record) => $this->rowFor($record, $project, $overhead));
 
         $totals = [
             'uniqueEmployees' => $rows->pluck('employeeId')->filter()->unique()->count(),
@@ -42,6 +48,7 @@ class ProjectEmployeeHistoryService
             'overtimeHours' => (int) $rows->sum('overtimeHours'),
             'basicCost' => round($rows->sum('basicCost'), 2),
             'overtimeCost' => round($rows->sum('overtimeCost'), 2),
+            'overheadCost' => round($rows->sum('overheadCost'), 2),
             'totalCost' => round($rows->sum('totalCost'), 2),
         ];
 
@@ -65,6 +72,7 @@ class ProjectEmployeeHistoryService
                 ->where('missingPayrollSetting', true)
                 ->map(fn (array $row) => trim($row['employeeCode'].' - '.$row['employeeName'], ' -'))
                 ->values(),
+            'overhead' => $overhead,
             'filters' => [
                 'from' => $from,
                 'to' => $to,
@@ -76,7 +84,7 @@ class ProjectEmployeeHistoryService
     /**
      * @return array<string, mixed>
      */
-    private function rowFor(AttendanceRecord $record, Project $project): array
+    private function rowFor(AttendanceRecord $record, Project $project, array $overhead): array
     {
         $employee = $record->employee;
         $setting = $employee?->payrollSetting;
@@ -98,6 +106,10 @@ class ProjectEmployeeHistoryService
             ? 0
             : $overtimeHours * ($dailySalary / $standardHours);
 
+        // Overhead rides on basic pay only, and it belongs in this row's total
+        // so employee shares and the footing total match the Overview page.
+        $overheadCost = $overhead['enabled'] ? $basicCost * $overhead['multiplier'] : 0.0;
+
         return [
             'id' => $record->id,
             'date' => $record->attendance_date?->format('d/m/Y'),
@@ -112,7 +124,8 @@ class ProjectEmployeeHistoryService
             'overtimeHours' => $overtimeHours,
             'basicCost' => round($basicCost, 2),
             'overtimeCost' => round($overtimeCost, 2),
-            'totalCost' => round($basicCost + $overtimeCost, 2),
+            'overheadCost' => round($overheadCost, 2),
+            'totalCost' => round($basicCost + $overtimeCost + $overheadCost, 2),
             'submittedBy' => $record->submitter?->name ?? '-',
             'submittedByRole' => $record->submitter?->role,
             'missingPayrollSetting' => ! $setting,
@@ -144,6 +157,7 @@ class ProjectEmployeeHistoryService
                     'overtimeHours' => (int) $employeeRows->sum('overtimeHours'),
                     'basicCost' => round($employeeRows->sum('basicCost'), 2),
                     'overtimeCost' => round($employeeRows->sum('overtimeCost'), 2),
+                    'overheadCost' => round($employeeRows->sum('overheadCost'), 2),
                     'totalCost' => $totalCost,
                     'costShare' => $projectTotal > 0
                         ? round($totalCost / $projectTotal * 100, 1)

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppSetting;
 use App\Models\AttendanceRecord;
 use App\Models\EmployeeExpense;
 use App\Models\Equipment;
@@ -29,6 +30,10 @@ class ProjectController extends Controller
 
     public function overview(Request $request): Response
     {
+        // Read once here and passed down, never memoised on the controller:
+        // the router keeps one controller instance per route, so a cached
+        // value would outlive the request that saved the new setting.
+        $overhead = AppSetting::projectOverheadSettings();
         $selectedType = $this->normalizeType($request->query('type'));
         $selectedProjectId = $this->normalizeProjectId($request->query('project_id'), $selectedType);
 
@@ -42,7 +47,7 @@ class ProjectController extends Controller
 
         $overviewRows = $projects
             ->when($selectedProjectId, fn (Collection $items) => $items->where('id', $selectedProjectId))
-            ->map(fn (Project $project) => $this->projectOverviewRow($project, $costMaps))
+            ->map(fn (Project $project) => $this->projectOverviewRow($project, $costMaps, $overhead))
             ->values();
 
         return Inertia::render('Projects/Overview', [
@@ -62,6 +67,7 @@ class ProjectController extends Controller
                 'workedDays' => $overviewRows->sum('workedDays'),
                 'overtimeHours' => $overviewRows->sum('overtimeHours'),
                 'labourCost' => round($overviewRows->sum('labourCost'), 2),
+                'overheadCost' => round($overviewRows->sum('overheadCost'), 2),
                 'purchaseCost' => round($overviewRows->sum('purchaseCost'), 2),
                 'expenseCost' => round($overviewRows->sum('expenseCost'), 2),
                 'totalCost' => round($overviewRows->sum('totalCost'), 2),
@@ -76,7 +82,21 @@ class ProjectController extends Controller
             'typeOptions' => $this->typeOptions(),
             'projectTypes' => Project::TYPES,
             'statuses' => Project::STATUSES,
+            'overheadSettings' => $overhead,
         ]);
+    }
+
+    public function updateOverheadSettings(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'multiplier' => ['required', 'numeric', 'min:0', 'max:10'],
+        ]);
+
+        AppSetting::setValue('project_overhead_enabled', $data['enabled'] ? '1' : '0');
+        AppSetting::setValue('project_overhead_multiplier', (string) $data['multiplier']);
+
+        return back()->with('success', 'Overhead setting saved.');
     }
 
     public function index(?string $type = null): Response
@@ -89,9 +109,10 @@ class ProjectController extends Controller
             ->latest()
             ->get();
         $costMaps = $this->projectCostMaps($projects->pluck('id'));
+        $overhead = AppSetting::projectOverheadSettings();
 
         return Inertia::render('Projects/Index', [
-            'projects' => $projects->map(fn (Project $project) => $this->projectOverviewRow($project, $costMaps))->values(),
+            'projects' => $projects->map(fn (Project $project) => $this->projectOverviewRow($project, $costMaps, $overhead))->values(),
             'statuses' => Project::STATUSES,
             'projectType' => $type,
             'projectTypeLabel' => Project::TYPES[$type],
@@ -214,7 +235,7 @@ class ProjectController extends Controller
         return $data;
     }
 
-    private function projectOverviewRow(Project $project, array $costMaps): array
+    private function projectOverviewRow(Project $project, array $costMaps, array $overhead): array
     {
         $records = AttendanceRecord::query()
             ->with('employee.payrollSetting')
@@ -259,11 +280,12 @@ class ProjectController extends Controller
         $labourIds = $records->pluck('employee_id')->unique();
         $workedDates = $records->pluck('attendance_date')->map(fn ($date) => Carbon::parse($date)->toDateString())->unique();
         $labourCost = round($basicCost + $overtimeCost, 2);
+        $overheadCost = $overhead['enabled'] ? round($basicCost * $overhead['multiplier'], 2) : 0.0;
         $purchaseCost = (float) ($costMaps['purchases'][$project->id] ?? 0);
         $purchaseVat = (float) ($costMaps['purchaseVat'][$project->id] ?? 0);
         $supplierPaid = (float) ($costMaps['supplierPaid'][$project->id] ?? 0);
         $expenseCost = (float) ($costMaps['expenses'][$project->id] ?? 0);
-        $actualCost = round($labourCost + $purchaseCost + $expenseCost, 2);
+        $actualCost = round($labourCost + $overheadCost + $purchaseCost + $expenseCost, 2);
         $contractValue = $project->contract_value !== null ? (float) $project->contract_value : null;
         $costBudget = $project->cost_budget !== null ? (float) $project->cost_budget : null;
         $budgetRemaining = $costBudget !== null ? round($costBudget - $actualCost, 2) : null;
@@ -302,6 +324,7 @@ class ProjectController extends Controller
             'basicCost' => round($basicCost, 2),
             'overtimeCost' => round($overtimeCost, 2),
             'labourCost' => $labourCost,
+            'overheadCost' => $overheadCost,
             'purchaseCost' => round($purchaseCost, 2),
             'purchaseVat' => round($purchaseVat, 2),
             'supplierPaid' => round($supplierPaid, 2),

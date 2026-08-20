@@ -49,6 +49,24 @@ class AppSetting extends Model
         ];
     }
 
+    /**
+     * Site overhead carried on top of a worker's wage.
+     *
+     * A day of labour costs the company more than the day's salary —
+     * accommodation, visa, transport, food, insurance. The multiplier turns
+     * basic salary into that real burden. It rides on basic pay only:
+     * overtime, purchases, and expenses are already at their true cost.
+     */
+    public static function projectOverheadSettings(): array
+    {
+        $multiplier = (float) static::getValue('project_overhead_multiplier', '2');
+
+        return [
+            'enabled' => static::getValue('project_overhead_enabled', '0') === '1',
+            'multiplier' => max(0, min(10, $multiplier)),
+        ];
+    }
+
     public static function getValue(string $key, ?string $default = null): ?string
     {
         $value = static::query()->where('key', $key)->value('value');

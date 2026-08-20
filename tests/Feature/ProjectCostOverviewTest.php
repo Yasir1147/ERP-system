@@ -1,6 +1,10 @@
 <?php
 
+use App\Models\AppSetting;
+use App\Models\AttendanceRecord;
+use App\Models\Employee;
 use App\Models\EmployeeExpense;
+use App\Models\EmployeePayrollSetting;
 use App\Models\Project;
 use App\Models\PurchaseBill;
 use App\Models\Supplier;
@@ -121,4 +125,102 @@ test('project with linked cost records cannot be deleted', function () {
         ->assertSessionHasErrors('project');
 
     $this->assertDatabaseHas('projects', ['id' => $project->id]);
+});
+
+test('overhead multiplies basic salary into actual cost when it is switched on', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $project = Project::query()->create([
+        'name' => 'Overhead Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+        'progress_percentage' => 0,
+    ]);
+    $employee = Employee::query()->create([
+        'code' => '991',
+        'name' => 'Overhead Worker',
+        'profession' => 'Mason',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    EmployeePayrollSetting::query()->create([
+        'employee_id' => $employee->id,
+        'daily_salary' => 100,
+        'standard_hours_per_day' => 8,
+        'is_overtime_enabled' => true,
+    ]);
+    AttendanceRecord::query()->create([
+        'employee_id' => $employee->id,
+        'project_id' => $project->id,
+        'attendance_date' => '2026-08-10',
+        'status' => AttendanceRecord::STATUS_PRESENT,
+        'attendance_fraction' => 1,
+        'overtime_hours' => 4,
+        'submitted_by' => $admin->id,
+    ]);
+
+    // Off by default: nothing about an existing project's cost may move
+    // until an admin deliberately switches overhead on.
+    $this->actingAs($admin)
+        ->get("/projects/overview?type=contracting&project_id={$project->id}")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('overviewRows.0.basicCost', 100)
+            ->where('overviewRows.0.overtimeCost', 50)
+            ->where('overviewRows.0.overheadCost', 0)
+            ->where('overviewRows.0.totalCost', 150));
+
+    $this->actingAs($admin)
+        ->post('/projects/overhead-settings', ['enabled' => true, 'multiplier' => 2])
+        ->assertSessionHasNoErrors();
+
+    // Overhead is 2 x basic (200), never 2 x overtime.
+    $this->actingAs($admin)
+        ->get("/projects/overview?type=contracting&project_id={$project->id}")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('overviewRows.0.overheadCost', 200)
+            ->where('overviewRows.0.totalCost', 350));
+});
+
+test('the employee history total agrees with the overview once overhead is on', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $project = Project::query()->create([
+        'name' => 'History Overhead Project',
+        'status' => 'ongoing',
+        'type' => 'contracting',
+        'progress_percentage' => 0,
+    ]);
+    $employee = Employee::query()->create([
+        'code' => '992',
+        'name' => 'History Worker',
+        'profession' => 'Helper',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    EmployeePayrollSetting::query()->create([
+        'employee_id' => $employee->id,
+        'daily_salary' => 100,
+        'standard_hours_per_day' => 8,
+        'is_overtime_enabled' => true,
+    ]);
+    AttendanceRecord::query()->create([
+        'employee_id' => $employee->id,
+        'project_id' => $project->id,
+        'attendance_date' => '2026-08-10',
+        'status' => AttendanceRecord::STATUS_PRESENT,
+        'attendance_fraction' => 1,
+        'overtime_hours' => 4,
+        'submitted_by' => $admin->id,
+    ]);
+
+    AppSetting::setValue('project_overhead_enabled', '1');
+    AppSetting::setValue('project_overhead_multiplier', '2');
+
+    $history = $this->actingAs($admin)
+        ->getJson("/projects/{$project->id}/employee-history")
+        ->assertOk()
+        ->json();
+
+    expect((float) $history['totals']['overheadCost'])->toBe(200.0)
+        ->and((float) $history['totals']['totalCost'])->toBe(350.0)
+        ->and((float) $history['employeeSummary'][0]['overheadCost'])->toBe(200.0)
+        ->and((float) $history['employeeSummary'][0]['costShare'])->toBe(100.0);
 });

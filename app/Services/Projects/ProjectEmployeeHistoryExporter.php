@@ -111,6 +111,9 @@ class ProjectEmployeeHistoryExporter
             ['Overtime Hours', $totals['overtimeHours'], false],
             ['Basic Cost', $totals['basicCost'], true],
             ['Overtime Cost', $totals['overtimeCost'], true],
+            ...(($history['overhead']['enabled'] ?? false)
+                ? [['Overhead', $totals['overheadCost'], true]]
+                : []),
             ['Total Labour Cost', $totals['totalCost'], true],
         ];
 
@@ -176,7 +179,14 @@ class ProjectEmployeeHistoryExporter
      */
     private function writeTable(Worksheet $sheet, array $history, int $row): void
     {
-        $headings = [
+        // Overhead earns a column only when it is switched on, so a workbook
+        // produced with it off reads exactly as it always did.
+        $hasOverhead = (bool) ($history['overhead']['enabled'] ?? false);
+        $overheadColumn = $hasOverhead ? 'I' : null;
+        $totalColumn = $hasOverhead ? 'J' : 'I';
+        $shareColumn = $hasOverhead ? 'K' : 'J';
+
+        $headings = array_values(array_filter([
             'Code',
             'Employee',
             'Profession',
@@ -185,9 +195,10 @@ class ProjectEmployeeHistoryExporter
             'OT Hours',
             'Basic Cost',
             'OT Cost',
+            $hasOverhead ? 'Overhead' : null,
             'Total Cost',
             'Share %',
-        ];
+        ]));
 
         $headerRow = $row;
         $column = 'A';
@@ -197,7 +208,7 @@ class ProjectEmployeeHistoryExporter
             $column++;
         }
 
-        $sheet->getStyle('A'.$headerRow.':J'.$headerRow)->applyFromArray([
+        $sheet->getStyle('A'.$headerRow.':'.$shareColumn.$headerRow)->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
@@ -219,11 +230,16 @@ class ProjectEmployeeHistoryExporter
             $sheet->setCellValue('F'.$row, $employee['overtimeHours']);
             $sheet->setCellValue('G'.$row, $employee['basicCost']);
             $sheet->setCellValue('H'.$row, $employee['overtimeCost']);
-            $sheet->setCellValue('I'.$row, $employee['totalCost']);
-            $sheet->setCellValue('J'.$row, $employee['costShare'] / 100);
+
+            if ($overheadColumn) {
+                $sheet->setCellValue($overheadColumn.$row, $employee['overheadCost']);
+            }
+
+            $sheet->setCellValue($totalColumn.$row, $employee['totalCost']);
+            $sheet->setCellValue($shareColumn.$row, $employee['costShare'] / 100);
 
             if ($employee['missingPayrollSetting']) {
-                $sheet->getStyle('A'.$row.':J'.$row)
+                $sheet->getStyle('A'.$row.':'.$shareColumn.$row)
                     ->getFill()
                     ->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()
@@ -236,14 +252,14 @@ class ProjectEmployeeHistoryExporter
         $lastDataRow = $row - 1;
 
         if ($lastDataRow >= $firstDataRow) {
-            $sheet->getStyle('G'.$firstDataRow.':I'.$lastDataRow)
+            $sheet->getStyle('G'.$firstDataRow.':'.$totalColumn.$lastDataRow)
                 ->getNumberFormat()
                 ->setFormatCode(self::MONEY_FORMAT);
-            $sheet->getStyle('J'.$firstDataRow.':J'.$lastDataRow)
+            $sheet->getStyle($shareColumn.$firstDataRow.':'.$shareColumn.$lastDataRow)
                 ->getNumberFormat()
                 ->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
 
-            $sheet->setAutoFilter('A'.$headerRow.':J'.$lastDataRow);
+            $sheet->setAutoFilter('A'.$headerRow.':'.$shareColumn.$lastDataRow);
         }
 
         // Totals row, so the table foots to the same number as the summary.
@@ -254,10 +270,15 @@ class ProjectEmployeeHistoryExporter
         $sheet->setCellValue('F'.$row, $history['totals']['overtimeHours']);
         $sheet->setCellValue('G'.$row, $history['totals']['basicCost']);
         $sheet->setCellValue('H'.$row, $history['totals']['overtimeCost']);
-        $sheet->setCellValue('I'.$row, $history['totals']['totalCost']);
-        $sheet->setCellValue('J'.$row, $history['totals']['totalCost'] > 0 ? 1 : 0);
 
-        $sheet->getStyle('A'.$row.':J'.$row)->applyFromArray([
+        if ($overheadColumn) {
+            $sheet->setCellValue($overheadColumn.$row, $history['totals']['overheadCost']);
+        }
+
+        $sheet->setCellValue($totalColumn.$row, $history['totals']['totalCost']);
+        $sheet->setCellValue($shareColumn.$row, $history['totals']['totalCost'] > 0 ? 1 : 0);
+
+        $sheet->getStyle('A'.$row.':'.$shareColumn.$row)->applyFromArray([
             'font' => ['bold' => true],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
@@ -267,14 +288,14 @@ class ProjectEmployeeHistoryExporter
                 'top' => ['borderStyle' => Border::BORDER_THIN],
             ],
         ]);
-        $sheet->getStyle('G'.$row.':I'.$row)
+        $sheet->getStyle('G'.$row.':'.$totalColumn.$row)
             ->getNumberFormat()
             ->setFormatCode(self::MONEY_FORMAT);
-        $sheet->getStyle('J'.$row)
+        $sheet->getStyle($shareColumn.$row)
             ->getNumberFormat()
             ->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
 
-        $sheet->getStyle('A'.$headerRow.':J'.$row)
+        $sheet->getStyle('A'.$headerRow.':'.$shareColumn.$row)
             ->getBorders()
             ->getAllBorders()
             ->setBorderStyle(Border::BORDER_HAIR)
@@ -296,7 +317,8 @@ class ProjectEmployeeHistoryExporter
             'G' => 14,
             'H' => 13,
             'I' => 15,
-            'J' => 10,
+            'J' => 15,
+            'K' => 10,
         ];
 
         foreach ($widths as $column => $width) {

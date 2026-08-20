@@ -3,7 +3,7 @@ import SortableHeader from '@/components/SortableHeader.vue';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { Banknote, BookOpen, BriefcaseBusiness, FileSpreadsheet, LoaderCircle, Printer, Search, Users, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -43,6 +43,7 @@ interface OverviewRow {
     basicCost: number;
     overtimeCost: number;
     labourCost: number;
+    overheadCost: number;
     purchaseCost: number;
     purchaseVat: number;
     supplierPaid: number;
@@ -74,6 +75,7 @@ interface ProjectHistoryEmployeeSummary {
     overtimeHours: number;
     basicCost: number;
     overtimeCost: number;
+    overheadCost: number;
     totalCost: number;
     costShare: number;
     missingPayrollSetting: boolean;
@@ -87,6 +89,7 @@ interface ProjectHistoryTotals {
     overtimeHours: number;
     basicCost: number;
     overtimeCost: number;
+    overheadCost: number;
     totalCost: number;
 }
 
@@ -115,6 +118,7 @@ const props = defineProps<{
         workedDays: number;
         overtimeHours: number;
         labourCost: number;
+        overheadCost: number;
         purchaseCost: number;
         expenseCost: number;
         totalCost: number;
@@ -129,6 +133,7 @@ const props = defineProps<{
     projectTypes: Record<string, string>;
     statuses: string[];
     selectedProjectDetails: SelectedProjectDetails | null;
+    overheadSettings: { enabled: boolean; multiplier: number };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -177,8 +182,18 @@ const historyTotals = ref<ProjectHistoryTotals>({
     overtimeHours: 0,
     basicCost: 0,
     overtimeCost: 0,
+    overheadCost: 0,
     totalCost: 0,
 });
+const overheadForm = useForm({
+    enabled: props.overheadSettings.enabled,
+    multiplier: String(props.overheadSettings.multiplier),
+});
+
+const saveOverhead = () => {
+    overheadForm.post('/projects/overhead-settings', { preserveScroll: true });
+};
+
 const selectedProject = computed(() => (props.filters.projectId !== 'all' ? (props.overviewRows[0] ?? null) : null));
 
 /// Export links carry the same date filter the modal is showing, so the file
@@ -397,6 +412,49 @@ const closeProjectHistory = () => {
                 </div>
             </div>
 
+            <form class="rounded-lg border bg-card p-4" @submit.prevent="saveOverhead">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                        <h2 class="text-base font-medium">Labour Overhead</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            A worked day costs more than the day's wage - accommodation, visa, transport, food, insurance. This adds that
+                            burden to every project's actual cost as a multiple of basic salary. Overtime, purchases, and expenses are left
+                            at their own cost.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-end gap-3">
+                        <label class="flex items-center gap-2 text-sm">
+                            <input v-model="overheadForm.enabled" type="checkbox" class="size-4 rounded border-input" />
+                            Include overhead
+                        </label>
+                        <div class="grid gap-1">
+                            <label class="text-xs text-muted-foreground" for="overhead-multiplier">Multiplier</label>
+                            <Input
+                                id="overhead-multiplier"
+                                v-model="overheadForm.multiplier"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="10"
+                                class="h-10 w-28"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                            :disabled="overheadForm.processing"
+                        >
+                            Save
+                        </button>
+                    </div>
+                </div>
+                <p v-if="overheadForm.errors.multiplier" class="mt-2 text-sm text-red-600">{{ overheadForm.errors.multiplier }}</p>
+                <p v-else-if="overheadForm.enabled" class="mt-2 text-sm text-muted-foreground">
+                    A worker on AED 100 a day carries AED {{ (100 * Number(overheadForm.multiplier || 0)).toFixed(2) }} of overhead, so that
+                    day costs the project AED {{ (100 + 100 * Number(overheadForm.multiplier || 0)).toFixed(2) }}.
+                </p>
+            </form>
+
             <div class="grid auto-rows-min gap-4 sm:grid-cols-2 xl:grid-cols-6">
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
                     <div class="flex items-center justify-between gap-3">
@@ -418,6 +476,15 @@ const closeProjectHistory = () => {
                             <p class="mt-2 text-xl font-semibold">{{ money(summary.labourCost) }}</p>
                         </div>
                         <Users class="size-6 text-muted-foreground" />
+                    </div>
+                </div>
+                <div v-if="overheadSettings.enabled" class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <p class="text-sm text-muted-foreground">Overhead ({{ overheadSettings.multiplier }}x basic)</p>
+                            <p class="mt-2 text-xl font-semibold">{{ money(summary.overheadCost) }}</p>
+                        </div>
+                        <Users class="size-6 text-violet-700" />
                     </div>
                 </div>
                 <div class="rounded-lg border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
@@ -890,6 +957,10 @@ const closeProjectHistory = () => {
                                 <p class="text-xs text-muted-foreground">OT Cost</p>
                                 <p class="mt-1 text-xl font-semibold">{{ money(historyTotals.overtimeCost) }}</p>
                             </div>
+                            <div v-if="overheadSettings.enabled" class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Overhead</p>
+                                <p class="mt-1 text-xl font-semibold">{{ money(historyTotals.overheadCost) }}</p>
+                            </div>
                             <div class="rounded-md border p-3">
                                 <p class="text-xs text-muted-foreground">Total Cost</p>
                                 <p class="mt-1 text-xl font-semibold">{{ money(historyTotals.totalCost) }}</p>
@@ -922,6 +993,7 @@ const closeProjectHistory = () => {
                                             <th class="w-[90px] px-3 py-2 text-right font-medium">OT Hrs</th>
                                             <th class="w-[120px] px-3 py-2 text-right font-medium">Basic Cost</th>
                                             <th class="w-[120px] px-3 py-2 text-right font-medium">OT Cost</th>
+                                            <th v-if="overheadSettings.enabled" class="w-[120px] px-3 py-2 text-right font-medium">Overhead</th>
                                             <th class="w-[120px] px-3 py-2 text-right font-medium">Total Cost</th>
                                             <th class="w-[130px] px-3 py-2 text-right font-medium">Share</th>
                                             <th class="w-[180px] px-3 py-2 font-medium">Submitted By</th>
@@ -950,6 +1022,7 @@ const closeProjectHistory = () => {
                                             <td class="px-3 py-3 text-right">{{ summaryRow.overtimeHours }}</td>
                                             <td class="px-3 py-3 text-right">{{ money(summaryRow.basicCost) }}</td>
                                             <td class="px-3 py-3 text-right">{{ money(summaryRow.overtimeCost) }}</td>
+                                            <td v-if="overheadSettings.enabled" class="px-3 py-3 text-right">{{ money(summaryRow.overheadCost) }}</td>
                                             <td class="px-3 py-3 text-right font-semibold">{{ money(summaryRow.totalCost) }}</td>
                                             <td class="px-3 py-3 text-right">
                                                 <span class="text-xs font-medium">{{ summaryRow.costShare }}%</span>

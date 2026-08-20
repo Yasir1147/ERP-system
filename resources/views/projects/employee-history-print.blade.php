@@ -4,6 +4,7 @@
     $employees = $history['employeeSummary'];
     $missing = $history['missingPayrollEmployees'];
     $money = fn ($value) => number_format((float) $value, 2);
+    $hasOverhead = (bool) ($history['overhead']['enabled'] ?? false);
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -255,6 +256,9 @@
             <div class="stat"><span>Overtime Hours</span><strong>{{ $totals['overtimeHours'] }}</strong></div>
             <div class="stat"><span>Basic Cost</span><strong>{{ $money($totals['basicCost']) }}</strong></div>
             <div class="stat"><span>Overtime Cost</span><strong>{{ $money($totals['overtimeCost']) }}</strong></div>
+            @if ($hasOverhead)
+                <div class="stat"><span>Overhead</span><strong>{{ $money($totals['overheadCost']) }}</strong></div>
+            @endif
             <div class="stat total"><span>Total Labour Cost</span><strong>{{ $money($totals['totalCost']) }}</strong></div>
             <div class="stat"><span>Currency</span><strong>AED</strong></div>
         </div>
@@ -276,6 +280,7 @@
                     <th class="num" style="width: 7%">OT Hrs</th>
                     <th class="num" style="width: 10%">Basic</th>
                     <th class="num" style="width: 9%">OT Cost</th>
+                    @if ($hasOverhead)<th class="num" style="width: 10%">Overhead</th>@endif
                     <th class="num" style="width: 11%">Total</th>
                     <th class="num" style="width: 8%">Share</th>
                 </tr>
@@ -291,6 +296,7 @@
                         <td class="num">{{ $employee['overtimeHours'] }}</td>
                         <td class="num">{{ $money($employee['basicCost']) }}</td>
                         <td class="num">{{ $money($employee['overtimeCost']) }}</td>
+                        @if ($hasOverhead)<td class="num">{{ $money($employee['overheadCost']) }}</td>@endif
                         <td class="num">{{ $money($employee['totalCost']) }}</td>
                         <td class="num">
                             {{ $employee['costShare'] }}%
@@ -299,7 +305,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" style="text-align: center; padding: 22px; color: #6b7280;">
+                        <td colspan="{{ $hasOverhead ? 11 : 10 }}" style="text-align: center; padding: 22px; color: #6b7280;">
                             No attendance recorded for this project in the selected range.
                         </td>
                     </tr>
@@ -314,6 +320,7 @@
                         <td class="num">{{ $totals['overtimeHours'] }}</td>
                         <td class="num">{{ $money($totals['basicCost']) }}</td>
                         <td class="num">{{ $money($totals['overtimeCost']) }}</td>
+                        @if ($hasOverhead)<td class="num">{{ $money($totals['overheadCost']) }}</td>@endif
                         <td class="num">{{ $money($totals['totalCost']) }}</td>
                         <td class="num">100%</td>
                     </tr>

@@ -433,6 +433,23 @@ Employee history rows show employee code with name, are ordered by cost, and car
 
 Employees without a payroll setting are costed at zero, which understates the project total. Those rows are flagged in the modal, the Excel file, and the print view, so a reader is never shown an incomplete total as if it were final.
 
+### Labour Overhead
+
+A worked day costs the company more than that day's wage — accommodation, visa, transport, food, insurance. Projects Overview carries an admin control that adds this burden to actual cost as a multiple of **basic salary**:
+
+```text
+overhead = basic salary x multiplier
+actual cost = basic + overtime + overhead + purchases + approved expenses
+```
+
+Overtime, purchases, and expenses are excluded from the multiplier because they already sit at their true cost. The setting lives in `app_settings` as `project_overhead_enabled` and `project_overhead_multiplier` (default 2), read by `AppSetting::projectOverheadSettings()`.
+
+It ships **off**. Switching it on is an admin decision, so no existing project's reported cost moves on its own.
+
+The same overhead flows through the employee history modal, its Excel export, and its print view, as its own column that appears only when the setting is on. Both screens must foot to the same number; a project costing 4,000 on Overview and 1,200 in its own history breakdown is worse than having no overhead at all.
+
+Do not cache the setting on a controller or an injected service. Laravel keeps one controller instance per route for the process, so a memoised value outlives the request that changed it — the setting saved but the page kept showing the old cost. Read it per request and pass it down.
+
 The history can be exported from the modal:
 
 ```text
