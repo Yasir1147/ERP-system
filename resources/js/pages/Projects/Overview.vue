@@ -413,17 +413,22 @@ const closeProjectHistory = () => {
             </div>
 
             <form class="rounded-lg border bg-card p-4" @submit.prevent="saveOverhead">
-                <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
+                <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                    <div class="min-w-0">
                         <h2 class="text-base font-medium">Labour Overhead</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
+                        <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
                             A worked day costs more than the day's wage - accommodation, visa, transport, food, insurance. This adds that
                             burden to every project's actual cost as a multiple of basic salary. Overtime, purchases, and expenses are left
                             at their own cost.
                         </p>
+                        <p v-if="overheadForm.errors.multiplier" class="mt-2 text-sm text-red-600">{{ overheadForm.errors.multiplier }}</p>
+                        <p v-else-if="overheadForm.enabled" class="mt-2 max-w-2xl text-sm text-muted-foreground">
+                            A worker on AED 100 a day carries AED {{ (100 * Number(overheadForm.multiplier || 0)).toFixed(2) }} of overhead,
+                            so that day costs the project AED {{ (100 + 100 * Number(overheadForm.multiplier || 0)).toFixed(2) }}.
+                        </p>
                     </div>
-                    <div class="flex flex-wrap items-end gap-3">
-                        <label class="flex items-center gap-2 text-sm">
+                    <div class="flex shrink-0 flex-wrap items-end gap-3 lg:flex-nowrap">
+                        <label class="flex h-10 items-center gap-2 whitespace-nowrap text-sm">
                             <input v-model="overheadForm.enabled" type="checkbox" class="size-4 rounded border-input" />
                             Include overhead
                         </label>
@@ -436,23 +441,18 @@ const closeProjectHistory = () => {
                                 step="0.1"
                                 min="0"
                                 max="10"
-                                class="h-10 w-28"
+                                class="h-10 w-24"
                             />
                         </div>
                         <button
                             type="submit"
-                            class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                            class="h-10 shrink-0 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground disabled:opacity-60"
                             :disabled="overheadForm.processing"
                         >
                             Save
                         </button>
                     </div>
                 </div>
-                <p v-if="overheadForm.errors.multiplier" class="mt-2 text-sm text-red-600">{{ overheadForm.errors.multiplier }}</p>
-                <p v-else-if="overheadForm.enabled" class="mt-2 text-sm text-muted-foreground">
-                    A worker on AED 100 a day carries AED {{ (100 * Number(overheadForm.multiplier || 0)).toFixed(2) }} of overhead, so that
-                    day costs the project AED {{ (100 + 100 * Number(overheadForm.multiplier || 0)).toFixed(2) }}.
-                </p>
             </form>
 
             <div class="grid auto-rows-min gap-4 sm:grid-cols-2 xl:grid-cols-6">
