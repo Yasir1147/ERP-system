@@ -87,14 +87,25 @@ class ProjectEmployeeHistoryExporter
         $sheet->setCellValue('B5', $project['typeLabel']);
         $sheet->setCellValue('A6', 'Status');
         $sheet->setCellValue('B6', ucfirst((string) $project['status']));
-        $sheet->setCellValue('A7', 'Date Range');
-        $sheet->setCellValue('B7', $history['rangeLabel']);
-        $sheet->setCellValue('A8', 'Generated');
-        $sheet->setCellValue('B8', now()->format('d/m/Y h:i A'));
+        // Contract value sits with the project's own facts, so labour cost can
+        // be read against what the project was sold for.
+        $sheet->setCellValue('A7', 'Contract Value');
 
-        $sheet->getStyle('A4:A8')->getFont()->setBold(true);
+        if ($project['contractValue'] !== null) {
+            $sheet->setCellValue('B7', $project['contractValue']);
+            $sheet->getStyle('B7')->getNumberFormat()->setFormatCode(self::MONEY_FORMAT);
+        } else {
+            $sheet->setCellValue('B7', 'Not set');
+        }
 
-        return 10;
+        $sheet->setCellValue('A8', 'Date Range');
+        $sheet->setCellValue('B8', $history['rangeLabel']);
+        $sheet->setCellValue('A9', 'Generated');
+        $sheet->setCellValue('B9', now()->format('d/m/Y h:i A'));
+
+        $sheet->getStyle('A4:A9')->getFont()->setBold(true);
+
+        return 11;
     }
 
     /**

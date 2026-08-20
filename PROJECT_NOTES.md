@@ -461,6 +461,8 @@ The history can be exported from the modal:
 /projects/{project}/employee-history/print    print/PDF view
 ```
 
+Both name the project's contract value alongside its code and status, so labour cost can be read against what the project was sold for. Projects with no contract value say "Not set" rather than showing a misleading zero.
+
 Both carry the modal's current date filter, so the file always matches what is on screen. Excel export uses PhpSpreadsheet: frozen header, auto-filter, currency and percentage formats, and a bold totals row that foots to the summary. The print view is A4 portrait and is saved as PDF from the browser print dialog, matching payslips and timesheets.
 
 History data is built by `app/Services/Projects/ProjectEmployeeHistoryService.php` and shared by the modal, the Excel export, and the print view, so the three can never disagree about a project's labour cost.

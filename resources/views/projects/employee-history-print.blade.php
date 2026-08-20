@@ -245,6 +245,7 @@
                 <span><b>Project Code:</b> {{ $project['code'] }}</span>
             @endif
             <span><b>Status:</b> {{ ucfirst($project['status']) }}</span>
+            <span><b>Contract Value:</b> {{ $project['contractValue'] !== null ? 'AED '.$money($project['contractValue']) : 'Not set' }}</span>
             <span><b>Date Range:</b> {{ $history['rangeLabel'] }}</span>
             <span><b>Generated:</b> {{ $generatedAt }}</span>
         </div>

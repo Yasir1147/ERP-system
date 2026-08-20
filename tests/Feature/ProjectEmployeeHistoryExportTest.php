@@ -209,3 +209,30 @@ it('blocks non-admin users from the exports', function () {
         ->get('/projects/'.$project->id.'/employee-history/print')
         ->assertForbidden();
 });
+
+it('shows the project contract value in the print view', function () {
+    $admin = historyAdmin();
+    $project = historyProject();
+    $project->update(['contract_value' => 125000]);
+
+    historyRecord($project, historyEmployee('851', 'Contract Worker', 200), $admin);
+
+    $this->actingAs($admin)
+        ->get('/projects/'.$project->id.'/employee-history/print')
+        ->assertOk()
+        ->assertSee('Contract Value')
+        ->assertSee('125,000.00');
+});
+
+it('says so in the print view when no contract value is set', function () {
+    $admin = historyAdmin();
+    $project = historyProject();
+
+    historyRecord($project, historyEmployee('852', 'No Contract Worker', 200), $admin);
+
+    $this->actingAs($admin)
+        ->get('/projects/'.$project->id.'/employee-history/print')
+        ->assertOk()
+        ->assertSee('Contract Value')
+        ->assertSee('Not set');
+});

@@ -62,6 +62,9 @@ class ProjectEmployeeHistoryService
                 'status' => $project->status,
                 'type' => $project->type,
                 'typeLabel' => Project::TYPES[$project->type],
+                // Carried into the exports so labour cost can be read against
+                // what the project was actually sold for.
+                'contractValue' => $project->contract_value !== null ? (float) $project->contract_value : null,
             ],
             'records' => $rows->values(),
             'employeeSummary' => $employeeSummary,
