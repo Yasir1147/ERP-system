@@ -28,6 +28,7 @@ export const adminNavigation: NavItem[] = [
         items: [
             { title: 'Overview', href: '/attendance' },
             { title: 'Timesheet', href: '/attendance/timesheet' },
+            { title: 'Statement', href: '/attendance/statement' },
             { title: 'Contracting Attendance', href: '/mark-attendance/contracting' },
             { title: 'Rope Access Attendance', href: '/mark-attendance/rope-access' },
         ],

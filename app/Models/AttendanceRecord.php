@@ -73,6 +73,11 @@ class AttendanceRecord extends Model
         return $this->belongsTo(Employee::class);
     }
 
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
     public function overtimeProject(): BelongsTo
     {
         return $this->belongsTo(Project::class, 'overtime_project_id');

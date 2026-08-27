@@ -548,6 +548,25 @@ The parser is forgiving about message shape and strict about meaning. It reads `
 
 Chat exports are gitignored under `storage/app/imports`; they contain phone numbers and private messages.
 
+## Attendance Statement
+
+```text
+/attendance/statement
+/attendance/statement/export   formatted .xlsx
+/attendance/statement/print    print/PDF view
+```
+
+Day-by-day attendance for **one employee** or **one project**, over any date range. The timesheet answers "who worked this month" across everyone at once; the statement answers "what did this one person, or this one project, actually do" — the shape needed when a report is handed to a client, a project manager, or the worker being asked about a particular day.
+
+- One row per day: date, weekday, project, status, day value, overtime, note. In project mode each row also names the employee.
+- A half day counts as 0.5 of a present day, not a whole one.
+- Leave-range days appear even where no daily attendance record exists, because a silent gap on a formally approved leave day reads as unexplained absence. A real record for that date wins over the synthetic leave row.
+- **Include salary and cost** is off by default. Without it the statement carries no pay at all and can be handed to anyone; with it, daily salary, basic, overtime, and total cost appear and the copy is internal. The screen says so when the switch is on.
+- An employee with no payroll setting is costed at zero, and the statement says the cost is incomplete rather than presenting it as final.
+- Previous/Next month buttons move the range a whole calendar month at a time, and a whole month is labelled "August 2026" rather than as two dates.
+
+`app/Services/Attendance/AttendanceStatementService.php` builds it and is shared by the screen, the workbook, and the print view, so a printed copy can never say something the screen did not.
+
 ## Timesheet
 
 Monthly attendance timesheet:
