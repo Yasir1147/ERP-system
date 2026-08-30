@@ -49,6 +49,7 @@ class AttendanceStatementService
                 'missingSalary' => $employee->payrollSetting === null,
             ],
             'rows' => $rows,
+            'matrix' => $this->matrix($rows),
             'totals' => $this->totals($rows, $withSalary),
             'withSalary' => $withSalary,
             'filters' => ['from' => $from, 'to' => $to],
@@ -68,7 +69,24 @@ class AttendanceStatementService
             })
             ->get();
 
+        // Absent and Leave carry no project — nobody is marked away *to* a
+        // site — so a project statement built only from project-linked rows
+        // could never show an absence. The crew is taken to be everyone who
+        // worked this project in the range, and their away days are pulled in
+        // beside their worked ones. Without this the grid reads as though the
+        // whole crew turned up every single day.
+        $crewIds = $records->pluck('employee_id')->filter()->unique();
+
+        $awayRecords = $crewIds->isEmpty()
+            ? collect()
+            : $this->records($from, $to)
+                ->whereIn('attendance_records.employee_id', $crewIds)
+                ->whereNull('attendance_records.project_id')
+                ->whereIn('attendance_records.status', [AttendanceRecord::STATUS_ABSENT, AttendanceRecord::STATUS_LEAVE])
+                ->get();
+
         $rows = $records
+            ->concat($awayRecords)
             ->map(fn (AttendanceRecord $record) => $this->rowFor($record, $withSalary, forEmployee: false))
             ->sortBy([['dateValue', 'asc'], ['employeeName', 'asc']])
             ->values();
@@ -85,6 +103,7 @@ class AttendanceStatementService
                 'missingSalary' => false,
             ],
             'rows' => $rows,
+            'matrix' => $this->matrix($rows),
             'totals' => $this->totals($rows, $withSalary),
             'withSalary' => $withSalary,
             'filters' => ['from' => $from, 'to' => $to],
@@ -199,6 +218,96 @@ class AttendanceStatementService
 
                 return $days;
             });
+    }
+
+    /**
+     * The same days turned side-on: one row per person, one column per date
+     * the project actually ran.
+     *
+     * Only worked dates become columns. A site that runs two days a week over
+     * four months would otherwise carry a hundred empty columns, and the sheet
+     * stops being readable long before it stops being correct.
+     *
+     * A blank cell is deliberately "not listed" rather than absent: nobody
+     * wrote that person down that day, which is not the same as marking them
+     * away, and reading one as the other costs someone a day's pay.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return array<string, mixed>
+     */
+    private function matrix(Collection $rows): array
+    {
+        $dates = $rows
+            ->pluck('dateValue')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        $dateColumns = $dates->map(fn (string $date) => [
+            'value' => $date,
+            'label' => Carbon::parse($date)->format('d-M'),
+            'weekday' => Carbon::parse($date)->format('D'),
+        ]);
+
+        $people = $rows
+            ->groupBy(fn (array $row) => ($row['employeeCode'] ?? '').'|'.$row['employeeName'])
+            ->map(function (Collection $personRows) use ($dates) {
+                $first = $personRows->first();
+                $byDate = $personRows->keyBy('dateValue');
+
+                $cells = $dates->map(function (string $date) use ($byDate) {
+                    $row = $byDate->get($date);
+
+                    if (! $row) {
+                        return ['code' => '-', 'status' => 'not_listed', 'note' => null];
+                    }
+
+                    $code = match ($row['status']) {
+                        AttendanceRecord::STATUS_PRESENT => $row['dayValue'] == 0.5 ? 'H' : 'P',
+                        AttendanceRecord::STATUS_ABSENT => 'A',
+                        default => 'L',
+                    };
+
+                    return [
+                        'code' => $code,
+                        'status' => $row['status'],
+                        'note' => $row['overtimeHours'] ? $row['overtimeHours'].'h OT' : $row['note'],
+                    ];
+                });
+
+                return [
+                    'employeeCode' => $first['employeeCode'],
+                    'employeeName' => $first['employeeName'],
+                    'profession' => $first['profession'],
+                    'cells' => $cells->values(),
+                    'presentDays' => round($personRows->sum('dayValue'), 2),
+                    'absentDays' => $personRows->where('status', AttendanceRecord::STATUS_ABSENT)->count(),
+                    'leaveDays' => $personRows->where('status', AttendanceRecord::STATUS_LEAVE)->count(),
+                    'notListed' => $dates->count() - $personRows->pluck('dateValue')->unique()->count(),
+                ];
+            })
+            ->sortByDesc('presentDays')
+            ->values();
+
+        $footer = $dates->map(function (string $date) use ($rows) {
+            $onDate = $rows->where('dateValue', $date);
+
+            return [
+                'present' => round($onDate->where('status', AttendanceRecord::STATUS_PRESENT)->sum('dayValue'), 2),
+                'absent' => $onDate->where('status', AttendanceRecord::STATUS_ABSENT)->count(),
+            ];
+        });
+
+        return [
+            'dates' => $dateColumns,
+            'people' => $people,
+            'footer' => $footer->values(),
+            'footerTotals' => [
+                'present' => round($footer->sum('present'), 2),
+                'absent' => (int) $footer->sum('absent'),
+            ],
+        ];
     }
 
     /**

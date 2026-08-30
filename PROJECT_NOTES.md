@@ -558,6 +558,17 @@ Chat exports are gitignored under `storage/app/imports`; they contain phone numb
 
 Day-by-day attendance for **one employee** or **one project**, over any date range. The timesheet answers "who worked this month" across everyone at once; the statement answers "what did this one person, or this one project, actually do" — the shape needed when a report is handed to a client, a project manager, or the worker being asked about a particular day.
 
+Two layouts, switched on the page and carried into both exports:
+
+- **Grid by person** (default for a project) — people down the side, worked days across the top, one letter per cell: `P` present, `H` half day, `A` absent, `L` leave, `–` not listed. Right-hand columns total Days Present, Days Absent, Not listed; the two footer rows count headcount present and marked absent per day. Excel uses rotated date headers and coloured cells; the print view goes A3 landscape.
+- **Day list** (default for an employee) — one row per day, with optional cost columns.
+
+Only days that actually carry a record become grid columns. A site running two days a week over four months would otherwise be a hundred empty columns wide, and the sheet stops being readable long before it stops being correct.
+
+A blank cell is **not listed**, never absent. Nobody wrote that person down that day, which is not the same as marking them away — and reading one as the other costs someone a day's pay.
+
+Absent and Leave carry no project, because nobody is marked away *to* a site. A project statement built only from project-linked rows could therefore never show an absence, so the crew is taken to be everyone who worked that project in the range and their away days are pulled in beside their worked ones. Without this the grid reads as though the whole crew turned up every single day.
+
 - One row per day: date, weekday, project, status, day value, overtime, note. In project mode each row also names the employee.
 - A half day counts as 0.5 of a present day, not a whole one.
 - Leave-range days appear even where no daily attendance record exists, because a silent gap on a formally approved leave day reads as unexplained absence. A real record for that date wins over the synthetic leave row.

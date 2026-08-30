@@ -40,7 +40,33 @@ interface StatementRow {
     missingSalary: boolean;
 }
 
+interface MatrixCell {
+    code: string;
+    status: string;
+    note: string | null;
+}
+
+interface MatrixPerson {
+    employeeCode: string | null;
+    employeeName: string;
+    profession: string | null;
+    cells: MatrixCell[];
+    presentDays: number;
+    absentDays: number;
+    leaveDays: number;
+    notListed: number;
+}
+
+interface Matrix {
+    dates: Array<{ value: string; label: string; weekday: string }>;
+    people: MatrixPerson[];
+    footer: Array<{ present: number; absent: number }>;
+    footerTotals: { present: number; absent: number };
+}
+
 interface Statement {
+    layout: 'list' | 'grid';
+    matrix: Matrix;
     mode: 'employee' | 'project';
     subject: {
         id: number;
@@ -73,6 +99,7 @@ const props = defineProps<{
     statement: Statement | null;
     filters: {
         mode: 'employee' | 'project';
+        layout: 'list' | 'grid';
         employeeId: number | null;
         projectId: number | null;
         from: string;
@@ -89,6 +116,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const mode = ref(props.filters.mode);
+const layout = ref(props.filters.layout);
 const employeeId = ref(props.filters.employeeId ? String(props.filters.employeeId) : '');
 const projectId = ref(props.filters.projectId ? String(props.filters.projectId) : '');
 const from = ref(props.filters.from);
@@ -104,7 +132,7 @@ const employeeOptions = computed(() =>
 );
 
 const query = computed(() => {
-    const params = new URLSearchParams({ mode: mode.value, from: from.value, to: to.value });
+    const params = new URLSearchParams({ mode: mode.value, layout: layout.value, from: from.value, to: to.value });
 
     if (mode.value === 'employee' && employeeId.value) params.set('employee_id', employeeId.value);
     if (mode.value === 'project' && projectId.value) params.set('project_id', projectId.value);
@@ -150,6 +178,13 @@ const visibleRows = computed(() => {
 });
 
 const money = (value: number | null) => (value === null ? '-' : new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2 }).format(value));
+
+const cellClass = (code: string) => {
+    if (code === 'P') return 'bg-green-100 text-green-800';
+    if (code === 'H' || code === 'L') return 'bg-amber-100 text-amber-800';
+    if (code === 'A') return 'bg-red-100 text-red-800';
+    return 'bg-muted/60 font-normal text-muted-foreground';
+};
 
 const statusClass = (status: string) => {
     if (status === 'present') return 'border-green-600/30 bg-green-600/10 text-green-700';
@@ -239,6 +274,24 @@ const statusClass = (status: string) => {
                         <button type="button" class="rounded border px-2 py-1 text-xs hover:bg-muted" @click="shiftMonth(-1)">Previous month</button>
                         <button type="button" class="rounded border px-2 py-1 text-xs hover:bg-muted" @click="shiftMonth(1)">Next month</button>
                     </div>
+                    <div class="inline-flex rounded-md border p-1">
+                        <button
+                            v-for="option in [
+                                { value: 'grid', label: 'Grid by person' },
+                                { value: 'list', label: 'Day list' },
+                            ]"
+                            :key="option.value"
+                            type="button"
+                            class="rounded px-3 py-1.5 text-sm"
+                            :class="layout === option.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
+                            @click="
+                                layout = option.value as 'list' | 'grid';
+                                applyFilters();
+                            "
+                        >
+                            {{ option.label }}
+                        </button>
+                    </div>
                     <label class="flex items-center gap-2 text-sm">
                         <input v-model="withSalary" type="checkbox" class="size-4 rounded border-input" @change="applyFilters" />
                         Include salary and cost
@@ -324,7 +377,86 @@ const statusClass = (status: string) => {
                     </div>
                 </section>
 
-                <section class="overflow-hidden rounded-lg border bg-card">
+                <section v-if="statement.layout === 'grid'" class="overflow-hidden rounded-lg border bg-card">
+                    <div class="border-b p-4">
+                        <h2 class="font-medium">Attendance by person</h2>
+                        <p class="text-sm text-muted-foreground">
+                            {{ statement.matrix.people.length }} people across {{ statement.matrix.dates.length }} worked days. Only days with a
+                            record become columns.
+                        </p>
+                    </div>
+
+                    <div v-if="statement.matrix.people.length" class="max-h-[34rem] overflow-auto">
+                        <table class="w-full border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-[#c0504d] text-white">
+                                    <th class="sticky left-0 z-20 min-w-[190px] bg-[#c0504d] px-3 py-2 text-left font-medium">Name</th>
+                                    <th
+                                        v-for="date in statement.matrix.dates"
+                                        :key="date.value"
+                                        class="min-w-[42px] px-1 py-2 text-center align-bottom font-medium"
+                                    >
+                                        <span class="inline-block whitespace-nowrap [writing-mode:vertical-rl] [transform:rotate(180deg)]">
+                                            {{ date.label }}
+                                        </span>
+                                    </th>
+                                    <th class="min-w-[70px] px-2 py-2 text-center font-medium">Present</th>
+                                    <th class="min-w-[70px] px-2 py-2 text-center font-medium">Absent</th>
+                                    <th class="min-w-[80px] px-2 py-2 text-center font-medium">Not listed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="person in statement.matrix.people" :key="person.employeeName" class="border-b last:border-b-0">
+                                    <td class="sticky left-0 z-10 whitespace-nowrap border-r bg-card px-3 py-1.5">
+                                        {{ person.employeeCode ? `${person.employeeCode} - ` : '' }}{{ person.employeeName }}
+                                    </td>
+                                    <td
+                                        v-for="(cell, index) in person.cells"
+                                        :key="index"
+                                        class="border-r px-1 py-1.5 text-center font-semibold"
+                                        :class="cellClass(cell.code)"
+                                        :title="cell.note || ''"
+                                    >
+                                        {{ cell.code === '-' ? '–' : cell.code }}
+                                    </td>
+                                    <td class="border-r px-2 py-1.5 text-center font-semibold">{{ person.presentDays }}</td>
+                                    <td class="border-r px-2 py-1.5 text-center">{{ person.absentDays }}</td>
+                                    <td class="px-2 py-1.5 text-center text-muted-foreground">{{ person.notListed }}</td>
+                                </tr>
+                            </tbody>
+                            <tfoot class="border-t-2 font-semibold text-[#9b2c2c]">
+                                <tr>
+                                    <td class="sticky left-0 z-10 whitespace-nowrap border-r bg-card px-3 py-1.5">Headcount present that day</td>
+                                    <td v-for="(day, index) in statement.matrix.footer" :key="index" class="border-r px-1 py-1.5 text-center">
+                                        {{ day.present }}
+                                    </td>
+                                    <td class="border-r px-2 py-1.5 text-center">{{ statement.matrix.footerTotals.present }}</td>
+                                    <td class="border-r"></td>
+                                    <td></td>
+                                </tr>
+                                <tr>
+                                    <td class="sticky left-0 z-10 whitespace-nowrap border-r bg-card px-3 py-1.5">Marked absent that day</td>
+                                    <td v-for="(day, index) in statement.matrix.footer" :key="index" class="border-r px-1 py-1.5 text-center">
+                                        {{ day.absent }}
+                                    </td>
+                                    <td class="border-r px-2 py-1.5 text-center">{{ statement.matrix.footerTotals.absent }}</td>
+                                    <td class="border-r"></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div v-else class="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
+                        No attendance recorded in this date range.
+                    </div>
+
+                    <p class="border-t p-3 text-xs text-muted-foreground">
+                        <b>P</b> Present · <b>H</b> Half day · <b>A</b> Absent · <b>L</b> Leave · <b>–</b> Not listed that day
+                    </p>
+                </section>
+
+                <section v-else class="overflow-hidden rounded-lg border bg-card">
                     <div class="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <h2 class="font-medium">Daily Record</h2>

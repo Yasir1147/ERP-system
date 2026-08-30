@@ -234,3 +234,127 @@ it('blocks non-admin users from the statement', function () {
     $this->actingAs($user)->get('/attendance/statement/export')->assertStatus(403);
     $this->actingAs($user)->get('/attendance/statement/print')->assertStatus(403);
 });
+
+it('turns the project days side-on as a grid of people against dates', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $first = statementEmployee('611', 'Grid One');
+    $second = statementEmployee('612', 'Grid Two');
+
+    statementRecord($first, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($second, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($first, $project, '2026-08-05', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($second, $project, '2026-08-05', AttendanceRecord::STATUS_ABSENT, $admin);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('statement.layout', 'grid')
+            // Only worked days become columns; the other 29 days of August do not.
+            ->has('statement.matrix.dates', 2)
+            ->has('statement.matrix.people', 2)
+            ->where('statement.matrix.people.0.employeeName', 'Grid One')
+            ->where('statement.matrix.people.0.cells.0.code', 'P')
+            ->where('statement.matrix.people.0.presentDays', 2)
+            ->where('statement.matrix.people.1.cells.1.code', 'A')
+            ->where('statement.matrix.people.1.absentDays', 1)
+            ->where('statement.matrix.footer.0.present', 2)
+            ->where('statement.matrix.footer.1.absent', 1));
+});
+
+it('marks a day nobody wrote the person down for as not listed, never absent', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $regular = statementEmployee('613', 'Every Day');
+    $occasional = statementEmployee('614', 'One Day Only');
+
+    statementRecord($regular, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($regular, $project, '2026-08-04', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($occasional, $project, '2026-08-04', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    // Reading "not listed" as absent would cost this man a day's pay.
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('statement.matrix.people.1.employeeName', 'One Day Only')
+            ->where('statement.matrix.people.1.cells.0.code', '-')
+            ->where('statement.matrix.people.1.absentDays', 0)
+            ->where('statement.matrix.people.1.notListed', 1));
+});
+
+it('shows a half day as its own mark in the grid', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $employee = statementEmployee('615', 'Half Day Worker');
+
+    statementRecord($employee, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin, fraction: 0.5);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('statement.matrix.people.0.cells.0.code', 'H')
+            ->where('statement.matrix.people.0.presentDays', 0.5));
+});
+
+it('renders the grid print view with the day columns and footer counts', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $employee = statementEmployee('616', 'Printed Grid');
+
+    statementRecord($employee, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement/print?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31&layout=grid')
+        ->assertOk()
+        ->assertSee('Printed Grid')
+        ->assertSee('03-Aug')
+        ->assertSee('Headcount present that day')
+        ->assertSee('Not listed');
+});
+
+it('downloads the grid workbook', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $employee = statementEmployee('617', 'Grid Export');
+
+    statementRecord($employee, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    $response = $this->actingAs($admin)
+        ->get('/attendance/statement/export?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31&layout=grid');
+
+    $response->assertOk();
+
+    expect(strlen($response->streamedContent()))->toBeGreaterThan(2000);
+});
+
+it('can switch a project back to the day list', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $employee = statementEmployee('618', 'List Again');
+
+    statementRecord($employee, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31&layout=list')
+        ->assertInertia(fn (Assert $page) => $page->where('statement.layout', 'list'));
+});
+
+it('pulls a crew absence into the project grid even though absences carry no project', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $crew = statementEmployee('619', 'Crew Member');
+    $stranger = statementEmployee('620', 'Never Here');
+
+    statementRecord($crew, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($crew, null, '2026-08-04', AttendanceRecord::STATUS_ABSENT, $admin);
+    // Somebody who never worked this project stays out of its statement.
+    statementRecord($stranger, null, '2026-08-04', AttendanceRecord::STATUS_ABSENT, $admin);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31')
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('statement.matrix.people', 1)
+            ->where('statement.matrix.people.0.employeeName', 'Crew Member')
+            ->where('statement.matrix.people.0.absentDays', 1)
+            ->where('statement.totals.absent', 1));
+});

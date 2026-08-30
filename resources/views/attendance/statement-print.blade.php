@@ -7,6 +7,8 @@
     $money = fn ($value) => number_format((float) $value, 2);
     $title = $isProject ? 'Project Attendance Statement' : 'Employee Attendance Statement';
     $columnCount = 6 + ($isProject ? 3 : 0) + ($withSalary ? 4 : 0);
+    $isGrid = ($statement['layout'] ?? 'list') === 'grid';
+    $matrix = $statement['matrix'] ?? ['dates' => [], 'people' => [], 'footer' => [], 'footerTotals' => ['present' => 0, 'absent' => 0]];
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -155,13 +157,37 @@
             justify-content: space-between;
         }
 
+        /* Grid layout: people down the side, worked days across the top. */
+        .page.grid { width: 420mm; min-height: 297mm; }
+
+        table.matrix { table-layout: auto; font-size: 8.5px; }
+        table.matrix thead th { background: #c0504d; border-color: #a94442; padding: 5px 3px; }
+        table.matrix thead th.day { writing-mode: vertical-rl; transform: rotate(180deg); height: 62px; text-align: left; }
+        table.matrix thead th.name { min-width: 150px; }
+        table.matrix tbody td { padding: 3px 4px; text-align: center; font-weight: 700; }
+        table.matrix tbody td.name { text-align: left; font-weight: 400; white-space: nowrap; }
+        table.matrix tbody tr:nth-child(even) td { background: transparent; }
+
+        td.mark-P { background: #dcfce7; color: #166534; }
+        td.mark-H { background: #fef3c7; color: #92400e; }
+        td.mark-L { background: #fef3c7; color: #92400e; }
+        td.mark-A { background: #fee2e2; color: #991b1b; }
+        td.mark-none { background: #f3f4f6; color: #9ca3af; font-weight: 400; }
+
+        table.matrix tfoot td { background: #fff; color: #9b2c2c; text-align: center; border-color: #d1d5db; }
+        table.matrix tfoot td.label { text-align: left; white-space: nowrap; }
+
+        .legend { margin-top: 10px; font-size: 9.5px; color: #4b5563; }
+        .legend b { color: #111827; }
+
         @media print {
             body { background: #fff; }
             .toolbar { display: none; }
             .page { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
             thead { display: table-header-group; }
             tr { break-inside: avoid; }
-            @page { size: A4 portrait; margin: 10mm; }
+            /* A grid of fifty day columns does not fit a portrait page. */
+            @page { size: {{ $isGrid ? 'A3 landscape' : 'A4 portrait' }}; margin: 10mm; }
         }
     </style>
 </head>
@@ -170,7 +196,7 @@
         <button type="button" onclick="window.print()">Print / Save as PDF</button>
     </div>
 
-    <div class="page">
+    <div class="page {{ $isGrid ? 'grid' : '' }}">
         <div class="header">
             <div class="brand">
                 <img src="{{ asset('al-mohafiz-logo.png') }}" alt="Al Mohafiz">
@@ -220,6 +246,69 @@
             <p class="warning">Cost is incomplete. This employee has no salary setting, so every day is costed at zero.</p>
         @endif
 
+        @if ($isGrid)
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th class="name">Name</th>
+                        @foreach ($matrix['dates'] as $date)
+                            <th class="day">{{ $date['label'] }}</th>
+                        @endforeach
+                        <th>Days Present</th>
+                        <th>Days Absent</th>
+                        <th>Not listed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($matrix['people'] as $person)
+                        <tr>
+                            <td class="name">{{ $person['employeeCode'] ? $person['employeeCode'].' - ' : '' }}{{ $person['employeeName'] }}</td>
+                            @foreach ($person['cells'] as $cell)
+                                <td class="mark-{{ $cell['code'] === '-' ? 'none' : $cell['code'] }}" title="{{ $cell['note'] }}">
+                                    {{ $cell['code'] === '-' ? '–' : $cell['code'] }}
+                                </td>
+                            @endforeach
+                            <td>{{ $person['presentDays'] }}</td>
+                            <td>{{ $person['absentDays'] }}</td>
+                            <td>{{ $person['notListed'] }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="{{ count($matrix['dates']) + 4 }}" style="text-align: center; padding: 22px; color: #6b7280;">
+                                No attendance recorded in this date range.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+                @if (count($matrix['people']))
+                    <tfoot>
+                        <tr>
+                            <td class="label">Headcount present that day</td>
+                            @foreach ($matrix['footer'] as $day)
+                                <td>{{ $day['present'] }}</td>
+                            @endforeach
+                            <td>{{ $matrix['footerTotals']['present'] }}</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="label">Marked absent that day</td>
+                            @foreach ($matrix['footer'] as $day)
+                                <td>{{ $day['absent'] }}</td>
+                            @endforeach
+                            <td>{{ $matrix['footerTotals']['absent'] }}</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                @endif
+            </table>
+
+            <p class="legend">
+                <b>P</b> Present &nbsp; <b>H</b> Half day &nbsp; <b>A</b> Absent &nbsp; <b>L</b> Leave &nbsp; <b>–</b> Not listed that day.
+                Only days this {{ $isProject ? 'project' : 'employee' }} has a record for become columns.
+            </p>
+        @else
         <table>
             <thead>
                 <tr>
@@ -294,6 +383,7 @@
                 </tfoot>
             @endif
         </table>
+        @endif
 
         <div class="footer">
             <span>Present Day counts a half day as 0.5. Leave days from an approved leave range appear even where no daily record exists.</span>

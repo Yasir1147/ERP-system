@@ -85,6 +85,7 @@ class AttendanceStatementController extends Controller
     {
         $data = $request->validate([
             'mode' => ['nullable', Rule::in(['employee', 'project'])],
+            'layout' => ['nullable', Rule::in(['list', 'grid'])],
             'employee_id' => ['nullable', 'integer', Rule::exists('employees', 'id')],
             'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')],
             'from' => ['nullable', 'date'],
@@ -97,8 +98,13 @@ class AttendanceStatementController extends Controller
         $from = $data['from'] ?? Carbon::today()->startOfMonth()->toDateString();
         $to = $data['to'] ?? Carbon::today()->endOfMonth()->toDateString();
 
+        $mode = $data['mode'] ?? 'employee';
+
         return [
-            'mode' => $data['mode'] ?? 'employee',
+            'mode' => $mode,
+            // A project is read as a grid of people against days; one person is
+            // read as a list of their days. Either can be switched to the other.
+            'layout' => $data['layout'] ?? ($mode === 'project' ? 'grid' : 'list'),
             'employeeId' => isset($data['employee_id']) ? (int) $data['employee_id'] : null,
             'projectId' => isset($data['project_id']) ? (int) $data['project_id'] : null,
             'from' => $from,
@@ -117,14 +123,26 @@ class AttendanceStatementController extends Controller
             $project = $filters['projectId'] ? Project::find($filters['projectId']) : null;
 
             return $project
-                ? $this->statements->forProject($project, $filters['from'], $filters['to'], $filters['withSalary'])
+                ? $this->withLayout($this->statements->forProject($project, $filters['from'], $filters['to'], $filters['withSalary']), $filters)
                 : null;
         }
 
         $employee = $filters['employeeId'] ? Employee::with('payrollSetting')->find($filters['employeeId']) : null;
 
         return $employee
-            ? $this->statements->forEmployee($employee, $filters['from'], $filters['to'], $filters['withSalary'])
+            ? $this->withLayout($this->statements->forEmployee($employee, $filters['from'], $filters['to'], $filters['withSalary']), $filters)
             : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $statement
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function withLayout(array $statement, array $filters): array
+    {
+        $statement['layout'] = $filters['layout'];
+
+        return $statement;
     }
 }
