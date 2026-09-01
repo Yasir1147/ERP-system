@@ -173,6 +173,8 @@
         td.mark-L { background: #fef3c7; color: #92400e; }
         td.mark-A { background: #fee2e2; color: #991b1b; }
         td.mark-none { background: #f3f4f6; color: #9ca3af; font-weight: 400; }
+        td.mark-S { background: #d9d9d9; color: #c00000; }
+        table.matrix thead th.sunday { background: #7f7f7f; border-color: #6b7280; }
 
         table.matrix tfoot td { background: #fff; color: #9b2c2c; text-align: center; border-color: #d1d5db; }
         table.matrix tfoot td.label { text-align: left; white-space: nowrap; }
@@ -252,7 +254,7 @@
                     <tr>
                         <th class="name">Name</th>
                         @foreach ($matrix['dates'] as $date)
-                            <th class="day">{{ $date['label'] }}</th>
+                            <th class="day {{ $date['isSunday'] ? 'sunday' : '' }}">{{ $date['label'] }}</th>
                         @endforeach
                         <th>Days Present</th>
                         <th>Days Absent</th>
@@ -305,7 +307,7 @@
             </table>
 
             <p class="legend">
-                <b>P</b> Present &nbsp; <b>H</b> Half day &nbsp; <b>A</b> Absent &nbsp; <b>L</b> Leave &nbsp; <b>–</b> Not listed that day.
+                <b>P</b> Present &nbsp; <b>H</b> Half day &nbsp; <b>A</b> Absent &nbsp; <b>L</b> Leave &nbsp; <b>S</b> Sunday &nbsp; <b>–</b> Not listed that day.
                 Only days this {{ $isProject ? 'project' : 'employee' }} has a record for become columns.
             </p>
         @else

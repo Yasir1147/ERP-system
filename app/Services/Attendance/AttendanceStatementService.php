@@ -292,17 +292,37 @@ class AttendanceStatementService
      */
     private function matrix(Collection $rows, ?Collection $roster = null): array
     {
-        $dates = $rows
+        $recorded = $rows
             ->pluck('dateValue')
             ->filter()
             ->unique()
             ->sort()
             ->values();
 
+        // Sundays between the first and last worked day are kept as columns
+        // even though nobody worked them. Dropping them makes a month read as
+        // one unbroken run of days and hides the week's shape; the site sheet
+        // has always shown the rest day in its place.
+        $sundays = collect();
+
+        if ($recorded->isNotEmpty()) {
+            $day = Carbon::parse($recorded->first());
+            $end = Carbon::parse($recorded->last());
+
+            for (; $day->lte($end); $day->addDay()) {
+                if ($day->isSunday()) {
+                    $sundays->push($day->toDateString());
+                }
+            }
+        }
+
+        $dates = $recorded->concat($sundays)->unique()->sort()->values();
+
         $dateColumns = $dates->map(fn (string $date) => [
             'value' => $date,
             'label' => Carbon::parse($date)->format('d-M'),
             'weekday' => Carbon::parse($date)->format('D'),
+            'isSunday' => Carbon::parse($date)->isSunday(),
         ]);
 
         $people = $rows
@@ -315,7 +335,11 @@ class AttendanceStatementService
                     $row = $byDate->get($date);
 
                     if (! $row) {
-                        return ['code' => '-', 'status' => 'not_listed', 'note' => null];
+                        // A rest day is not an unmarked day. Nobody was meant
+                        // to be written down on a Sunday.
+                        return Carbon::parse($date)->isSunday()
+                            ? ['code' => 'S', 'status' => 'rest', 'note' => 'Sunday']
+                            : ['code' => '-', 'status' => 'not_listed', 'note' => null];
                     }
 
                     $code = match ($row['status']) {
@@ -339,7 +363,11 @@ class AttendanceStatementService
                     'presentDays' => round($personRows->sum('dayValue'), 2),
                     'absentDays' => $personRows->where('status', AttendanceRecord::STATUS_ABSENT)->count(),
                     'leaveDays' => $personRows->where('status', AttendanceRecord::STATUS_LEAVE)->count(),
-                    'notListed' => $dates->count() - $personRows->pluck('dateValue')->unique()->count(),
+                    // Sundays are excluded: a rest day is not a day this person
+                    // went unlisted, and counting it as one reads as neglect.
+                    'notListed' => $dates
+                        ->reject(fn (string $date) => Carbon::parse($date)->isSunday() || $byDate->has($date))
+                        ->count(),
                 ];
             })
             ->sortByDesc('presentDays')
@@ -354,11 +382,13 @@ class AttendanceStatementService
                     'employeeCode' => $person['employeeCode'],
                     'employeeName' => $person['employeeName'],
                     'profession' => $person['profession'],
-                    'cells' => $dates->map(fn () => ['code' => '-', 'status' => 'not_listed', 'note' => null])->values(),
+                    'cells' => $dates->map(fn (string $date) => Carbon::parse($date)->isSunday()
+                        ? ['code' => 'S', 'status' => 'rest', 'note' => 'Sunday']
+                        : ['code' => '-', 'status' => 'not_listed', 'note' => null])->values(),
                     'presentDays' => 0.0,
                     'absentDays' => 0,
                     'leaveDays' => 0,
-                    'notListed' => $dates->count(),
+                    'notListed' => $dates->reject(fn (string $date) => Carbon::parse($date)->isSunday())->count(),
                 ]);
 
             $people = $people->concat($missing)->values();

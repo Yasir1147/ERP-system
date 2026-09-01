@@ -118,6 +118,19 @@ class AttendanceStatementExporter
         $sheet->getStyle('A'.$headerRow)->getAlignment()->setTextRotation(0)->setHorizontal(Alignment::HORIZONTAL_LEFT);
         $sheet->getRowDimension($headerRow)->setRowHeight(58);
 
+        // Applied after the row styling, which would otherwise paint over it:
+        // the rest day is marked in the header so a column can be recognised
+        // without reading all the way down it.
+        foreach ($dates as $index => $date) {
+            if ($date['isSunday'] ?? false) {
+                $sheet->getStyle($this->columnLetter(2 + $index).$headerRow)
+                    ->getFill()
+                    ->setFillType(Fill::FILL_SOLID)
+                    ->getStartColor()
+                    ->setARGB('FF7F7F7F');
+            }
+        }
+
         $row = $headerRow + 1;
         $firstDataRow = $row;
 
@@ -163,7 +176,7 @@ class AttendanceStatementExporter
         ]);
         $sheet->getStyle('A'.$row.':A'.($row + 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-        $sheet->setCellValue('A'.($row + 3), 'P = Present    H = Half day    A = Absent    L = Leave    – = Not listed that day');
+        $sheet->setCellValue('A'.($row + 3), 'P = Present    H = Half day    A = Absent    L = Leave    S = Sunday    – = Not listed that day');
         $sheet->getStyle('A'.($row + 3))->getFont()->setSize(9)->getColor()->setARGB('FF46545F');
 
         if ($lastDataRow >= $firstDataRow) {
@@ -190,6 +203,7 @@ class AttendanceStatementExporter
             'H' => 'FFFEF3C7',
             'A' => 'FFFEE2E2',
             'L' => 'FFFEF3C7',
+            'S' => 'FFD9D9D9',
             default => 'FFF3F4F6',
         };
     }
@@ -200,6 +214,7 @@ class AttendanceStatementExporter
             'P' => 'FF166534',
             'H', 'L' => 'FF92400E',
             'A' => 'FF991B1B',
+            'S' => 'FFC00000',
             default => 'FF9CA3AF',
         };
     }

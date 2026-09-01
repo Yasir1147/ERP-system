@@ -569,6 +569,8 @@ Two layouts, switched on the page and carried into both exports:
 
 Only days that actually carry a record become grid columns. A site running two days a week over four months would otherwise be a hundred empty columns wide, and the sheet stops being readable long before it stops being correct.
 
+Sundays between the first and last worked day are kept as columns even though nobody worked them, marked `S` on a grey ground. Dropping them makes a month read as one unbroken run of days and hides the week's shape. A Sunday that was actually worked keeps its real mark, and a Sunday never counts towards Not listed — a rest day is not a day somebody went unrecorded.
+
 A blank cell is **not listed**, never absent. Nobody wrote that person down that day, which is not the same as marking them away — and reading one as the other costs someone a day's pay.
 
 Absent and Leave carry no project, because nobody is marked away *to* a site. A project statement built only from project-linked rows could therefore never show an absence, so the crew is taken to be everyone who worked that project in the range and their away days are pulled in beside their worked ones. Without this the grid reads as though the whole crew turned up every single day.

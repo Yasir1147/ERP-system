@@ -420,3 +420,41 @@ it('downloads the whole type as one workbook', function () {
 
     expect(strlen($response->streamedContent()))->toBeGreaterThan(2000);
 });
+
+it('keeps sunday as its own column even though nobody worked it', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $employee = statementEmployee('627', 'Weekday Worker');
+
+    // 2026-08-14 is a Friday and 2026-08-17 a Monday; the 16th is a Sunday.
+    statementRecord($employee, $project, '2026-08-14', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($employee, $project, '2026-08-17', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31')
+        ->assertInertia(fn (Assert $page) => $page
+            // Fri 14, Sat 15, Sun 16, Mon 17 - only the Sunday is added back.
+            ->has('statement.matrix.dates', 3)
+            ->where('statement.matrix.dates.1.value', '2026-08-16')
+            ->where('statement.matrix.dates.1.isSunday', true)
+            ->where('statement.matrix.people.0.cells.1.code', 'S')
+            // A rest day is not a day this man went unlisted.
+            ->where('statement.matrix.people.0.notListed', 0)
+            ->where('statement.matrix.people.0.presentDays', 2));
+});
+
+it('lets a sunday that was actually worked keep its own mark', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $employee = statementEmployee('628', 'Sunday Worker');
+
+    statementRecord($employee, $project, '2026-08-14', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($employee, $project, '2026-08-16', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('statement.matrix.dates.1.isSunday', true)
+            ->where('statement.matrix.people.0.cells.1.code', 'P')
+            ->where('statement.matrix.people.0.presentDays', 2));
+});
