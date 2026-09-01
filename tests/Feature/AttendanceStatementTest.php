@@ -292,7 +292,7 @@ it('shows a half day as its own mark in the grid', function () {
     $this->actingAs($admin)
         ->get('/attendance/statement?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31')
         ->assertInertia(fn (Assert $page) => $page
-            ->where('statement.matrix.people.0.cells.0.code', 'H')
+            ->where('statement.matrix.people.0.cells.0.code', '½')
             ->where('statement.matrix.people.0.presentDays', 0.5));
 });
 

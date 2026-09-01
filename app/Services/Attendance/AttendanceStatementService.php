@@ -5,6 +5,7 @@ namespace App\Services\Attendance;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
+use App\Models\Holiday;
 use App\Models\Project;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -316,34 +317,46 @@ class AttendanceStatementService
             }
         }
 
-        $dates = $recorded->concat($sundays)->unique()->sort()->values();
+        // Holidays hold their place for the same reason Sundays do: a day the
+        // company closed is part of the month's shape, and a reader asking
+        // "why no work on the 2nd" should see the answer in the sheet.
+        $holidays = $recorded->isEmpty()
+            ? collect()
+            : Holiday::between($recorded->first(), $recorded->last());
+
+        $dates = $recorded->concat($sundays)->concat($holidays->keys())->unique()->sort()->values();
 
         $dateColumns = $dates->map(fn (string $date) => [
             'value' => $date,
             'label' => Carbon::parse($date)->format('d-M'),
             'weekday' => Carbon::parse($date)->format('D'),
             'isSunday' => Carbon::parse($date)->isSunday(),
+            'holiday' => $holidays->get($date)?->name,
         ]);
 
         $people = $rows
             ->groupBy(fn (array $row) => ($row['employeeCode'] ?? '').'|'.$row['employeeName'])
-            ->map(function (Collection $personRows) use ($dates) {
+            ->map(function (Collection $personRows) use ($dates, $holidays) {
                 $first = $personRows->first();
                 $byDate = $personRows->keyBy('dateValue');
 
-                $cells = $dates->map(function (string $date) use ($byDate) {
+                $cells = $dates->map(function (string $date) use ($byDate, $holidays) {
                     $row = $byDate->get($date);
 
                     if (! $row) {
                         // A rest day is not an unmarked day. Nobody was meant
-                        // to be written down on a Sunday.
+                        // to be written down on a Sunday or a holiday.
+                        if ($holidays->has($date)) {
+                            return ['code' => 'H', 'status' => 'holiday', 'note' => $holidays->get($date)->name];
+                        }
+
                         return Carbon::parse($date)->isSunday()
                             ? ['code' => 'S', 'status' => 'rest', 'note' => 'Sunday']
                             : ['code' => '-', 'status' => 'not_listed', 'note' => null];
                     }
 
                     $code = match ($row['status']) {
-                        AttendanceRecord::STATUS_PRESENT => $row['dayValue'] == 0.5 ? 'H' : 'P',
+                        AttendanceRecord::STATUS_PRESENT => $row['dayValue'] == 0.5 ? '½' : 'P',
                         AttendanceRecord::STATUS_ABSENT => 'A',
                         default => 'L',
                     };
@@ -366,7 +379,9 @@ class AttendanceStatementService
                     // Sundays are excluded: a rest day is not a day this person
                     // went unlisted, and counting it as one reads as neglect.
                     'notListed' => $dates
-                        ->reject(fn (string $date) => Carbon::parse($date)->isSunday() || $byDate->has($date))
+                        ->reject(fn (string $date) => Carbon::parse($date)->isSunday()
+                            || $holidays->has($date)
+                            || $byDate->has($date))
                         ->count(),
                 ];
             })
@@ -382,13 +397,19 @@ class AttendanceStatementService
                     'employeeCode' => $person['employeeCode'],
                     'employeeName' => $person['employeeName'],
                     'profession' => $person['profession'],
-                    'cells' => $dates->map(fn (string $date) => Carbon::parse($date)->isSunday()
-                        ? ['code' => 'S', 'status' => 'rest', 'note' => 'Sunday']
-                        : ['code' => '-', 'status' => 'not_listed', 'note' => null])->values(),
+                    'cells' => $dates->map(function (string $date) use ($holidays) {
+                        if ($holidays->has($date)) {
+                            return ['code' => 'H', 'status' => 'holiday', 'note' => $holidays->get($date)->name];
+                        }
+
+                        return Carbon::parse($date)->isSunday()
+                            ? ['code' => 'S', 'status' => 'rest', 'note' => 'Sunday']
+                            : ['code' => '-', 'status' => 'not_listed', 'note' => null];
+                    })->values(),
                     'presentDays' => 0.0,
                     'absentDays' => 0,
                     'leaveDays' => 0,
-                    'notListed' => $dates->reject(fn (string $date) => Carbon::parse($date)->isSunday())->count(),
+                    'notListed' => $dates->reject(fn (string $date) => Carbon::parse($date)->isSunday() || $holidays->has($date))->count(),
                 ]);
 
             $people = $people->concat($missing)->values();

@@ -7,6 +7,7 @@ use App\Models\AppSetting;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use App\Models\EmployeePayrollSetting;
+use App\Models\Holiday;
 use App\Models\PayrollAdjustment;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -592,11 +593,14 @@ class PayrollController extends Controller
             ->get([
                 'attendance_records.employee_id',
                 'attendance_records.status',
+                'attendance_records.attendance_date',
                 'attendance_records.attendance_fraction',
                 'attendance_records.overtime_hours',
                 'projects.name as project_name',
             ])
             ->groupBy('employee_id');
+
+        $holidays = Holiday::paidBetween($monthStart, $monthEnd);
 
         $adjustments = PayrollAdjustment::query()
             ->whereDate('month', $month)
@@ -606,7 +610,7 @@ class PayrollController extends Controller
 
         $leaveDeductions = $this->leaveDeductionsForMonth($month, $employees->pluck('id'));
 
-        return $employees->map(function (Employee $employee) use ($records, $adjustments, $leaveDeductions, $month) {
+        return $employees->map(function (Employee $employee) use ($records, $adjustments, $leaveDeductions, $month, $holidays) {
             $autoPreviousBalance = $this->carryForwardBalance($employee, Carbon::parse($month)->subMonthNoOverflow()->startOfMonth());
 
             return $this->payrollRowForMonth(
@@ -615,15 +619,43 @@ class PayrollController extends Controller
                 $adjustments->get($employee->id),
                 $autoPreviousBalance,
                 $leaveDeductions->get($employee->id, collect()),
+                $this->holidaysForEmployee($holidays, $employee),
             );
         })->values();
     }
 
-    private function payrollRowForMonth(Employee $employee, Collection $employeeRecords, ?PayrollAdjustment $adjustment, float $autoPreviousBalance, ?Collection $leaveDeductions = null): array
+    /**
+     * A holiday with no employee type is observed by everyone; the rest apply
+     * only to their own type.
+     *
+     * @param  Collection<string, Holiday>  $holidays
+     * @return Collection<string, Holiday>
+     */
+    private function holidaysForEmployee(Collection $holidays, Employee $employee): Collection
+    {
+        return $holidays->filter(
+            fn (Holiday $holiday) => $holiday->employee_type === null || $holiday->employee_type === $employee->type
+        );
+    }
+
+    private function payrollRowForMonth(Employee $employee, Collection $employeeRecords, ?PayrollAdjustment $adjustment, float $autoPreviousBalance, ?Collection $leaveDeductions = null, ?Collection $holidays = null): array
     {
         $setting = $employee->payrollSetting;
         $absenceSettings = AppSetting::absenceDeductionSettings();
-        $presentRecords = $employeeRecords->where('status', AttendanceRecord::STATUS_PRESENT);
+        $holidays ??= collect();
+        $allPresentRecords = $employeeRecords->where('status', AttendanceRecord::STATUS_PRESENT);
+
+        // A paid holiday is already paid for. Someone who came in anyway was
+        // not obliged to, so that day is not counted a second time as a
+        // present day — it is paid as overtime instead.
+        $holidayWorkedRecords = $allPresentRecords->filter(
+            fn ($record) => $holidays->has(Carbon::parse($record->attendance_date)->toDateString())
+        );
+        $presentRecords = $allPresentRecords->reject(
+            fn ($record) => $holidays->has(Carbon::parse($record->attendance_date)->toDateString())
+        );
+
+        $holidayDays = $holidays->count();
         $realPresentDays = round($presentRecords->sum(
             fn ($record) => (float) ($record->attendance_fraction ?? AttendanceRecord::FULL_DAY_FRACTION)
         ), 2);
@@ -646,9 +678,21 @@ class PayrollController extends Controller
             : $dailySalary;
         $standardHours = max(1, (int) ($setting?->standard_hours_per_day ?? 8));
         $hourlyRate = $effectiveDailySalary / $standardHours;
+
+        // A day worked on a holiday becomes its standard hours of overtime,
+        // on top of any overtime already written against that day.
+        $holidayOvertimeHours = (int) round($holidayWorkedRecords->sum(
+            fn ($record) => $standardHours * (float) ($record->attendance_fraction ?? AttendanceRecord::FULL_DAY_FRACTION)
+        ));
+        $overtimeHours += $holidayOvertimeHours;
+
+        // The holiday is a credited day for both salary rules: it pays a
+        // Present Days man, and it keeps a Fixed 30 Days man's absence
+        // deduction from eating a day nobody was asked to work.
+        $creditedDays = round($realPresentDays + $holidayDays, 2);
         $presentDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
-            ? min($realPresentDays, 30)
-            : $realPresentDays;
+            ? min($creditedDays, 30)
+            : $creditedDays;
         $availableDeductionDays = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS
             ? max(0, 30 - $presentDays)
             : PHP_FLOAT_MAX;
@@ -713,6 +757,9 @@ class PayrollController extends Controller
             'halfDays' => $halfDays,
             'halfDayDeductionDays' => $effectiveHalfDayDeductionDays,
             'realPresentDays' => $realPresentDays,
+            'holidayDays' => $holidayDays,
+            'holidayWorkedDays' => $holidayWorkedRecords->count(),
+            'holidayOvertimeHours' => $holidayOvertimeHours,
             'realAbsentDays' => $realAbsentDays,
             'leaveDeductedAsAbsentDays' => $effectiveLeaveDeductedAsAbsentDays,
             'absentDays' => $absentDays,
@@ -793,6 +840,7 @@ class PayrollController extends Controller
                 ->get([
                     'attendance_records.employee_id',
                     'attendance_records.status',
+                    'attendance_records.attendance_date',
                     'attendance_records.attendance_fraction',
                     'attendance_records.overtime_hours',
                     'projects.name as project_name',
@@ -800,7 +848,11 @@ class PayrollController extends Controller
 
             $leaveDeductions = $this->leaveDeductionsForMonth($monthStart, collect([$employee->id]))->get($employee->id, collect());
 
-            $balance = $this->payrollRowForMonth($employee, $records, $adjustment, $balance, $leaveDeductions)['balance'];
+            // The carried balance has to be built the same way as the month it
+            // came from, holidays included, or the two would disagree.
+            $holidays = $this->holidaysForEmployee(Holiday::paidBetween($monthStart, $monthEnd), $employee);
+
+            $balance = $this->payrollRowForMonth($employee, $records, $adjustment, $balance, $leaveDeductions, $holidays)['balance'];
         }
 
         return $balance;

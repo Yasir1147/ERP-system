@@ -11,6 +11,7 @@ use App\Http\Controllers\ChequeBookController;
 use App\Http\Controllers\ChequePartyController;
 use App\Http\Controllers\ContractingDutyPlanController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\DocumentCategoryController;
 use App\Http\Controllers\EmployeeDocumentController;
@@ -59,6 +60,13 @@ Route::delete('attendance/{attendanceRecord}', [AttendanceReportController::clas
 Route::get('attendance/import', [AttendanceImportController::class, 'create'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.import');
 Route::post('attendance/import/preview', [AttendanceImportController::class, 'preview'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.import.preview');
 Route::post('attendance/import', [AttendanceImportController::class, 'store'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.import.store');
+Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+    Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
+    Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');
+    Route::put('holidays/{holiday}', [HolidayController::class, 'update'])->name('holidays.update');
+    Route::delete('holidays/{holiday}', [HolidayController::class, 'destroy'])->name('holidays.destroy');
+});
+
 Route::get('attendance/statement', [AttendanceStatementController::class, 'index'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.statement');
 Route::get('attendance/statement/export', [AttendanceStatementController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.statement.export');
 Route::get('attendance/statement/print', [AttendanceStatementController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.statement.print');

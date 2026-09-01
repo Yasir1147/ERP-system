@@ -169,11 +169,12 @@
         table.matrix tbody tr:nth-child(even) td { background: transparent; }
 
         td.mark-P { background: #dcfce7; color: #166534; }
-        td.mark-H { background: #fef3c7; color: #92400e; }
+        td.mark-H { background: #dbeafe; color: #1e40af; }
         td.mark-L { background: #fef3c7; color: #92400e; }
         td.mark-A { background: #fee2e2; color: #991b1b; }
         td.mark-none { background: #f3f4f6; color: #9ca3af; font-weight: 400; }
         td.mark-S { background: #d9d9d9; color: #c00000; }
+        td.mark-half { background: #fef3c7; color: #92400e; }
         table.matrix thead th.sunday { background: #7f7f7f; border-color: #6b7280; }
 
         table.matrix tfoot td { background: #fff; color: #9b2c2c; text-align: center; border-color: #d1d5db; }
@@ -266,7 +267,7 @@
                         <tr>
                             <td class="name">{{ $person['employeeCode'] ? $person['employeeCode'].' - ' : '' }}{{ $person['employeeName'] }}</td>
                             @foreach ($person['cells'] as $cell)
-                                <td class="mark-{{ $cell['code'] === '-' ? 'none' : $cell['code'] }}" title="{{ $cell['note'] }}">
+                                <td class="mark-{{ $cell['code'] === '-' ? 'none' : ($cell['code'] === '½' ? 'half' : $cell['code']) }}" title="{{ $cell['note'] }}">
                                     {{ $cell['code'] === '-' ? '–' : $cell['code'] }}
                                 </td>
                             @endforeach
@@ -307,7 +308,7 @@
             </table>
 
             <p class="legend">
-                <b>P</b> Present &nbsp; <b>H</b> Half day &nbsp; <b>A</b> Absent &nbsp; <b>L</b> Leave &nbsp; <b>S</b> Sunday &nbsp; <b>–</b> Not listed that day.
+                <b>P</b> Present &nbsp; <b>½</b> Half day &nbsp; <b>A</b> Absent &nbsp; <b>L</b> Leave &nbsp; <b>H</b> Holiday &nbsp; <b>S</b> Sunday &nbsp; <b>–</b> Not listed that day.
                 Only days this {{ $isProject ? 'project' : 'employee' }} has a record for become columns.
             </p>
         @else

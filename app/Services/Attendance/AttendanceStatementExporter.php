@@ -176,7 +176,7 @@ class AttendanceStatementExporter
         ]);
         $sheet->getStyle('A'.$row.':A'.($row + 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-        $sheet->setCellValue('A'.($row + 3), 'P = Present    H = Half day    A = Absent    L = Leave    S = Sunday    – = Not listed that day');
+        $sheet->setCellValue('A'.($row + 3), 'P = Present    ½ = Half day    A = Absent    L = Leave    H = Holiday    S = Sunday    – = Not listed that day');
         $sheet->getStyle('A'.($row + 3))->getFont()->setSize(9)->getColor()->setARGB('FF46545F');
 
         if ($lastDataRow >= $firstDataRow) {
@@ -200,7 +200,8 @@ class AttendanceStatementExporter
     {
         return match ($code) {
             'P' => 'FFDCFCE7',
-            'H' => 'FFFEF3C7',
+            '½' => 'FFFEF3C7',
+            'H' => 'FFDBEAFE',
             'A' => 'FFFEE2E2',
             'L' => 'FFFEF3C7',
             'S' => 'FFD9D9D9',
@@ -212,7 +213,8 @@ class AttendanceStatementExporter
     {
         return match ($code) {
             'P' => 'FF166534',
-            'H', 'L' => 'FF92400E',
+            '½', 'L' => 'FF92400E',
+            'H' => 'FF1E40AF',
             'A' => 'FF991B1B',
             'S' => 'FFC00000',
             default => 'FF9CA3AF',

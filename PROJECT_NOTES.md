@@ -644,6 +644,25 @@ Dashboard monthly leave summary counts leave records/events, not leave days. One
 
 Dashboard should show a notification when a long leave has completed and needs admin review/status update.
 
+## Holidays
+
+```text
+/holidays
+```
+
+Admin declares company holidays: date, name, paid or unpaid, and whether they apply to all employees or one employee type. A holiday with no type is observed by everyone.
+
+A **paid holiday** is a day nobody was asked to work but everybody is paid for:
+
+- It adds one credited day for every active employee, so a **Present Days** man is paid for it. He would otherwise get nothing, since a holiday creates no attendance record.
+- A **Fixed 30 Days** man already receives the whole month, so his basic does not move. The credited day still matters: it keeps the absence-deduction arithmetic from eating a day nobody was asked to work.
+- Anyone who **did** come in keeps the paid holiday, and the day they worked becomes `standard_hours_per_day` of overtime instead of a second paid day. Overtime already written against that day is kept on top. Paying it as both a present day and a holiday would pay one day twice.
+- An **unpaid** holiday credits nothing. It still shows on the sheets.
+
+Holidays appear as their own column in the attendance grid, marked `H` on blue, and never count towards Not listed — nobody was meant to be written down that day. Because `H` is the holiday, a half day is marked `½`.
+
+The same-date check is done by hand rather than with `Rule::unique`, because "all employees" is stored as `null` and neither `= NULL` in SQL nor the table's unique index treats two nulls as a clash — the duplicate would slip through and pay the day twice.
+
 ## Payroll
 
 Payroll calculates salary from attendance, leave deduction decisions, fines, and payroll settings.

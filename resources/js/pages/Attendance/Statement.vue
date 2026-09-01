@@ -188,7 +188,8 @@ const money = (value: number | null) => (value === null ? '-' : new Intl.NumberF
 
 const cellClass = (code: string) => {
     if (code === 'P') return 'bg-green-100 text-green-800';
-    if (code === 'H' || code === 'L') return 'bg-amber-100 text-amber-800';
+    if (code === '½' || code === 'L') return 'bg-amber-100 text-amber-800';
+    if (code === 'H') return 'bg-blue-100 text-blue-800';
     if (code === 'A') return 'bg-red-100 text-red-800';
     if (code === 'S') return 'bg-neutral-300 text-red-700 dark:bg-neutral-700';
     return 'bg-muted/60 font-normal text-muted-foreground';
@@ -470,7 +471,7 @@ const statusClass = (status: string) => {
                     </div>
 
                     <p class="border-t p-3 text-xs text-muted-foreground">
-                        <b>P</b> Present · <b>H</b> Half day · <b>A</b> Absent · <b>L</b> Leave · <b>S</b> Sunday · <b>–</b> Not listed that day
+                        <b>P</b> Present · <b>½</b> Half day · <b>A</b> Absent · <b>L</b> Leave · <b>H</b> Holiday · <b>S</b> Sunday · <b>–</b> Not listed that day
                     </p>
                 </section>
 
