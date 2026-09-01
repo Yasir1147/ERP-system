@@ -358,3 +358,65 @@ it('pulls a crew absence into the project grid even though absences carry no pro
             ->where('statement.matrix.people.0.absentDays', 1)
             ->where('statement.totals.absent', 1));
 });
+
+it('puts every employee of one type in a single grid', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $worked = statementEmployee('621', 'Worked This Month');
+    statementEmployee('622', 'Never Turned Up');
+
+    $contracting = Employee::query()->create([
+        'code' => '623',
+        'name' => 'Other Type',
+        'profession' => 'Mason',
+        'type' => 'contracting',
+        'status' => Employee::STATUS_ACTIVE,
+    ]);
+    statementRecord($contracting, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+    statementRecord($worked, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=type&employee_type=rope_access&from=2026-08-01&to=2026-08-31')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('statement.layout', 'grid')
+            ->where('statement.subject.name', 'Rope Access Employee')
+            // Both rope access employees are rows, including the one who never
+            // turned up - he is exactly who a reader is looking for.
+            ->has('statement.matrix.people', 2)
+            ->where('statement.matrix.people.0.employeeName', 'Worked This Month')
+            ->where('statement.matrix.people.1.employeeName', 'Never Turned Up')
+            ->where('statement.matrix.people.1.presentDays', 0)
+            ->where('statement.matrix.people.1.notListed', 1));
+});
+
+it('leaves employees who have left off the type sheet', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $active = statementEmployee('624', 'Still Here');
+    $left = statementEmployee('625', 'Gone Home');
+    $left->update(['status' => Employee::STATUS_LEFT]);
+
+    statementRecord($active, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    $this->actingAs($admin)
+        ->get('/attendance/statement?mode=type&employee_type=rope_access&from=2026-08-01&to=2026-08-31')
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('statement.matrix.people', 1)
+            ->where('statement.matrix.people.0.employeeName', 'Still Here'));
+});
+
+it('downloads the whole type as one workbook', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $employee = statementEmployee('626', 'Sheet Worker');
+
+    statementRecord($employee, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin);
+
+    $response = $this->actingAs($admin)
+        ->get('/attendance/statement/export?mode=type&employee_type=rope_access&from=2026-08-01&to=2026-08-31&layout=grid');
+
+    $response->assertOk()
+        ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    expect(strlen($response->streamedContent()))->toBeGreaterThan(2000);
+});

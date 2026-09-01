@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { FileText, Search } from 'lucide-vue-next';
+import { FileSpreadsheet, FileText, Search } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface TimesheetDate {
@@ -102,6 +102,23 @@ const printUrl = computed(() => {
     return `/attendance/timesheet-print?${params.toString()}`;
 });
 
+/// The Excel copy is the statement's grid for this same type and month, so the
+/// two never drift apart and the workbook only has to be built once.
+const excelUrl = computed(() => {
+    const [year, month] = filterMonth.value.split('-').map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+
+    const params = new URLSearchParams({
+        mode: 'type',
+        layout: 'grid',
+        employee_type: filterType.value,
+        from: `${filterMonth.value}-01`,
+        to: `${filterMonth.value}-${String(lastDay).padStart(2, '0')}`,
+    });
+
+    return `/attendance/statement/export?${params.toString()}`;
+});
+
 const statusLabel = (status: string | null) => {
     if (!status) return '';
     if (status === 'present') return 'Present';
@@ -135,7 +152,7 @@ const selectEmployeeRow = (employeeId: number) => {
                     <p class="mt-1 text-sm text-muted-foreground">Monthly employee attendance with project and overtime details.</p>
                 </div>
 
-                <div class="grid gap-2 sm:grid-cols-[220px_180px_auto_150px_auto]">
+                <div class="grid gap-2 sm:grid-cols-[220px_180px_auto_150px_auto_auto]">
                     <select
                         v-model="filterType"
                         class="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -157,6 +174,13 @@ const selectEmployeeRow = (employeeId: number) => {
                         <option value="a3">A3 Landscape</option>
                         <option value="a4">A4 Landscape</option>
                     </select>
+                    <a
+                        :href="excelUrl"
+                        class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent"
+                    >
+                        <FileSpreadsheet class="size-4" />
+                        Excel Sheet
+                    </a>
                     <a
                         :href="printUrl"
                         target="_blank"

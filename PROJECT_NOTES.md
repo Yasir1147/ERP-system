@@ -558,6 +558,10 @@ Chat exports are gitignored under `storage/app/imports`; they contain phone numb
 
 Day-by-day attendance for **one employee** or **one project**, over any date range. The timesheet answers "who worked this month" across everyone at once; the statement answers "what did this one person, or this one project, actually do" — the shape needed when a report is handed to a client, a project manager, or the worker being asked about a particular day.
 
+Three subjects: **By Employee Type** (every Rope Access or Contracting employee in one sheet), **By Employee** (one person), **By Project** (one site).
+
+On the type sheet every employee on the books is a row, worked or not. A man who did not turn up all month is exactly who a reader is looking for, and leaving him off the sheet hides that. Employees marked as left are excluded.
+
 Two layouts, switched on the page and carried into both exports:
 
 - **Grid by person** (default for a project) — people down the side, worked days across the top, one letter per cell: `P` present, `H` half day, `A` absent, `L` leave, `–` not listed. Right-hand columns total Days Present, Days Absent, Not listed; the two footer rows count headcount present and marked absent per day. Excel uses rotated date headers and coloured cells; the print view goes A3 landscape.
@@ -577,6 +581,8 @@ Absent and Leave carry no project, because nobody is marked away *to* a site. A 
 - Previous/Next month buttons move the range a whole calendar month at a time, and a whole month is labelled "August 2026" rather than as two dates.
 
 `app/Services/Attendance/AttendanceStatementService.php` builds it and is shared by the screen, the workbook, and the print view, so a printed copy can never say something the screen did not.
+
+The Timesheet page's **Excel Sheet** button is this same statement: it links to the statement export with `mode=type`, that page's employee type, and its month as the range. The grid workbook is therefore built in one place only, and the two screens cannot drift apart. The Timesheet keeps its own CSV route and A3/A4 print view.
 
 ## Timesheet
 

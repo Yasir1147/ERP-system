@@ -405,7 +405,11 @@ class AttendanceStatementExporter
      */
     private function title(array $statement): string
     {
-        return $statement['mode'] === 'project' ? 'Project Attendance Statement' : 'Employee Attendance Statement';
+        return match ($statement['mode']) {
+            'project' => 'Project Attendance Statement',
+            'type' => 'Monthly Attendance Sheet',
+            default => 'Employee Attendance Statement',
+        };
     }
 
     /**

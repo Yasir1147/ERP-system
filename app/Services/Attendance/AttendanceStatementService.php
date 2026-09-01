@@ -111,6 +111,61 @@ class AttendanceStatementService
         ];
     }
 
+    /**
+     * Every employee of one type, in one sheet.
+     *
+     * This is the timesheet's question — "who worked this month" — answered in
+     * the same grid the site reads, so both can be exported from one place.
+     *
+     * @return array<string, mixed>
+     */
+    public function forEmployeeType(string $type, string $from, string $to, bool $withSalary): array
+    {
+        $employees = Employee::query()
+            ->with('payrollSetting')
+            ->where('type', $type)
+            ->where('status', '!=', Employee::STATUS_LEFT)
+            ->orderBy('code')
+            ->get();
+
+        $records = $this->records($from, $to)
+            ->whereIn('attendance_records.employee_id', $employees->pluck('id'))
+            ->get();
+
+        $rows = $records
+            ->map(fn (AttendanceRecord $record) => $this->rowFor($record, $withSalary, forEmployee: false))
+            ->sortBy([['dateValue', 'asc'], ['employeeName', 'asc']])
+            ->values();
+
+        // Everyone on the books is a row, worked or not. A man who did not
+        // turn up all month is exactly who a reader is looking for, and
+        // leaving him off the sheet hides that.
+        $roster = $employees->map(fn (Employee $employee) => [
+            'employeeCode' => $employee->code,
+            'employeeName' => $employee->name,
+            'profession' => $employee->profession,
+        ]);
+
+        return [
+            'mode' => 'type',
+            'subject' => [
+                'id' => null,
+                'code' => null,
+                'name' => Employee::TYPES[$type] ?? $type,
+                'profession' => null,
+                'typeLabel' => Employee::TYPES[$type] ?? $type,
+                'status' => 'all',
+                'missingSalary' => false,
+            ],
+            'rows' => $rows,
+            'matrix' => $this->matrix($rows, $roster),
+            'totals' => $this->totals($rows, $withSalary),
+            'withSalary' => $withSalary,
+            'filters' => ['from' => $from, 'to' => $to],
+            'rangeLabel' => $this->rangeLabel($from, $to),
+        ];
+    }
+
     private function records(string $from, string $to)
     {
         return AttendanceRecord::query()
@@ -235,7 +290,7 @@ class AttendanceStatementService
      * @param  Collection<int, array<string, mixed>>  $rows
      * @return array<string, mixed>
      */
-    private function matrix(Collection $rows): array
+    private function matrix(Collection $rows, ?Collection $roster = null): array
     {
         $dates = $rows
             ->pluck('dateValue')
@@ -289,6 +344,25 @@ class AttendanceStatementService
             })
             ->sortByDesc('presentDays')
             ->values();
+
+        if ($roster) {
+            $seen = $people->map(fn (array $person) => ($person['employeeCode'] ?? '').'|'.$person['employeeName'])->all();
+
+            $missing = $roster
+                ->reject(fn (array $person) => in_array(($person['employeeCode'] ?? '').'|'.$person['employeeName'], $seen, true))
+                ->map(fn (array $person) => [
+                    'employeeCode' => $person['employeeCode'],
+                    'employeeName' => $person['employeeName'],
+                    'profession' => $person['profession'],
+                    'cells' => $dates->map(fn () => ['code' => '-', 'status' => 'not_listed', 'note' => null])->values(),
+                    'presentDays' => 0.0,
+                    'absentDays' => 0,
+                    'leaveDays' => 0,
+                    'notListed' => $dates->count(),
+                ]);
+
+            $people = $people->concat($missing)->values();
+        }
 
         $footer = $dates->map(function (string $date) use ($rows) {
             $onDate = $rows->where('dateValue', $date);

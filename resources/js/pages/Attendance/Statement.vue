@@ -67,7 +67,7 @@ interface Matrix {
 interface Statement {
     layout: 'list' | 'grid';
     matrix: Matrix;
-    mode: 'employee' | 'project';
+    mode: 'employee' | 'project' | 'type';
     subject: {
         id: number;
         code: string | null;
@@ -98,8 +98,9 @@ interface Statement {
 const props = defineProps<{
     statement: Statement | null;
     filters: {
-        mode: 'employee' | 'project';
+        mode: 'employee' | 'project' | 'type';
         layout: 'list' | 'grid';
+        employeeType: string;
         employeeId: number | null;
         projectId: number | null;
         from: string;
@@ -108,6 +109,7 @@ const props = defineProps<{
     };
     employees: EmployeeOption[];
     projects: ProjectOption[];
+    employeeTypes: Array<{ value: string; label: string }>;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -117,6 +119,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const mode = ref(props.filters.mode);
 const layout = ref(props.filters.layout);
+const employeeType = ref(props.filters.employeeType);
 const employeeId = ref(props.filters.employeeId ? String(props.filters.employeeId) : '');
 const projectId = ref(props.filters.projectId ? String(props.filters.projectId) : '');
 const from = ref(props.filters.from);
@@ -134,6 +137,7 @@ const employeeOptions = computed(() =>
 const query = computed(() => {
     const params = new URLSearchParams({ mode: mode.value, layout: layout.value, from: from.value, to: to.value });
 
+    if (mode.value === 'type') params.set('employee_type', employeeType.value);
     if (mode.value === 'employee' && employeeId.value) params.set('employee_id', employeeId.value);
     if (mode.value === 'project' && projectId.value) params.set('project_id', projectId.value);
     if (withSalary.value) params.set('with_salary', '1');
@@ -143,7 +147,10 @@ const query = computed(() => {
 
 const exportUrl = computed(() => `/attendance/statement/export?${query.value}`);
 const printUrl = computed(() => `/attendance/statement/print?${query.value}`);
-const hasSubject = computed(() => (mode.value === 'employee' ? Boolean(employeeId.value) : Boolean(projectId.value)));
+const hasSubject = computed(() => {
+    if (mode.value === 'type') return true;
+    return mode.value === 'employee' ? Boolean(employeeId.value) : Boolean(projectId.value);
+});
 
 const applyFilters = () => {
     router.get(`/attendance/statement?${query.value}`, {}, { preserveState: false });
@@ -209,6 +216,7 @@ const statusClass = (status: string) => {
                 <div class="inline-flex rounded-md border p-1">
                     <button
                         v-for="option in [
+                            { value: 'type', label: 'By Employee Type' },
                             { value: 'employee', label: 'By Employee' },
                             { value: 'project', label: 'By Project' },
                         ]"
@@ -216,14 +224,22 @@ const statusClass = (status: string) => {
                         type="button"
                         class="rounded px-3 py-1.5 text-sm"
                         :class="mode === option.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
-                        @click="mode = option.value as 'employee' | 'project'"
+                        @click="mode = option.value as 'employee' | 'project' | 'type'"
                     >
                         {{ option.label }}
                     </button>
                 </div>
 
                 <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_auto_auto_auto]">
-                    <div v-if="mode === 'employee'" class="grid gap-1">
+                    <div v-if="mode === 'type'" class="grid gap-1">
+                        <label class="text-xs text-muted-foreground" for="statement-type">Employee Type</label>
+                        <select id="statement-type" v-model="employeeType" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                            <option v-for="option in employeeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
+                        </select>
+                        <p class="text-xs text-muted-foreground">Every employee of this type, worked or not, in one sheet.</p>
+                    </div>
+
+                    <div v-else-if="mode === 'employee'" class="grid gap-1">
                         <label class="text-xs text-muted-foreground" for="statement-employee">Employee</label>
                         <div class="relative">
                             <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

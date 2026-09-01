@@ -54,6 +54,10 @@ class AttendanceStatementController extends Controller
                     'name' => $project->name,
                     'type' => $project->type,
                 ]),
+            'employeeTypes' => collect(Employee::TYPES)->map(fn (string $label, string $value) => [
+                'value' => $value,
+                'label' => $label,
+            ])->values(),
         ]);
     }
 
@@ -84,8 +88,9 @@ class AttendanceStatementController extends Controller
     private function filters(Request $request): array
     {
         $data = $request->validate([
-            'mode' => ['nullable', Rule::in(['employee', 'project'])],
+            'mode' => ['nullable', Rule::in(['employee', 'project', 'type'])],
             'layout' => ['nullable', Rule::in(['list', 'grid'])],
+            'employee_type' => ['nullable', Rule::in(array_keys(Employee::TYPES))],
             'employee_id' => ['nullable', 'integer', Rule::exists('employees', 'id')],
             'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')],
             'from' => ['nullable', 'date'],
@@ -104,7 +109,8 @@ class AttendanceStatementController extends Controller
             'mode' => $mode,
             // A project is read as a grid of people against days; one person is
             // read as a list of their days. Either can be switched to the other.
-            'layout' => $data['layout'] ?? ($mode === 'project' ? 'grid' : 'list'),
+            'layout' => $data['layout'] ?? ($mode === 'employee' ? 'list' : 'grid'),
+            'employeeType' => $data['employee_type'] ?? 'rope_access',
             'employeeId' => isset($data['employee_id']) ? (int) $data['employee_id'] : null,
             'projectId' => isset($data['project_id']) ? (int) $data['project_id'] : null,
             'from' => $from,
@@ -119,6 +125,13 @@ class AttendanceStatementController extends Controller
      */
     private function statement(array $filters): ?array
     {
+        if ($filters['mode'] === 'type') {
+            return $this->withLayout(
+                $this->statements->forEmployeeType($filters['employeeType'], $filters['from'], $filters['to'], $filters['withSalary']),
+                $filters,
+            );
+        }
+
         if ($filters['mode'] === 'project') {
             $project = $filters['projectId'] ? Project::find($filters['projectId']) : null;
 
