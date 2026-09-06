@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
 use App\Models\AttendanceRecord;
+use App\Models\ContractingDutyAssignment;
 use App\Models\EmployeeExpense;
 use App\Models\Equipment;
 use App\Models\Project;
@@ -17,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -84,6 +86,48 @@ class ProjectController extends Controller
             'statuses' => Project::STATUSES,
             'overheadSettings' => $overhead,
         ]);
+    }
+
+    /**
+     * Folds a project raised from an attendance form into the real one.
+     *
+     * Field users type the same site three different ways, and those rows
+     * cannot simply be deleted — attendance, duties, bills and expenses hang
+     * off them. Everything is moved to the target first, then the empty
+     * provisional project goes.
+     */
+    public function merge(Request $request, Project $project): RedirectResponse
+    {
+        $data = $request->validate([
+            'target_project_id' => [
+                'required',
+                'integer',
+                // notIn, not `different`: that rule compares two request
+                // fields, so `different:7` would look for a field named "7",
+                // find nothing, and quietly pass — merging a project into
+                // itself and deleting it along with its records.
+                Rule::notIn([$project->id]),
+                Rule::exists('projects', 'id')->where('type', $project->type),
+            ],
+        ], [
+            'target_project_id.not_in' => 'Choose a different project to merge into.',
+        ]);
+
+        $targetId = (int) $data['target_project_id'];
+
+        DB::transaction(function () use ($project, $targetId) {
+            AttendanceRecord::query()->where('project_id', $project->id)->update(['project_id' => $targetId]);
+            AttendanceRecord::query()->where('overtime_project_id', $project->id)->update(['overtime_project_id' => $targetId]);
+            ContractingDutyAssignment::query()->where('project_id', $project->id)->update(['project_id' => $targetId]);
+            ContractingDutyAssignment::query()->where('overtime_project_id', $project->id)->update(['overtime_project_id' => $targetId]);
+            PurchaseBill::query()->where('project_id', $project->id)->update(['project_id' => $targetId]);
+            EmployeeExpense::query()->where('project_id', $project->id)->update(['project_id' => $targetId]);
+            Equipment::query()->where('assigned_project_id', $project->id)->update(['assigned_project_id' => $targetId]);
+
+            $project->delete();
+        });
+
+        return back()->with('success', 'Project merged. Its attendance and costs now sit on the target project.');
     }
 
     public function updateOverheadSettings(Request $request): RedirectResponse
@@ -307,6 +351,7 @@ class ProjectController extends Controller
             'status' => $project->status,
             'type' => $project->type,
             'typeLabel' => Project::TYPES[$project->type],
+            'isProvisional' => (bool) $project->is_provisional,
             'startDate' => $project->start_date?->format('d/m/Y'),
             'startDateValue' => $project->start_date?->toDateString(),
             'expectedEndDate' => $project->expected_end_date?->format('d/m/Y'),

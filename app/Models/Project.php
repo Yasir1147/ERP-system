@@ -35,6 +35,8 @@ class Project extends Model
         'cost_budget',
         'progress_percentage',
         'description',
+        'is_provisional',
+        'created_by',
     ];
 
     protected $casts = [
@@ -43,7 +45,40 @@ class Project extends Model
         'contract_value' => 'decimal:2',
         'cost_budget' => 'decimal:2',
         'progress_percentage' => 'integer',
+        'is_provisional' => 'boolean',
     ];
+
+    /**
+     * The project a field user named because the site was not on the list.
+     *
+     * It is created as a real project rather than kept as loose text: every
+     * cost figure in the system hangs off project_id, so attendance with no
+     * project silently drops out of the labour cost, the project statement,
+     * and the employee history. Matching is case- and space-insensitive so
+     * the same site typed twice does not become two projects.
+     */
+    public static function raiseProvisional(string $name, string $type, ?int $userId = null): self
+    {
+        $name = trim(preg_replace('/\s+/', ' ', $name) ?? $name);
+
+        $existing = static::query()
+            ->where('type', $type)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        return static::create([
+            'name' => $name,
+            'type' => $type,
+            'status' => 'ongoing',
+            'is_provisional' => true,
+            'progress_percentage' => 0,
+            'created_by' => $userId,
+        ]);
+    }
 
     public function purchaseBills(): HasMany
     {

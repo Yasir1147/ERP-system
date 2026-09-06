@@ -4,7 +4,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { sortByEmployeeSearch } from '@/lib/employee-search';
+import { matchesEmployeeSearch, sortByEmployeeSearch } from '@/lib/employee-search';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     ArrowLeft,
@@ -119,6 +119,7 @@ const addForm = useForm({
     extend_finalized: props.extensionMode,
     duty_date: props.selectedDate,
     project_id: '',
+    project_name: '',
     employee_ids: [] as string[],
 });
 
@@ -158,6 +159,20 @@ const availableEmployees = computed(() => {
     return sortByEmployeeSearch(unassigned, employeeSearch.value, (employee) => [employee.code, employee.name, employee.profession]);
 });
 
+
+/// A site typed by hand becomes a real project on submit, so a near match is
+/// worth catching before three spellings of one site pile up.
+const projectNameSuggestion = computed(() => {
+    const query = addForm.project_name.trim();
+
+    if (query.length < 3) return null;
+
+    const match = props.projects.find(
+        (project) => project.name.toLowerCase() !== query.toLowerCase() && matchesEmployeeSearch([project.name], query),
+    );
+
+    return match?.name ?? null;
+});
 
 const assignmentSearch = ref('');
 
@@ -503,8 +518,19 @@ const finalizePlan = () => {
                             <option v-for="project in projects" :key="project.id" :value="String(project.id)">
                                 {{ project.name }} - {{ project.status }}
                             </option>
+                            <option value="other">Other - project is not in this list</option>
                         </select>
                         <InputError :message="addForm.errors.project_id" />
+
+                        <template v-if="addForm.project_id === 'other'">
+                            <Input v-model="addForm.project_name" placeholder="Type the site name" maxlength="120" />
+                            <p v-if="projectNameSuggestion" class="text-xs text-amber-700">
+                                Did you mean <b>{{ projectNameSuggestion }}</b
+                                >? Pick it from the list so the site is not added twice.
+                            </p>
+                            <p v-else class="text-xs text-muted-foreground">Admin will review this project later.</p>
+                            <InputError :message="addForm.errors.project_name" />
+                        </template>
                     </div>
 
                     <div class="grid gap-2">

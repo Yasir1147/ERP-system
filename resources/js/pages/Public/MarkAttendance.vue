@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, LogOut, Search, UserCircle2, X } from 'lucide-vue-next';
 import type { User } from '@/types';
+import { matchesEmployeeSearch } from '@/lib/employee-search';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 interface Project {
@@ -98,6 +99,8 @@ const historyLoading = ref(false);
 const form = useForm({
     project_id: '',
     overtime_project_id: '',
+    project_name: '',
+    overtime_project_name: '',
     employee_ids: [] as string[],
     status: '',
     attendance_fraction: '1',
@@ -126,7 +129,29 @@ const filteredProjects = computed(() => {
     return props.projects.filter((project) => [project.name, project.status].some((value) => value.toLowerCase().includes(query)));
 });
 
+const OTHER_PROJECT = 'other';
+
 const selectedProject = computed(() => props.projects.find((project) => String(project.id) === form.project_id));
+const projectIsOther = computed(() => form.project_id === OTHER_PROJECT);
+const overtimeProjectIsOther = computed(() => form.overtime_project_id === OTHER_PROJECT);
+
+/// A site typed by hand is a real project the moment it is submitted, so a
+/// near match is worth catching here rather than leaving three spellings of
+/// one site in the project list.
+const nameSuggestion = (typed: string) => {
+    const query = typed.trim();
+
+    if (query.length < 3) return null;
+
+    const match = props.projects.find(
+        (project) => project.name.toLowerCase() !== query.toLowerCase() && matchesEmployeeSearch([project.name], query),
+    );
+
+    return match?.name ?? null;
+};
+
+const projectNameSuggestion = computed(() => nameSuggestion(form.project_name));
+const overtimeProjectNameSuggestion = computed(() => nameSuggestion(form.overtime_project_name));
 const selectedOvertimeProject = computed(() => props.projects.find((project) => String(project.id) === form.overtime_project_id));
 
 const filteredEmployees = computed(() => {
@@ -260,12 +285,26 @@ const shiftHistoryDate = (days: number) => {
 
 const selectProject = (project: Project) => {
     form.project_id = String(project.id);
+    form.project_name = '';
+    projectSearch.value = '';
+    projectOpen.value = false;
+};
+
+const selectOtherProject = () => {
+    form.project_id = OTHER_PROJECT;
     projectSearch.value = '';
     projectOpen.value = false;
 };
 
 const selectOvertimeProject = (project: Project) => {
     form.overtime_project_id = String(project.id);
+    form.overtime_project_name = '';
+    overtimeProjectSearch.value = '';
+    overtimeProjectOpen.value = false;
+};
+
+const selectOtherOvertimeProject = () => {
+    form.overtime_project_id = OTHER_PROJECT;
     overtimeProjectSearch.value = '';
     overtimeProjectOpen.value = false;
 };
@@ -346,6 +385,8 @@ watch(
             form.attendance_fraction = '1';
             form.project_id = '';
             form.overtime_project_id = '';
+            form.project_name = '';
+            form.overtime_project_name = '';
             form.has_overtime = false;
             form.overtime_hours = '';
             projectSearch.value = '';
@@ -607,7 +648,9 @@ const submit = () => {
                                     @click="projectOpen = !projectOpen"
                                 >
                                     <span class="min-w-0 truncate">
-                                        {{ selectedProject ? `${selectedProject.name} - ${selectedProject.status}` : 'Select project' }}
+                                        <template v-if="projectIsOther">Other - type the project name</template>
+                                        <template v-else-if="selectedProject">{{ selectedProject.name }} - {{ selectedProject.status }}</template>
+                                        <template v-else>Select project</template>
                                     </span>
                                     <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
                                 </button>
@@ -629,10 +672,31 @@ const submit = () => {
                                             <span class="text-xs capitalize text-muted-foreground">{{ project.status }}</span>
                                         </button>
                                         <div v-if="filteredProjects.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">No projects found.</div>
+                                        <button
+                                            type="button"
+                                            class="mt-1 flex w-full flex-col rounded-md border-t px-3 py-2 text-left text-sm hover:bg-accent"
+                                            @click="selectOtherProject"
+                                        >
+                                            <span class="font-medium">Other</span>
+                                            <span class="text-xs text-muted-foreground">Project is not in this list</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                             <InputError :message="form.errors.project_id" />
+
+                            <div v-if="projectIsOther" class="grid gap-1.5">
+                                <Label for="project-name">Project Name</Label>
+                                <Input id="project-name" v-model="form.project_name" placeholder="Type the site name" maxlength="120" />
+                                <p v-if="projectNameSuggestion" class="text-xs text-amber-700">
+                                    Did you mean <b>{{ projectNameSuggestion }}</b
+                                    >? Pick it from the list instead so the site is not added twice.
+                                </p>
+                                <p v-else class="text-xs text-muted-foreground">
+                                    This adds the project so today's work is recorded. Admin will review it later.
+                                </p>
+                                <InputError :message="form.errors.project_name" />
+                            </div>
                         </div>
 
                         <label class="flex h-12 cursor-pointer items-center gap-3 rounded-md border p-3 text-sm font-medium">
@@ -649,13 +713,12 @@ const submit = () => {
                                     @click="overtimeProjectOpen = !overtimeProjectOpen"
                                 >
                                     <span class="min-w-0 truncate">
-                                        {{
-                                            selectedOvertimeProject
-                                                ? `${selectedOvertimeProject.name} - ${selectedOvertimeProject.status}`
-                                                : selectedProject
-                                                  ? `Same as main project - ${selectedProject.name}`
-                                                  : 'Same as main project'
-                                        }}
+                                        <template v-if="overtimeProjectIsOther">Other - type the project name</template>
+                                        <template v-else-if="selectedOvertimeProject">
+                                            {{ selectedOvertimeProject.name }} - {{ selectedOvertimeProject.status }}
+                                        </template>
+                                        <template v-else-if="selectedProject">Same as main project - {{ selectedProject.name }}</template>
+                                        <template v-else>Same as main project</template>
                                     </span>
                                     <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
                                 </button>
@@ -689,10 +752,33 @@ const submit = () => {
                                             <span class="text-xs capitalize text-muted-foreground">{{ project.status }}</span>
                                         </button>
                                         <div v-if="filteredProjects.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">No projects found.</div>
+                                        <button
+                                            type="button"
+                                            class="mt-1 flex w-full flex-col rounded-md border-t px-3 py-2 text-left text-sm hover:bg-accent"
+                                            @click="selectOtherOvertimeProject"
+                                        >
+                                            <span class="font-medium">Other</span>
+                                            <span class="text-xs text-muted-foreground">Project is not in this list</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                             <InputError :message="form.errors.overtime_project_id" />
+
+                            <div v-if="overtimeProjectIsOther" class="grid gap-1.5">
+                                <Label for="overtime-project-name">Overtime Project Name</Label>
+                                <Input
+                                    id="overtime-project-name"
+                                    v-model="form.overtime_project_name"
+                                    placeholder="Type the site name"
+                                    maxlength="120"
+                                />
+                                <p v-if="overtimeProjectNameSuggestion" class="text-xs text-amber-700">
+                                    Did you mean <b>{{ overtimeProjectNameSuggestion }}</b
+                                    >? Pick it from the list instead so the site is not added twice.
+                                </p>
+                                <InputError :message="form.errors.overtime_project_name" />
+                            </div>
                         </div>
 
                         <div v-if="form.has_overtime" class="grid gap-2">

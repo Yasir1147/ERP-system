@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ResolvesNamedProjects;
 use App\Models\AttendanceRecord;
 use App\Models\ContractingDutyAssignment;
 use App\Models\ContractingDutyPlan;
@@ -20,6 +21,8 @@ use Inertia\Response;
 
 class ContractingDutyPlanController extends Controller
 {
+    use ResolvesNamedProjects;
+
     public function index(Request $request): Response
     {
         $this->ensureContractingAccess($request);
@@ -190,6 +193,7 @@ class ContractingDutyPlanController extends Controller
     public function storeAssignments(Request $request): RedirectResponse
     {
         $this->ensureContractingAccess($request);
+        $this->resolveNamedProjects($request, 'contracting', ['project_id' => 'project_name']);
         $dateRange = $request->user()->attendanceDateRange();
         // Adding people to a duty that already exists is not the same as
         // backdating a new one. The plan's date was allowed when it was

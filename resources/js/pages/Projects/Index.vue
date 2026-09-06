@@ -28,6 +28,7 @@ interface Project {
     description: string | null;
     healthStatus: string;
     healthLabel: string;
+    isProvisional: boolean;
     totalCost: number;
     expectedProfit: number | null;
     budgetRemaining: number | null;
@@ -145,6 +146,33 @@ const deleteProject = (project: Project) => {
 /// has to be visible from the list rather than found by comparing two
 /// numbers by eye. Projects with no contract value are not judged.
 const overContract = (project: Project) => project.contractValue !== null && project.totalCost > project.contractValue;
+
+/// Projects raised from an attendance form pile up as near-duplicates of one
+/// site. They cannot simply be deleted, because attendance hangs off them, so
+/// merging moves the records first and then removes the empty one.
+const mergingProject = ref<Project | null>(null);
+const mergeForm = useForm({ target_project_id: '' });
+
+const openMerge = (project: Project) => {
+    mergingProject.value = project;
+    mergeForm.target_project_id = '';
+    mergeForm.clearErrors();
+};
+
+const mergeTargets = computed(() =>
+    props.projects.filter((project) => project.id !== mergingProject.value?.id && !project.isProvisional),
+);
+
+const submitMerge = () => {
+    if (!mergingProject.value) return;
+
+    mergeForm.post(`/projects/${mergingProject.value.id}/merge`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            mergingProject.value = null;
+        },
+    });
+};
 
 const money = (value: number | null) => {
     if (value === null) return 'Not set';
@@ -277,6 +305,15 @@ const healthClass = (status: string) => {
                             </div>
                             <div class="flex shrink-0 flex-col items-end gap-1">
                                 <span class="rounded-full border px-2 py-1 text-xs">{{ statusLabels[project.status] }}</span>
+                                <button
+                                    v-if="project.isProvisional"
+                                    type="button"
+                                    class="rounded-full border border-amber-600/40 bg-amber-600/10 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-600/20"
+                                    title="Raised from an attendance form. Review its details, or merge it into the real project."
+                                    @click="openMerge(project)"
+                                >
+                                    Needs review
+                                </button>
                                 <span
                                     v-if="overContract(project)"
                                     class="inline-flex items-center gap-1 rounded-full border border-red-600/40 bg-red-600/10 px-2 py-1 text-xs font-medium text-red-700"
@@ -357,6 +394,46 @@ const healthClass = (status: string) => {
                     </article>
                 </div>
             </section>
+
+            <div
+                v-if="mergingProject"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                @click.self="mergingProject = null"
+            >
+                <div class="w-full max-w-lg rounded-xl border bg-card p-5 shadow-xl">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <h2 class="font-semibold">Merge "{{ mergingProject.name }}"</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                This project was raised from an attendance form. Merging moves its attendance, duties, bills, expenses and
+                                equipment onto the project you choose, then removes this one.
+                            </p>
+                        </div>
+                        <Button type="button" size="icon" variant="ghost" @click="mergingProject = null"><X class="size-4" /></Button>
+                    </div>
+
+                    <form class="mt-4 grid gap-3" @submit.prevent="submitMerge">
+                        <div class="grid gap-1.5">
+                            <Label>Merge into</Label>
+                            <select v-model="mergeForm.target_project_id" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                                <option value="">Select the real project</option>
+                                <option v-for="target in mergeTargets" :key="target.id" :value="String(target.id)">
+                                    {{ target.projectCode ? `${target.projectCode} - ` : '' }}{{ target.name }}
+                                </option>
+                            </select>
+                            <InputError :message="mergeForm.errors.target_project_id" />
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            Nothing is deleted except the empty project itself. If this really is a separate site, close this and edit its
+                            details instead.
+                        </p>
+                        <div class="flex gap-2">
+                            <Button type="submit" :disabled="mergeForm.processing || !mergeForm.target_project_id">Merge</Button>
+                            <Button type="button" variant="outline" @click="mergingProject = null">Cancel</Button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </AppLayout>
 </template>

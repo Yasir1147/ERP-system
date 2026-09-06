@@ -7,6 +7,7 @@ use App\Models\ContractingDutyAssignment;
 use App\Models\ContractingDutyPlan;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
+use App\Models\Project;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -218,6 +219,19 @@ class DashboardController extends Controller
             'monthlySummary' => $monthlySummary,
             'completedLongLeaves' => $completedLongLeaves,
             'contractingDuty' => $this->contractingDutyOverview($selectedDate),
+            // Projects a field user named because the site was not on the
+            // list. Left unreviewed they quietly split one site's cost across
+            // several near-duplicate rows.
+            'provisionalProjects' => Project::query()
+                ->where('is_provisional', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'type'])
+                ->map(fn (Project $project) => [
+                    'id' => $project->id,
+                    'name' => $project->name,
+                    'type' => $project->type,
+                    'typeLabel' => Project::TYPES[$project->type] ?? $project->type,
+                ]),
             'selectedDate' => $selectedDate,
             'selectedDateLabel' => $selectedDay->format('d/m/Y'),
             'selectedMonthLabel' => $selectedDay->format('F Y'),

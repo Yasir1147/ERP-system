@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ResolvesNamedProjects;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
@@ -17,6 +18,8 @@ use Inertia\Response;
 
 class PublicAttendanceController extends Controller
 {
+    use ResolvesNamedProjects;
+
     public function create(string $type = 'contracting'): Response
     {
         $type = $this->normalizeType($type);
@@ -79,6 +82,13 @@ class PublicAttendanceController extends Controller
         $isPresent = $request->input('status') === AttendanceRecord::STATUS_PRESENT;
         $isLeave = $request->input('status') === AttendanceRecord::STATUS_LEAVE;
         $dateRange = $request->user()->attendanceDateRange();
+
+        // A site nobody registered yet is named on the form; it becomes a
+        // real project here so the validation below only sees an id.
+        $this->resolveNamedProjects($request, $type, [
+            'project_id' => 'project_name',
+            'overtime_project_id' => 'overtime_project_name',
+        ]);
 
         $data = $request->validate([
             'employee_ids' => ['required', 'array', 'min:1'],

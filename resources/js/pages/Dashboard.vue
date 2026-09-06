@@ -119,6 +119,7 @@ const props = defineProps<{
     monthlySummary: MonthlySummary[];
     completedLongLeaves: CompletedLongLeave[];
     contractingDuty: ContractingDuty;
+    provisionalProjects: Array<{ id: number; name: string; type: string; typeLabel: string }>;
     selectedDate: string;
     selectedDateLabel: string;
     selectedMonthLabel: string;
@@ -509,6 +510,34 @@ const filteredContractingRecords = computed(() => props.attendanceRecords.contra
                         <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                     </select>
                     <button type="button" class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" @click="applyFilters">Filter</button>
+                </div>
+            </div>
+
+            <div
+                v-if="provisionalProjects.length"
+                class="rounded-lg border border-amber-600/30 bg-amber-600/10 p-4 text-amber-900"
+            >
+                <div class="flex gap-3">
+                    <AlertTriangle class="mt-0.5 size-5 shrink-0 text-amber-700" />
+                    <div class="min-w-0">
+                        <h2 class="text-base font-medium">
+                            {{ provisionalProjects.length }} project{{ provisionalProjects.length === 1 ? '' : 's' }} added from attendance
+                        </h2>
+                        <p class="mt-1 text-sm text-amber-800">
+                            A field user named a site that was not on the list. Review each one, or merge it into the real project before the
+                            same site ends up costed twice.
+                        </p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <a
+                                v-for="project in provisionalProjects"
+                                :key="project.id"
+                                :href="`/projects/${project.type}`"
+                                class="rounded-full border border-amber-600/30 bg-background/70 px-3 py-1 text-xs font-medium hover:bg-background"
+                            >
+                                {{ project.name }}
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
 

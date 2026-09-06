@@ -431,6 +431,20 @@ The project cards carry the same signal: a red **Loss** badge beside the status,
 
 Projects with linked attendance, purchase bills, expenses, equipment, or contracting duty assignments cannot be deleted. Mark them completed instead.
 
+### Projects Named From The Field
+
+Sites turn up that nobody registered yet, and a field user cannot be left unable to record the day's work. Every project dropdown — Mark Attendance (both types), its overtime project, and the Contracting Duty Plan — ends with **Other · project is not in this list** and a name field.
+
+The typed name is **not** kept as loose text. Every cost figure in the system hangs off `project_id`, so attendance without one drops silently out of labour cost, the project statement, the employee history, and the loss check. A real project is raised instead, flagged `is_provisional`, with `created_by` recording who named it.
+
+- Matching is case- and space-insensitive per employee type, so the same site typed twice does not become two projects. The same name under a different employee type is a different project.
+- While typing, the forgiving matcher suggests a near name — *"Did you mean Sobha Opulence?"* — because three spellings of one site are far easier to prevent than to unpick.
+- The name must be at least 3 characters.
+
+Admin sees a **Needs review** badge on those project cards and a count on the Dashboard. The badge opens **Merge**, which moves that project's attendance, duty assignments, purchase bills, expenses, and equipment onto the real project inside one transaction, then removes the now-empty one. Deleting is not an option — records hang off it.
+
+The merge target uses `Rule::notIn`, not `different`. Laravel's `different` rule compares two *request fields*, so `different:7` would look for a field named "7", find nothing, and quietly pass — merging a project into itself and deleting it along with its records.
+
 Project employee history is available from each project row. The current desired modal focuses on Employee Summary, not detailed attendance rows.
 
 Employee history rows show employee code with name, are ordered by cost, and carry a Share column showing each employee's percentage of the project's labour cost.
