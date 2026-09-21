@@ -1108,6 +1108,18 @@ Database tables:
 - Suppliers and purchase bills with related financial/equipment records are protected from unsafe deletion.
 - Uploaded procurement documents use Laravel's `public` disk; production requires `php artisan storage:link`.
 
+# Fixed Office Staff Attendance (September 2026)
+
+- Office Staff create/edit offers `Check In / Check Out` or `Fixed Daily Attendance`. No employee is automatically switched; admin selects the staff and schedule. No password is required.
+- Fixed staff may sign in at `/login` with username only and land at `/office-attendance/personal`. Their public board profile opens the same Mark Attendance / Leave page without login. Inactive staff cannot sign in.
+- Personal page has Mark Attendance and Apply for Leave. Attendance uses today's UAE date and the staff's configured schedule (default 09:00–17:00). It saves a completed session and actual `marked_at` audit timestamp. Fixed attendance counts all scheduled hours, including breaks, for remote and office staff, with no automatic late or overtime calculation.
+- `/office-attendance/staff` and its existing profile routes remain public. Normal staff retain public check-in/check-out. Fixed profiles use one-click scheduled attendance and leave. Blank records with no times or sessions are completed in place; existing timed attendance prevents duplicate submission.
+- Leave requires a date (today or later) and reason. Requests are pending until admin approves/rejects from Office Staff > Leave Requests (`/office-leave-requests`). Pending or approved leave blocks fixed attendance on both public and personal routes; approved leave also blocks normal public attendance. An admin cannot approve leave where attendance already exists.
+- Leave emails go to `info@almohafiz.com` using Settings > Mail. Requests survive mail failure; email delivery status and Retry Email are available to admins. Leave records are separate from worked-day attendance totals.
+- Leave popup starts with an admin-editable sick-leave message (Office Staff > Leave Requests > Default Leave Message). `[Your Name]`, `[Leave Date]`, and `[Return Date]` are filled in the browser; staff can edit the message before submission. Templates are stored in `app_settings.office_leave_message_template`, and changes apply to new requests, not historical ones.
+- Board status is computed for the UAE date: pending leave displays On Leave (Pending approval), approved leave displays On Leave; future dates do not mark the person off early. Personal/profile history and date-filtered report/PDF leave sections show Scheduled leave, On Leave, or Was on leave. Rejected leave is excluded from report leave sections; leave creates no worked hours. Public profiles show only leave date/status, not the reason.
+- Migration: `2026_09_21_000001_add_fixed_office_attendance.php`. Existing attendance records and default staff modes remain unchanged.
+
 # Employee Document Expiry
 
 - Admin-only document tracking is available at `/employee-documents`.

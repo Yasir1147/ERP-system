@@ -5,31 +5,32 @@ use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AttendanceStatementController;
 use App\Http\Controllers\AttendanceTimesheetController;
 use App\Http\Controllers\BankController;
-use App\Http\Controllers\ChequeFormatController;
-use App\Http\Controllers\ChequeController;
 use App\Http\Controllers\ChequeBookController;
+use App\Http\Controllers\ChequeController;
+use App\Http\Controllers\ChequeFormatController;
 use App\Http\Controllers\ChequePartyController;
 use App\Http\Controllers\ContractingDutyPlanController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\HolidayController;
-use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\DocumentCategoryController;
+use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeDocumentController;
 use App\Http\Controllers\EmployeeExpenseController;
 use App\Http\Controllers\EmployeeFineController;
 use App\Http\Controllers\EmployeeLeaveController;
 use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\OfficeAttendanceController;
 use App\Http\Controllers\OfficeAttendanceReportController;
 use App\Http\Controllers\OfficeStaffController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PersonalOfficeAttendanceController;
 use App\Http\Controllers\ProjectController;
-use App\Http\Controllers\PurchaseBillController;
 use App\Http\Controllers\PublicAttendanceController;
+use App\Http\Controllers\PurchaseBillController;
+use App\Http\Controllers\Settings\WhatsAppSettingsController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPaymentController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\Settings\WhatsAppSettingsController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -46,7 +47,7 @@ Route::get('/', function (Request $request) {
     }
 
     if ($request->user()->role === User::ROLE_OFFICE_STAFF) {
-        return redirect()->route('office-attendance.staff.index');
+        return redirect()->route($request->user()->usesFixedAttendance() ? 'office-attendance.personal' : 'office-attendance.staff.index');
     }
 
     return redirect()->route('dashboard');
@@ -129,10 +130,14 @@ Route::middleware(['attendance.access'])->group(function () {
 });
 
 Route::get('office-attendance/staff', [OfficeAttendanceController::class, 'index'])->name('office-attendance.staff.index');
+Route::post('office-attendance/mark/{officeStaff}/leave', [PersonalOfficeAttendanceController::class, 'leave'])->name('office-attendance.staff.leave');
 Route::get('office-attendance/mark/{officeStaff}', [OfficeAttendanceController::class, 'create'])->name('office-attendance.staff.create');
 Route::post('office-attendance/mark/{officeStaff}', [OfficeAttendanceController::class, 'store'])->name('office-attendance.staff.store');
 
 Route::middleware(['auth', 'role:office_staff'])->group(function () {
+    Route::get('office-attendance/personal', [PersonalOfficeAttendanceController::class, 'index'])->name('office-attendance.personal');
+    Route::post('office-attendance/personal', [PersonalOfficeAttendanceController::class, 'mark'])->name('office-attendance.personal.mark');
+    Route::post('office-attendance/personal/leave', [PersonalOfficeAttendanceController::class, 'leave'])->name('office-attendance.personal.leave');
     Route::get('office-attendance/mark', [OfficeAttendanceController::class, 'create'])->name('office-attendance.create');
     Route::post('office-attendance/mark', [OfficeAttendanceController::class, 'store'])->name('office-attendance.store');
 });
@@ -219,6 +224,10 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::post('purchase-bills/{purchaseBill}/payments', [SupplierPaymentController::class, 'store'])->name('purchase-bills.payments.store');
     Route::delete('supplier-payments/{supplierPayment}', [SupplierPaymentController::class, 'destroy'])->name('supplier-payments.destroy');
     Route::resource('equipment', EquipmentController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::get('office-leave-requests', [PersonalOfficeAttendanceController::class, 'requests'])->name('office-leaves.index');
+    Route::put('office-leave-template', [PersonalOfficeAttendanceController::class, 'updateTemplate'])->name('office-leaves.template');
+    Route::put('office-leave-requests/{leave}', [PersonalOfficeAttendanceController::class, 'review'])->name('office-leaves.review');
+    Route::post('office-leave-requests/{leave}/email', [PersonalOfficeAttendanceController::class, 'retryEmail'])->name('office-leaves.email');
     Route::resource('office-staff', OfficeStaffController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::get('office-attendance/report', [OfficeAttendanceReportController::class, 'index'])->name('office-attendance.report');
     Route::get('office-attendance/report/{officeStaff}/details', [OfficeAttendanceReportController::class, 'details'])->name('office-attendance.details');

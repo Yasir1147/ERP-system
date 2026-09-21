@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\OfficeLeaveRequest;
 use App\Models\OfficeStaff;
 use App\Models\OfficeStaffAttendance;
 use App\Models\OfficeStaffAttendanceSession;
@@ -24,13 +25,16 @@ class OfficeAttendanceController extends Controller
             ->get()
             ->keyBy('office_staff_id');
 
+        $todayLeaves = OfficeLeaveRequest::whereDate('leave_date', now('Asia/Dubai')->toDateString())
+            ->whereIn('status', ['pending', 'approved'])->get()->keyBy('office_staff_id');
+
         return Inertia::render('OfficeAttendance/StaffList', [
             'staffMembers' => OfficeStaff::query()
                 ->with('user:id,username')
                 ->where('status', OfficeStaff::STATUS_ACTIVE)
                 ->orderByRaw('cast(code as unsigned), code')
                 ->get()
-                ->map(fn (OfficeStaff $staff) => $this->staffListPayload($staff, $todayRecords->get($staff->id))),
+                ->map(fn (OfficeStaff $staff) => $this->staffListPayload($staff, $todayRecords->get($staff->id), $todayLeaves->get($staff->id))),
             'today' => today()->toDateString(),
         ]);
     }
@@ -38,6 +42,10 @@ class OfficeAttendanceController extends Controller
     public function create(Request $request, ?OfficeStaff $officeStaff = null): Response
     {
         $staff = $this->resolveStaff($request, $officeStaff);
+
+        if ($staff->attendance_mode === 'fixed') {
+            return app(PersonalOfficeAttendanceController::class)->index($request, $officeStaff);
+        }
 
         $todayRecord = OfficeStaffAttendance::query()
             ->with(['sessions' => fn ($query) => $query->orderBy('check_in_time')->orderBy('id')])
@@ -66,6 +74,10 @@ class OfficeAttendanceController extends Controller
     public function store(Request $request, ?OfficeStaff $officeStaff = null): RedirectResponse
     {
         $staff = $this->resolveStaff($request, $officeStaff);
+
+        if ($staff->attendance_mode === 'fixed') {
+            return app(PersonalOfficeAttendanceController::class)->mark($request, $officeStaff);
+        }
 
         $data = $request->validate([
             'work_mode' => ['required', Rule::in(array_keys(OfficeStaffAttendance::MODES))],
@@ -116,6 +128,13 @@ class OfficeAttendanceController extends Controller
         ];
 
         DB::transaction(function () use ($staff, $values, $data, $existingRecord, $openSession) {
+            OfficeStaff::whereKey($staff->id)->lockForUpdate()->firstOrFail();
+            if (OfficeStaffAttendance::where('office_staff_id', $staff->id)->whereDate('attendance_date', today())->where('is_fixed', true)->exists()) {
+                throw ValidationException::withMessages(['attendance_action' => 'Fixed attendance is already completed for today.']);
+            }
+            if (OfficeLeaveRequest::where('office_staff_id', $staff->id)->whereDate('leave_date', today())->where('status', 'approved')->exists()) {
+                throw ValidationException::withMessages(['attendance_action' => 'Approved leave exists for today.']);
+            }
             $attendance = OfficeStaffAttendance::updateOrCreate([
                 'office_staff_id' => $staff->id,
                 'attendance_date' => today()->toDateString(),
@@ -212,10 +231,11 @@ class OfficeAttendanceController extends Controller
         ];
     }
 
-    private function staffListPayload(OfficeStaff $staff, ?OfficeStaffAttendance $todayRecord): array
+    private function staffListPayload(OfficeStaff $staff, ?OfficeStaffAttendance $todayRecord, ?OfficeLeaveRequest $leave = null): array
     {
         $record = $this->todayRecordPayload($todayRecord);
-        $status = ! $record ? 'not_marked' : ($record['hasOpenSession'] ? 'checked_in' : 'checked_out');
+        $hasAttendance = $todayRecord && ($todayRecord->check_in_time || $todayRecord->check_out_time || $todayRecord->sessions->isNotEmpty());
+        $status = $leave && ! $hasAttendance ? 'on_leave' : (! $hasAttendance ? 'not_marked' : ($record['hasOpenSession'] ? 'checked_in' : 'checked_out'));
 
         return [
             'id' => $staff->id,
@@ -227,6 +247,7 @@ class OfficeAttendanceController extends Controller
             'markUrl' => route('office-attendance.staff.create', $staff, false),
             'status' => $status,
             'statusLabel' => match ($status) {
+                'on_leave' => $leave?->attendanceLabel(),
                 'checked_in' => 'Checked In',
                 'checked_out' => 'Checked Out',
                 default => 'Not Marked',
@@ -237,6 +258,11 @@ class OfficeAttendanceController extends Controller
 
     private function photoUrl(OfficeStaff $staff): ?string
     {
-        return $staff->photo_path ? Storage::disk('public')->url($staff->photo_path) : null;
+        // Keep local public-disk photos on the current origin, including when
+        // APP_URL uses localhost and the browser uses 127.0.0.1. The staff board
+        // samples the photo backdrop through canvas, which requires same-origin pixels.
+        return $staff->photo_path
+            ? parse_url(Storage::disk('public')->url($staff->photo_path), PHP_URL_PATH)
+            : null;
     }
 }

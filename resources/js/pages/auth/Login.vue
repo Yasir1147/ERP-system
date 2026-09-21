@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { Building2, CalendarCheck2, LoaderCircle, ShieldCheck } from 'lucide-vue-next';
 
@@ -37,13 +37,13 @@ const submit = () => {
                     src="/login-rope-construction-grid.png"
                     alt=""
                     aria-hidden="true"
-                    class="absolute inset-0 h-full w-full object-cover opacity-55 saturate-75"
+                    class="saturate-75 absolute inset-0 h-full w-full object-cover opacity-55"
                 />
-                <div class="absolute inset-0 bg-white/68" />
-                <div class="absolute inset-0 bg-gradient-to-br from-white/95 via-white/84 to-white/72" />
-                <div class="absolute inset-0 bg-gradient-to-t from-white/90 via-transparent to-white/58" />
-                <div class="absolute left-[-10%] top-[-8%] h-64 w-64 rounded-full border border-slate-900/12" />
-                <div class="absolute bottom-[-12%] right-[-8%] h-80 w-80 rounded-full border border-slate-900/12" />
+                <div class="bg-white/68 absolute inset-0" />
+                <div class="via-white/84 to-white/72 absolute inset-0 bg-gradient-to-br from-white/95" />
+                <div class="to-white/58 absolute inset-0 bg-gradient-to-t from-white/90 via-transparent" />
+                <div class="border-slate-900/12 absolute left-[-10%] top-[-8%] h-64 w-64 rounded-full border" />
+                <div class="border-slate-900/12 absolute bottom-[-12%] right-[-8%] h-80 w-80 rounded-full border" />
 
                 <div class="relative z-10 flex min-h-svh flex-col p-10 xl:p-12">
                     <Link :href="route('home')" class="flex w-fit items-center gap-3">
@@ -65,17 +65,23 @@ const submit = () => {
                             </p>
 
                             <div class="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
-                                <div class="rounded-lg border border-slate-200/90 border-t-4 border-t-emerald-500 bg-white/92 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur-md">
+                                <div
+                                    class="bg-white/92 rounded-lg border border-t-4 border-slate-200/90 border-t-emerald-500 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur-md"
+                                >
                                     <CalendarCheck2 class="size-5 text-emerald-700" />
                                     <p class="mt-3 text-sm font-semibold text-slate-950">Attendance</p>
                                     <p class="mt-1 text-xs font-semibold text-slate-600">Daily records</p>
                                 </div>
-                                <div class="rounded-lg border border-slate-200/90 border-t-4 border-t-sky-500 bg-white/92 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur-md">
+                                <div
+                                    class="bg-white/92 rounded-lg border border-t-4 border-slate-200/90 border-t-sky-500 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur-md"
+                                >
                                     <Building2 class="size-5 text-sky-700" />
                                     <p class="mt-3 text-sm font-semibold text-slate-950">Projects</p>
                                     <p class="mt-1 text-xs font-semibold text-slate-600">Cost tracking</p>
                                 </div>
-                                <div class="rounded-lg border border-slate-200/90 border-t-4 border-t-amber-500 bg-white/92 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur-md">
+                                <div
+                                    class="bg-white/92 rounded-lg border border-t-4 border-slate-200/90 border-t-amber-500 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur-md"
+                                >
                                     <ShieldCheck class="size-5 text-amber-700" />
                                     <p class="mt-3 text-sm font-semibold text-slate-950">Payroll</p>
                                     <p class="mt-1 text-xs font-semibold text-slate-600">Payslips</p>
@@ -103,7 +109,10 @@ const submit = () => {
                             <p class="mt-2 text-sm text-muted-foreground">Attendance users can enter username only</p>
                         </div>
 
-                        <div v-if="status" class="mt-5 rounded-md border border-green-600/20 bg-green-600/10 px-3 py-2 text-center text-sm font-medium text-green-700">
+                        <div
+                            v-if="status"
+                            class="mt-5 rounded-md border border-green-600/20 bg-green-600/10 px-3 py-2 text-center text-sm font-medium text-green-700"
+                        >
                             {{ status }}
                         </div>
 
@@ -127,7 +136,9 @@ const submit = () => {
                                 <div class="grid gap-2">
                                     <div class="flex items-center justify-between">
                                         <Label for="password">Password for admin</Label>
-                                        <TextLink v-if="canResetPassword" :href="route('password.request')" class="text-sm" tabindex="5"> Forgot password? </TextLink>
+                                        <TextLink v-if="canResetPassword" :href="route('password.request')" class="text-sm" tabindex="5">
+                                            Forgot password?
+                                        </TextLink>
                                     </div>
                                     <Input
                                         id="password"
@@ -135,7 +146,7 @@ const submit = () => {
                                         tabindex="2"
                                         autocomplete="current-password"
                                         v-model="form.password"
-                                        placeholder="Admin password"
+                                        placeholder="Password"
                                     />
                                     <InputError :message="form.errors.password" />
                                 </div>
@@ -152,7 +163,6 @@ const submit = () => {
                                     Log in
                                 </Button>
                             </div>
-
                         </form>
                     </div>
                 </div>

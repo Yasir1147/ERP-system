@@ -3,13 +3,14 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     public const ROLE_ADMIN = 'admin';
@@ -62,6 +63,12 @@ class User extends Authenticatable
             'attendance_backdate_from' => 'date',
             'attendance_backdate_to' => 'date',
         ];
+    }
+
+    public function usesFixedAttendance(): bool
+    {
+        return $this->isOfficeStaff() && OfficeStaff::where('user_id', $this->id)
+            ->where('attendance_mode', 'fixed')->exists();
     }
 
     public function isAdmin(): bool

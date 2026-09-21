@@ -36,6 +36,9 @@ class OfficeStaff extends Model
         'photo_path',
         'staff_type',
         'status',
+        'attendance_mode',
+        'fixed_start_time',
+        'fixed_end_time',
     ];
 
     public function user(): BelongsTo

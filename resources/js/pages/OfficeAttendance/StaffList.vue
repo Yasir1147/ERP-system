@@ -13,7 +13,7 @@ interface StaffMember {
     staffTypeLabel: string;
     photoUrl: string | null;
     markUrl: string;
-    status: 'checked_in' | 'checked_out' | 'not_marked';
+    status: 'checked_in' | 'checked_out' | 'not_marked' | 'on_leave';
     statusLabel: string;
     todayRecord: {
         workModeLabel: string;
@@ -33,10 +33,39 @@ const props = defineProps<{
 
 const page = usePage();
 const search = ref('');
+const photoBackgrounds = ref<Record<string, string>>({});
+
+// Upper corners usually contain the portrait backdrop rather than clothing.
+const matchPhotoBackground = (event: Event, photoUrl: string) => {
+    if (photoBackgrounds.value[photoUrl]) return;
+    const photo = event.target as HTMLImageElement;
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 32;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) return;
+        context.drawImage(photo, 0, 0, 32, 32);
+        const pixels = context.getImageData(0, 0, 32, 32).data;
+        const channels: number[][] = [[], [], []];
+        for (let y = 1; y < 7; y++) {
+            for (const x of [1, 2, 3, 28, 29, 30]) {
+                const offset = (y * 32 + x) * 4;
+                if (pixels[offset + 3] < 240) continue;
+                channels.forEach((channel, index) => channel.push(pixels[offset + index]));
+            }
+        }
+        if (!channels[0].length) return;
+        const color = channels.map((channel) => channel.sort((a, b) => a - b)[Math.floor(channel.length / 2)]);
+        photoBackgrounds.value[photoUrl] = `rgb(${color.join(', ')})`;
+    } catch {
+        // Cross-origin photos can still display normally without pixel access.
+    }
+};
 const successMessage = computed(() => page.props.flash?.success as string | undefined);
 
 const checkedInCount = computed(() => props.staffMembers.filter((member) => member.status === 'checked_in').length);
 const checkedOutCount = computed(() => props.staffMembers.filter((member) => member.status === 'checked_out').length);
+const onLeaveCount = computed(() => props.staffMembers.filter((member) => member.status === 'on_leave').length);
 const notMarkedCount = computed(() => props.staffMembers.filter((member) => member.status === 'not_marked').length);
 
 const filteredStaff = computed(() => {
@@ -82,8 +111,7 @@ const formatDisplayTime = (time?: string | null) => {
     return `${displayHour}:${minute} ${period}`;
 };
 
-const displayCheckIn = (member: StaffMember) =>
-    formatDisplayTime(member.todayRecord?.latestCheckInTime ?? member.todayRecord?.checkInTime);
+const displayCheckIn = (member: StaffMember) => formatDisplayTime(member.todayRecord?.latestCheckInTime ?? member.todayRecord?.checkInTime);
 
 const displayCheckOut = (member: StaffMember) => {
     if (member.todayRecord?.hasOpenSession) {
@@ -99,7 +127,9 @@ const displayCheckOut = (member: StaffMember) => {
 
     <main class="min-h-svh bg-[#f4f7fb] px-4 py-6 text-slate-950">
         <div class="mx-auto max-w-7xl">
-            <div class="mb-6 flex flex-col gap-5 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div
+                class="mb-6 flex flex-col gap-5 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm md:flex-row md:items-center md:justify-between"
+            >
                 <div class="flex items-center gap-4">
                     <AppLogoIcon class="size-16 shrink-0" />
                     <div>
@@ -128,11 +158,16 @@ const displayCheckOut = (member: StaffMember) => {
                 </div>
             </div>
 
-            <div v-if="successMessage" class="mb-4 rounded-md border border-green-600/20 bg-green-600/10 px-4 py-3 text-sm font-medium text-green-700">
+            <div
+                v-if="successMessage"
+                class="mb-4 rounded-md border border-green-600/20 bg-green-600/10 px-4 py-3 text-sm font-medium text-green-700"
+            >
                 {{ successMessage }}
             </div>
 
-            <div class="mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div
+                class="mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"
+            >
                 <div>
                     <h2 class="text-base font-medium">Staff List</h2>
                     <p class="text-sm text-slate-500">{{ filteredStaff.length }} of {{ staffMembers.length }} active staff members</p>
@@ -148,6 +183,9 @@ const displayCheckOut = (member: StaffMember) => {
                 </div>
             </div>
 
+            <p v-if="onLeaveCount" class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                {{ onLeaveCount }} staff on leave today (including pending requests).
+            </p>
             <div v-if="filteredStaff.length === 0" class="rounded-lg border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
                 No active staff found.
             </div>
@@ -159,27 +197,37 @@ const displayCheckOut = (member: StaffMember) => {
                     :href="member.markUrl"
                     class="group overflow-hidden rounded-lg border border-white bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.10)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_22px_55px_rgba(15,23,42,0.16)]"
                 >
-                    <div class="relative overflow-hidden rounded-lg bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200">
-                        <div class="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold shadow-sm ring-1 ring-slate-900/5">
+                    <div
+                        class="relative overflow-hidden rounded-lg bg-slate-100"
+                        :style="{ backgroundColor: member.photoUrl ? photoBackgrounds[member.photoUrl] : undefined }"
+                    >
+                        <div
+                            class="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold shadow-sm ring-1 ring-slate-900/5"
+                        >
                             <span
                                 class="size-2 rounded-full"
                                 :class="{
                                     'bg-emerald-500': member.status === 'checked_in',
                                     'bg-blue-500': member.status === 'checked_out',
                                     'bg-slate-300': member.status === 'not_marked',
+                                    'bg-amber-500': member.status === 'on_leave',
                                 }"
                             ></span>
                             {{ member.statusLabel }}
                         </div>
 
-                        <div class="flex aspect-[4/3] items-center justify-center p-3">
+                        <div class="relative flex aspect-[4/3] items-center justify-center p-3">
                             <img
                                 v-if="member.photoUrl"
                                 :src="member.photoUrl"
                                 :alt="member.name"
-                                class="h-full w-full rounded-lg object-cover object-top shadow-inner"
+                                class="absolute inset-0 h-full w-full object-contain p-3 pt-10"
+                                @load="matchPhotoBackground($event, member.photoUrl)"
                             />
-                            <div v-else class="flex h-full w-full items-center justify-center rounded-lg bg-slate-200 text-6xl font-semibold text-slate-500">
+                            <div
+                                v-else
+                                class="flex h-full w-full items-center justify-center rounded-lg bg-slate-200 text-6xl font-semibold text-slate-500"
+                            >
                                 {{ initials(member.name) }}
                             </div>
                         </div>
@@ -195,6 +243,7 @@ const displayCheckOut = (member: StaffMember) => {
                                         'bg-emerald-100 text-emerald-700': member.status === 'checked_in',
                                         'bg-blue-100 text-blue-700': member.status === 'checked_out',
                                         'bg-slate-100 text-slate-500': member.status === 'not_marked',
+                                        'bg-amber-100 text-amber-700': member.status === 'on_leave',
                                     }"
                                 >
                                     <CheckCircle2 class="size-3.5" />

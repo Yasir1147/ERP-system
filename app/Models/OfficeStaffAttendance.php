@@ -25,12 +25,16 @@ class OfficeStaffAttendance extends Model
         'check_in_time',
         'check_out_time',
         'note',
+        'is_fixed',
+        'marked_at',
     ];
 
     protected function casts(): array
     {
         return [
             'attendance_date' => 'date',
+            'is_fixed' => 'boolean',
+            'marked_at' => 'datetime',
         ];
     }
 

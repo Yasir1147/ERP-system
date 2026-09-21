@@ -196,6 +196,18 @@
                 @endforelse
             </tbody>
         </table>
+        @if ($leaveRows->isNotEmpty())
+            <h3>Leave in Selected Date Range</h3>
+            <p>Leave days are separate from worked days and hours.</p>
+            <table>
+                <thead><tr><th>Date</th><th>Staff</th><th>Leave Status</th></tr></thead>
+                <tbody>
+                    @foreach ($leaveRows as $leave)
+                        <tr><td>{{ $leave['date'] }}</td><td>{{ $leave['staffName'] }}</td><td>{{ $leave['label'] }}</td></tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
     </main>
 </body>
 </html>

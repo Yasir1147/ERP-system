@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
+use App\Models\OfficeLeaveRequest;
 use App\Models\OfficeStaff;
 use App\Models\OfficeStaffAttendance;
 use Carbon\Carbon;
@@ -36,6 +37,7 @@ class OfficeAttendanceReportController extends Controller
             'workModes' => OfficeStaffAttendance::MODES,
             'filters' => $filters,
             'summaryRows' => $this->summaryRows($filters),
+            'leaveRows' => $this->leaveRows($filters),
             'officeRules' => $this->officeRules(),
         ]);
     }
@@ -53,6 +55,7 @@ class OfficeAttendanceReportController extends Controller
         return view('office-attendance.report', [
             'filters' => $filters,
             'summaryRows' => $this->summaryRows($filters),
+            'leaveRows' => $this->leaveRows($filters),
             'attendanceRows' => $rows,
             'workModes' => OfficeStaffAttendance::MODES,
             'staffLabel' => $filters['staffId']
@@ -158,7 +161,26 @@ class OfficeAttendanceReportController extends Controller
                 'staffTypeLabel' => OfficeStaff::TYPES[$officeStaff->staff_type] ?? $officeStaff->staff_type,
             ],
             'rows' => $rows,
+            'leaveRows' => $this->leaveRows($filters),
         ]);
+    }
+
+    private function leaveRows(array $filters)
+    {
+        return OfficeLeaveRequest::with('officeStaff:id,code,name,staff_type')
+            ->whereIn('status', ['pending', 'approved'])
+            ->when($filters['from'], fn ($q) => $q->whereDate('leave_date', '>=', $filters['from']))
+            ->when($filters['to'], fn ($q) => $q->whereDate('leave_date', '<=', $filters['to']))
+            ->when($filters['staffId'] !== '', fn ($q) => $q->where('office_staff_id', $filters['staffId']))
+            ->when(in_array($filters['workMode'], ['office', 'remote'], true), fn ($q) => $q->whereHas('officeStaff', fn ($staff) => $staff->where('staff_type', $filters['workMode'] === 'office' ? 'on_site' : 'remote')))
+            ->when($filters['search'] !== '', fn ($q) => $q->where(function ($q) use ($filters) {
+                $q->where('reason', 'like', '%'.$filters['search'].'%')->orWhereHas('officeStaff', fn ($staff) => $staff->where('name', 'like', '%'.$filters['search'].'%')->orWhere('code', 'like', '%'.$filters['search'].'%'));
+            }))
+            ->orderByDesc('leave_date')->get()->map(fn ($leave) => [
+                'id' => $leave->id, 'date' => $leave->leave_date->toDateString(),
+                'staffName' => $leave->officeStaff->code.' - '.$leave->officeStaff->name,
+                'label' => $leave->attendanceLabel(), 'reason' => $leave->reason,
+            ]);
     }
 
     private function filters(Request $request, bool $paginate = true): array
@@ -316,6 +338,12 @@ class OfficeAttendanceReportController extends Controller
 
     private function attendanceMetrics(OfficeStaffAttendance $attendance, array $rules, $sessions, ?string $checkInTime, ?string $checkOutTime): array
     {
+        if ($attendance->is_fixed) {
+            $minutes = $this->workedMinutes($attendance, [...$rules, 'break_included' => true], $sessions);
+
+            return ['workMinutes' => $minutes, 'workHoursLabel' => $this->formatMinutesLabel($minutes),
+                'overtimeMinutes' => 0, 'overtimeLabel' => '-', 'lateMinutes' => 0, 'lateLabel' => 'Fixed Attendance', 'isLate' => false];
+        }
         if ($attendance->work_mode !== OfficeStaffAttendance::MODE_OFFICE) {
             return [
                 'workMinutes' => 0,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import OfficeLeaveSummary from '@/components/OfficeLeaveSummary.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { BookOpen, LoaderCircle, Printer, Save, Search } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+type LeaveRow = { id: number; date: string; staffName: string; label: string; reason: string };
 
 interface StaffOption {
     id: number;
@@ -73,6 +75,7 @@ const props = defineProps<{
         perPage: number;
     };
     summaryRows: SummaryRow[];
+    leaveRows: LeaveRow[];
     officeRules: OfficeRules;
 }>();
 
@@ -91,6 +94,7 @@ const editRows = ref<Record<number, { work_mode: string; check_in_time: string; 
 const detailOpen = ref(false);
 const detailLoading = ref(false);
 const detailStaff = ref<SummaryRow | null>(null);
+const detailLeaves = ref<LeaveRow[]>([]);
 const detailRows = ref<AttendanceRow[]>([]);
 const detailFrom = ref(props.filters.from);
 const detailTo = ref(props.filters.to);
@@ -189,6 +193,7 @@ const detailPrintUrl = computed(() => {
 
 const loadStaffDetails = async (row: SummaryRow) => {
     detailStaff.value = row;
+    detailLeaves.value = [];
     detailFrom.value = from.value;
     detailTo.value = to.value;
     detailWorkMode.value = workMode.value;
@@ -219,6 +224,7 @@ const fetchStaffDetails = async () => {
     if (response.ok) {
         const data = await response.json();
         detailRows.value = data.rows ?? [];
+        detailLeaves.value = data.leaveRows ?? [];
         detailRows.value.forEach((attendance: AttendanceRow) => editRow(attendance));
     }
 
@@ -346,7 +352,14 @@ const sessionSegments = (summary?: string | null) => {
                         </div>
                         <div class="grid gap-2">
                             <Label for="office-late-grace">Grace Minutes</Label>
-                            <Input id="office-late-grace" v-model.number="ruleForm.late_grace_minutes" type="number" min="0" max="240" class="w-full xl:w-32" />
+                            <Input
+                                id="office-late-grace"
+                                v-model.number="ruleForm.late_grace_minutes"
+                                type="number"
+                                min="0"
+                                max="240"
+                                class="w-full xl:w-32"
+                            />
                         </div>
                         <label class="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
                             <input v-model="ruleForm.break_included" type="checkbox" class="size-4" />
@@ -401,7 +414,13 @@ const sessionSegments = (summary?: string | null) => {
                         <Label for="office-search">Search</Label>
                         <div class="relative">
                             <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input id="office-search" v-model="search" type="search" class="pl-9" placeholder="Search code, name, designation, note" />
+                            <Input
+                                id="office-search"
+                                v-model="search"
+                                type="search"
+                                class="pl-9"
+                                placeholder="Search code, name, designation, note"
+                            />
                         </div>
                     </div>
                     <Button type="button" @click="reloadReport(1)">Filter</Button>
@@ -447,13 +466,12 @@ const sessionSegments = (summary?: string | null) => {
                 </div>
             </div>
 
+            <OfficeLeaveSummary :rows="leaveRows" />
             <Dialog v-model:open="detailOpen">
                 <DialogScrollContent class="w-[96vw] max-w-[1500px]">
                     <DialogHeader>
                         <DialogTitle>{{ detailStaff ? `${detailStaff.code} - ${detailStaff.name}` : 'Staff Attendance Details' }}</DialogTitle>
-                        <DialogDescription>
-                            Review, edit, and print attendance details for the selected staff member.
-                        </DialogDescription>
+                        <DialogDescription> Review, edit, and print attendance details for the selected staff member. </DialogDescription>
                     </DialogHeader>
 
                     <div class="grid gap-3 md:grid-cols-[150px_150px_170px_minmax(220px,1fr)_auto_auto] md:items-end">
@@ -495,6 +513,7 @@ const sessionSegments = (summary?: string | null) => {
                         </Button>
                     </div>
 
+                    <OfficeLeaveSummary :rows="detailLeaves" />
                     <div class="overflow-hidden rounded-lg border">
                         <div class="border-b p-3">
                             <h3 class="text-sm font-medium">Attendance Detail</h3>
@@ -542,8 +561,14 @@ const sessionSegments = (summary?: string | null) => {
                                             <Input v-model="editRow(row).check_out_time" type="time" class="h-9 text-xs" />
                                         </td>
                                         <td class="px-4 py-3">
-                                            <p class="text-xs font-medium">{{ row.sessionCount || 0 }} session{{ row.sessionCount === 1 ? '' : 's' }}</p>
-                                            <div v-if="sessionSegments(row.sessionSummary).length" class="mt-1 flex flex-wrap gap-1.5" :title="row.sessionSummary">
+                                            <p class="text-xs font-medium">
+                                                {{ row.sessionCount || 0 }} session{{ row.sessionCount === 1 ? '' : 's' }}
+                                            </p>
+                                            <div
+                                                v-if="sessionSegments(row.sessionSummary).length"
+                                                class="mt-1 flex flex-wrap gap-1.5"
+                                                :title="row.sessionSummary"
+                                            >
                                                 <span
                                                     v-for="session in sessionSegments(row.sessionSummary)"
                                                     :key="session"
@@ -559,7 +584,9 @@ const sessionSegments = (summary?: string | null) => {
                                             <span
                                                 :class="[
                                                     'rounded-full px-2 py-1 text-xs font-semibold',
-                                                    row.overtimeMinutes > 0 ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' : 'bg-muted text-muted-foreground',
+                                                    row.overtimeMinutes > 0
+                                                        ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                                                        : 'bg-muted text-muted-foreground',
                                                 ]"
                                             >
                                                 {{ row.overtimeLabel }}
@@ -569,7 +596,9 @@ const sessionSegments = (summary?: string | null) => {
                                             <span
                                                 :class="[
                                                     'rounded-full px-2 py-1 text-xs font-semibold',
-                                                    row.isLate ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+                                                    row.isLate
+                                                        ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                                                        : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
                                                 ]"
                                             >
                                                 {{ row.lateLabel }}

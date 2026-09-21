@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { Check, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -21,6 +21,9 @@ interface StaffMember {
     status: string;
     statusLabel: string;
     username: string | null;
+    attendanceMode: string;
+    fixedStartTime: string;
+    fixedEndTime: string;
 }
 
 const props = defineProps<{
@@ -45,6 +48,9 @@ const createForm = useForm({
     photo: null as File | null,
     staff_type: 'on_site',
     status: 'active',
+    attendance_mode: 'sessions',
+    fixed_start_time: '09:00',
+    fixed_end_time: '17:00',
 });
 
 const editForm = useForm({
@@ -56,36 +62,26 @@ const editForm = useForm({
     _method: 'put',
     staff_type: 'on_site',
     status: 'active',
+    attendance_mode: 'sessions',
+    fixed_start_time: '09:00',
+    fixed_end_time: '17:00',
 });
 
 const filteredStaff = computed(() => {
     const query = search.value.trim().toLowerCase();
     const rows = query
         ? props.staff.filter((member) =>
-              [
-                  member.code,
-                  member.name,
-                  member.designation ?? '',
-                  member.staffTypeLabel,
-                  member.statusLabel,
-                  member.username ?? '',
-              ].some((value) => value.toLowerCase().includes(query)),
+              [member.code, member.name, member.designation ?? '', member.staffTypeLabel, member.statusLabel, member.username ?? ''].some((value) =>
+                  value.toLowerCase().includes(query),
+              ),
           )
         : props.staff;
 
     return [...rows].sort((first, second) => {
         const firstValue =
-            sortKey.value === 'staffType'
-                ? first.staffTypeLabel
-                : sortKey.value === 'status'
-                  ? first.statusLabel
-                  : (first[sortKey.value] ?? '');
+            sortKey.value === 'staffType' ? first.staffTypeLabel : sortKey.value === 'status' ? first.statusLabel : (first[sortKey.value] ?? '');
         const secondValue =
-            sortKey.value === 'staffType'
-                ? second.staffTypeLabel
-                : sortKey.value === 'status'
-                  ? second.statusLabel
-                  : (second[sortKey.value] ?? '');
+            sortKey.value === 'staffType' ? second.staffTypeLabel : sortKey.value === 'status' ? second.statusLabel : (second[sortKey.value] ?? '');
         const comparison = String(firstValue).localeCompare(String(secondValue), undefined, { numeric: true, sensitivity: 'base' });
 
         return sortDirection.value === 'asc' ? comparison : -comparison;
@@ -133,6 +129,9 @@ const startEditing = (member: StaffMember) => {
     editForm.photo = null;
     editForm.staff_type = member.staffType;
     editForm.status = member.status;
+    editForm.attendance_mode = member.attendanceMode;
+    editForm.fixed_start_time = member.fixedStartTime;
+    editForm.fixed_end_time = member.fixedEndTime;
 };
 
 const cancelEditing = () => {
@@ -165,6 +164,7 @@ const deleteStaff = (member: StaffMember) => {
         <div class="flex h-full min-w-0 flex-1 flex-col gap-4 p-4">
             <div>
                 <h1 class="text-2xl font-semibold tracking-normal">Office Staff</h1>
+                <Link href="/office-leave-requests" class="text-sm text-primary underline">Leave Requests</Link>
                 <p class="mt-1 text-sm text-muted-foreground">Create staff logins and manage remote or on-site attendance access.</p>
             </div>
 
@@ -217,6 +217,27 @@ const deleteStaff = (member: StaffMember) => {
                         Add Staff
                     </Button>
                 </div>
+                <div class="grid gap-3 rounded-lg border p-3 md:grid-cols-2">
+                    <label class="grid gap-1 text-sm"
+                        >Attendance Mode<select v-model="createForm.attendance_mode" class="rounded-md border bg-background p-2">
+                            <option value="sessions">Check In / Check Out</option>
+                            <option value="fixed">Fixed Daily Attendance</option></select
+                        ><InputError :message="createForm.errors.attendance_mode"
+                    /></label>
+                    <template v-if="createForm.attendance_mode === 'fixed'">
+                        <label class="grid gap-1 text-sm"
+                            >Fixed start<Input v-model="createForm.fixed_start_time" type="time" /><InputError
+                                :message="createForm.errors.fixed_start_time"
+                        /></label>
+                        <label class="grid gap-1 text-sm"
+                            >Fixed end<Input v-model="createForm.fixed_end_time" type="time" /><InputError
+                                :message="createForm.errors.fixed_end_time"
+                        /></label>
+                        <p class="text-xs text-muted-foreground md:col-span-2">
+                            Open the staff profile from the public attendance board. Default 9:00 AM to 5:00 PM credits 8 hours, including breaks.
+                        </p>
+                    </template>
+                </div>
             </form>
 
             <div class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-card dark:border-sidebar-border">
@@ -231,123 +252,204 @@ const deleteStaff = (member: StaffMember) => {
                     </div>
                 </div>
 
-                <div v-if="staff.length === 0" class="flex min-h-56 items-center justify-center text-sm text-muted-foreground">No office staff added yet.</div>
-                <div v-else-if="filteredStaff.length === 0" class="flex min-h-56 items-center justify-center text-sm text-muted-foreground">No staff match your search.</div>
+                <div v-if="staff.length === 0" class="flex min-h-56 items-center justify-center text-sm text-muted-foreground">
+                    No office staff added yet.
+                </div>
+                <div v-else-if="filteredStaff.length === 0" class="flex min-h-56 items-center justify-center text-sm text-muted-foreground">
+                    No staff match your search.
+                </div>
 
                 <div v-else class="overflow-x-auto">
                     <table class="w-full min-w-[1220px] table-fixed text-sm">
                         <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                             <tr>
                                 <th class="w-[9%] px-4 py-3 font-medium">
-                                    <SortableHeader label="Code" column="code" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
+                                    <SortableHeader
+                                        label="Code"
+                                        column="code"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortStaff"
+                                    />
                                 </th>
                                 <th class="w-[22%] px-4 py-3 font-medium">
-                                    <SortableHeader label="Name" column="name" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
+                                    <SortableHeader
+                                        label="Name"
+                                        column="name"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortStaff"
+                                    />
                                 </th>
                                 <th class="w-[16%] px-4 py-3 font-medium">Photo</th>
                                 <th class="w-[18%] px-4 py-3 font-medium">
-                                    <SortableHeader label="Username" column="username" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
+                                    <SortableHeader
+                                        label="Username"
+                                        column="username"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortStaff"
+                                    />
                                 </th>
                                 <th class="w-[18%] px-4 py-3 font-medium">
-                                    <SortableHeader label="Designation" column="designation" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
+                                    <SortableHeader
+                                        label="Designation"
+                                        column="designation"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortStaff"
+                                    />
                                 </th>
                                 <th class="w-[12%] px-4 py-3 font-medium">
-                                    <SortableHeader label="Type" column="staffType" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
+                                    <SortableHeader
+                                        label="Type"
+                                        column="staffType"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortStaff"
+                                    />
                                 </th>
                                 <th class="w-[11%] px-4 py-3 font-medium">
-                                    <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortStaff" />
+                                    <SortableHeader
+                                        label="Status"
+                                        column="status"
+                                        :sort-key="sortKey"
+                                        :sort-direction="sortDirection"
+                                        @sort="sortStaff"
+                                    />
                                 </th>
                                 <th class="w-[120px] px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="member in filteredStaff" :key="member.id" class="border-b last:border-b-0">
-                                <td class="px-4 py-3">
-                                    <Input v-if="editingId === member.id" v-model="editForm.code" type="text" inputmode="numeric" />
-                                    <span v-else class="block truncate font-medium">{{ member.code }}</span>
-                                    <InputError v-if="editingId === member.id" :message="editForm.errors.code" class="mt-2" />
-                                </td>
-                                <td class="px-4 py-3">
-                                    <Input v-if="editingId === member.id" v-model="editForm.name" type="text" />
-                                    <span v-else class="block truncate font-medium">{{ member.code }} - {{ member.name }}</span>
-                                    <InputError v-if="editingId === member.id" :message="editForm.errors.name" class="mt-2" />
-                                </td>
-                                <td class="px-4 py-3">
-                                    <div v-if="editingId === member.id" class="grid gap-2">
-                                        <div class="flex items-center gap-2">
+                            <template v-for="member in filteredStaff" :key="member.id"
+                                ><tr class="border-b last:border-b-0">
+                                    <td class="px-4 py-3">
+                                        <Input v-if="editingId === member.id" v-model="editForm.code" type="text" inputmode="numeric" />
+                                        <span v-else class="block truncate font-medium">{{ member.code }}</span>
+                                        <InputError v-if="editingId === member.id" :message="editForm.errors.code" class="mt-2" />
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <Input v-if="editingId === member.id" v-model="editForm.name" type="text" />
+                                        <span v-else class="block truncate font-medium">{{ member.code }} - {{ member.name }}</span>
+                                        <InputError v-if="editingId === member.id" :message="editForm.errors.name" class="mt-2" />
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div v-if="editingId === member.id" class="grid gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <img
+                                                    v-if="member.photoUrl"
+                                                    :src="member.photoUrl"
+                                                    :alt="member.name"
+                                                    class="size-10 rounded-md border object-cover"
+                                                />
+                                                <Input type="file" accept="image/*" @change="setEditPhoto" />
+                                            </div>
+                                            <InputError :message="editForm.errors.photo" />
+                                        </div>
+                                        <div v-else class="flex items-center gap-2">
                                             <img
                                                 v-if="member.photoUrl"
                                                 :src="member.photoUrl"
                                                 :alt="member.name"
                                                 class="size-10 rounded-md border object-cover"
                                             />
-                                            <Input type="file" accept="image/*" @change="setEditPhoto" />
+                                            <span
+                                                v-else
+                                                class="flex size-10 items-center justify-center rounded-md border bg-muted text-xs font-semibold text-muted-foreground"
+                                            >
+                                                {{ member.name.slice(0, 2).toUpperCase() }}
+                                            </span>
                                         </div>
-                                        <InputError :message="editForm.errors.photo" />
-                                    </div>
-                                    <div v-else class="flex items-center gap-2">
-                                        <img v-if="member.photoUrl" :src="member.photoUrl" :alt="member.name" class="size-10 rounded-md border object-cover" />
-                                        <span
-                                            v-else
-                                            class="flex size-10 items-center justify-center rounded-md border bg-muted text-xs font-semibold text-muted-foreground"
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <Input v-if="editingId === member.id" v-model="editForm.username" type="text" />
+                                        <span v-else class="block truncate">{{ member.username }}</span
+                                        ><span v-if="member.attendanceMode === 'fixed'" class="text-xs text-emerald-600">Fixed Daily Attendance</span>
+                                        <InputError v-if="editingId === member.id" :message="editForm.errors.username" class="mt-2" />
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <Input v-if="editingId === member.id" v-model="editForm.designation" type="text" />
+                                        <span v-else class="block truncate">{{ member.designation || '-' }}</span>
+                                        <InputError v-if="editingId === member.id" :message="editForm.errors.designation" class="mt-2" />
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <select
+                                            v-if="editingId === member.id"
+                                            v-model="editForm.staff_type"
+                                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                         >
-                                            {{ member.name.slice(0, 2).toUpperCase() }}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <Input v-if="editingId === member.id" v-model="editForm.username" type="text" />
-                                    <span v-else class="block truncate">{{ member.username }}</span>
-                                    <InputError v-if="editingId === member.id" :message="editForm.errors.username" class="mt-2" />
-                                </td>
-                                <td class="px-4 py-3">
-                                    <Input v-if="editingId === member.id" v-model="editForm.designation" type="text" />
-                                    <span v-else class="block truncate">{{ member.designation || '-' }}</span>
-                                    <InputError v-if="editingId === member.id" :message="editForm.errors.designation" class="mt-2" />
-                                </td>
-                                <td class="px-4 py-3">
-                                    <select
-                                        v-if="editingId === member.id"
-                                        v-model="editForm.staff_type"
-                                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                    >
-                                        <option v-for="(label, type) in staffTypes" :key="type" :value="type">{{ label }}</option>
-                                    </select>
-                                    <span v-else class="inline-flex rounded-md border px-2 py-1 text-xs font-medium">{{ member.staffTypeLabel }}</span>
-                                    <InputError v-if="editingId === member.id" :message="editForm.errors.staff_type" class="mt-2" />
-                                </td>
-                                <td class="px-4 py-3">
-                                    <select
-                                        v-if="editingId === member.id"
-                                        v-model="editForm.status"
-                                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                    >
-                                        <option v-for="(label, status) in statuses" :key="status" :value="status">{{ label }}</option>
-                                    </select>
-                                    <span v-else class="inline-flex rounded-md border px-2 py-1 text-xs font-medium">{{ member.statusLabel }}</span>
-                                    <InputError v-if="editingId === member.id" :message="editForm.errors.status" class="mt-2" />
-                                </td>
-                                <td class="px-4 py-3">
-                                    <div class="flex justify-end gap-2">
-                                        <template v-if="editingId === member.id">
-                                            <Button size="icon" type="button" :disabled="editForm.processing" @click="updateStaff(member)">
-                                                <Check class="size-4" />
-                                            </Button>
-                                            <Button size="icon" type="button" variant="outline" @click="cancelEditing">
-                                                <X class="size-4" />
-                                            </Button>
-                                        </template>
-                                        <template v-else>
-                                            <Button size="icon" type="button" variant="outline" @click="startEditing(member)">
-                                                <Pencil class="size-4" />
-                                            </Button>
-                                            <Button size="icon" type="button" variant="destructive" @click="deleteStaff(member)">
-                                                <Trash2 class="size-4" />
-                                            </Button>
-                                        </template>
-                                    </div>
-                                </td>
-                            </tr>
+                                            <option v-for="(label, type) in staffTypes" :key="type" :value="type">{{ label }}</option>
+                                        </select>
+                                        <span v-else class="inline-flex rounded-md border px-2 py-1 text-xs font-medium">{{
+                                            member.staffTypeLabel
+                                        }}</span>
+                                        <InputError v-if="editingId === member.id" :message="editForm.errors.staff_type" class="mt-2" />
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <select
+                                            v-if="editingId === member.id"
+                                            v-model="editForm.status"
+                                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                        >
+                                            <option v-for="(label, status) in statuses" :key="status" :value="status">{{ label }}</option>
+                                        </select>
+                                        <span v-else class="inline-flex rounded-md border px-2 py-1 text-xs font-medium">{{
+                                            member.statusLabel
+                                        }}</span>
+                                        <InputError v-if="editingId === member.id" :message="editForm.errors.status" class="mt-2" />
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="flex justify-end gap-2">
+                                            <template v-if="editingId === member.id">
+                                                <Button size="icon" type="button" :disabled="editForm.processing" @click="updateStaff(member)">
+                                                    <Check class="size-4" />
+                                                </Button>
+                                                <Button size="icon" type="button" variant="outline" @click="cancelEditing">
+                                                    <X class="size-4" />
+                                                </Button>
+                                            </template>
+                                            <template v-else>
+                                                <Button size="icon" type="button" variant="outline" @click="startEditing(member)">
+                                                    <Pencil class="size-4" />
+                                                </Button>
+                                                <Button size="icon" type="button" variant="destructive" @click="deleteStaff(member)">
+                                                    <Trash2 class="size-4" />
+                                                </Button>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr v-if="editingId === member.id">
+                                    <td colspan="8" class="p-4">
+                                        <div class="grid gap-3 rounded-lg border p-3 md:grid-cols-2">
+                                            <label class="grid gap-1 text-sm"
+                                                >Attendance Mode<select
+                                                    v-model="editForm.attendance_mode"
+                                                    class="rounded-md border bg-background p-2"
+                                                >
+                                                    <option value="sessions">Check In / Check Out</option>
+                                                    <option value="fixed">Fixed Daily Attendance</option></select
+                                                ><InputError :message="editForm.errors.attendance_mode"
+                                            /></label>
+                                            <template v-if="editForm.attendance_mode === 'fixed'">
+                                                <label class="grid gap-1 text-sm"
+                                                    >Fixed start<Input v-model="editForm.fixed_start_time" type="time" /><InputError
+                                                        :message="editForm.errors.fixed_start_time"
+                                                /></label>
+                                                <label class="grid gap-1 text-sm"
+                                                    >Fixed end<Input v-model="editForm.fixed_end_time" type="time" /><InputError
+                                                        :message="editForm.errors.fixed_end_time"
+                                                /></label>
+                                                <p class="text-xs text-muted-foreground md:col-span-2">
+                                                    Open the staff profile from the public attendance board. Default 9:00 AM to 5:00 PM credits 8
+                                                    hours, including breaks.
+                                                </p>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr></template
+                            >
                         </tbody>
                     </table>
                 </div>
