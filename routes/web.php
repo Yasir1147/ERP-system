@@ -229,6 +229,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::put('office-leave-requests/{leave}', [PersonalOfficeAttendanceController::class, 'review'])->name('office-leaves.review');
     Route::post('office-leave-requests/{leave}/email', [PersonalOfficeAttendanceController::class, 'retryEmail'])->name('office-leaves.email');
     Route::resource('office-staff', OfficeStaffController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::post('office-attendance/report', [OfficeAttendanceReportController::class, 'store'])->name('office-attendance.admin.store');
+    Route::get('office-attendance/report-export', [OfficeAttendanceReportController::class, 'export'])->name('office-attendance.report.export');
     Route::get('office-attendance/report', [OfficeAttendanceReportController::class, 'index'])->name('office-attendance.report');
     Route::get('office-attendance/report/{officeStaff}/details', [OfficeAttendanceReportController::class, 'details'])->name('office-attendance.details');
     Route::put('office-attendance/report/{officeAttendance}', [OfficeAttendanceReportController::class, 'update'])->name('office-attendance.update');

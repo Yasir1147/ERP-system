@@ -254,7 +254,7 @@
             <div class="stat"><span>Number of Person</span><strong>{{ $totals['uniqueEmployees'] }}</strong></div>
             <div class="stat"><span>Head Count</span><strong>{{ $totals['entries'] }}</strong></div>
             <div class="stat"><span>Worked Days</span><strong>{{ $totals['workedDays'] }}</strong></div>
-            <div class="stat"><span>Overtime Hours</span><strong>{{ $totals['overtimeHours'] }}</strong></div>
+            <div class="stat"><span>Overtime Hours</span><strong>{{ \App\Support\Overtime::label($totals['overtimeHours']) }}</strong></div>
             <div class="stat"><span>Basic Cost</span><strong>{{ $money($totals['basicCost']) }}</strong></div>
             <div class="stat"><span>Overtime Cost</span><strong>{{ $money($totals['overtimeCost']) }}</strong></div>
             @if ($hasOverhead)
@@ -294,7 +294,7 @@
                         <td>{{ $employee['profession'] }}</td>
                         <td class="num">{{ $employee['entries'] }}</td>
                         <td class="num">{{ $employee['workedDays'] }}</td>
-                        <td class="num">{{ $employee['overtimeHours'] }}</td>
+                        <td class="num">{{ \App\Support\Overtime::label($employee['overtimeHours']) }}</td>
                         <td class="num">{{ $money($employee['basicCost']) }}</td>
                         <td class="num">{{ $money($employee['overtimeCost']) }}</td>
                         @if ($hasOverhead)<td class="num">{{ $money($employee['overheadCost']) }}</td>@endif
@@ -318,7 +318,7 @@
                         <td colspan="3">TOTAL</td>
                         <td class="num">{{ $totals['entries'] }}</td>
                         <td class="num">{{ $totals['workedDays'] }}</td>
-                        <td class="num">{{ $totals['overtimeHours'] }}</td>
+                        <td class="num">{{ \App\Support\Overtime::label($totals['overtimeHours']) }}</td>
                         <td class="num">{{ $money($totals['basicCost']) }}</td>
                         <td class="num">{{ $money($totals['overtimeCost']) }}</td>
                         @if ($hasOverhead)<td class="num">{{ $money($totals['overheadCost']) }}</td>@endif

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InputError from '@/components/InputError.vue';
 import OfficeLeaveSummary from '@/components/OfficeLeaveSummary.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
@@ -6,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { BookOpen, LoaderCircle, Printer, Save, Search } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 type LeaveRow = { id: number; date: string; staffName: string; label: string; reason: string };
@@ -14,6 +15,10 @@ type LeaveRow = { id: number; date: string; staffName: string; label: string; re
 interface StaffOption {
     id: number;
     label: string;
+    workMode: string;
+    attendanceMode: string;
+    fixedStartTime: string;
+    fixedEndTime: string;
     designation: string | null;
 }
 
@@ -84,6 +89,45 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Attendance Report', href: '/office-attendance/report' },
 ];
 
+const page = usePage<{ flash: { success?: string } }>();
+const addOpen = ref(false);
+const addForm = useForm({
+    office_staff_id: '',
+    attendance_date: props.filters.to,
+    work_mode: 'office',
+    check_in_time: '09:00',
+    check_out_time: '17:00',
+    note: '',
+});
+const addStaff = computed(() => props.staff.find((staff) => String(staff.id) === addForm.office_staff_id));
+watch(
+    () => addForm.office_staff_id,
+    () => {
+        if (!addStaff.value) return;
+        addForm.work_mode = addStaff.value.workMode;
+        addForm.check_in_time = addStaff.value.attendanceMode === 'fixed' ? addStaff.value.fixedStartTime : props.officeRules.office_start_time;
+        addForm.check_out_time = addStaff.value.attendanceMode === 'fixed' ? addStaff.value.fixedEndTime : props.officeRules.office_end_time;
+    },
+);
+const openAdd = (id?: number) => {
+    addForm.clearErrors();
+    addForm.office_staff_id = id ? String(id) : staffId.value;
+    addForm.attendance_date = id ? detailTo.value : to.value;
+    addForm.note = '';
+    addOpen.value = true;
+};
+const submitAttendance = () =>
+    addForm.post('/office-attendance/report', {
+        preserveScroll: true,
+        onSuccess: async () => {
+            addOpen.value = false;
+            if (detailOpen.value && detailStaff.value?.id === Number(addForm.office_staff_id)) {
+                detailFrom.value = detailFrom.value < addForm.attendance_date ? detailFrom.value : addForm.attendance_date;
+                detailTo.value = detailTo.value > addForm.attendance_date ? detailTo.value : addForm.attendance_date;
+                await fetchStaffDetails();
+            }
+        },
+    });
 const from = ref(props.filters.from);
 const to = ref(props.filters.to);
 const staffId = ref(props.filters.staffId);
@@ -190,6 +234,9 @@ const detailPrintUrl = computed(() => {
 
     return `/office-attendance/report-print?${params.toString()}`;
 });
+
+const exportUrl = computed(() => printUrl.value.replace('/report-print?', '/report-export?'));
+const detailExportUrl = computed(() => detailPrintUrl.value.replace('/report-print?', '/report-export?'));
 
 const loadStaffDetails = async (row: SummaryRow) => {
     detailStaff.value = row;
@@ -298,14 +345,21 @@ const sessionSegments = (summary?: string | null) => {
                     <h1 class="text-2xl font-semibold tracking-normal">Office Attendance Report</h1>
                     <p class="mt-1 text-sm text-muted-foreground">Monthly or date-range report for remote and office staff attendance.</p>
                 </div>
-                <Button as-child variant="outline">
-                    <a :href="printUrl" target="_blank" rel="noreferrer">
-                        <Printer class="size-4" />
-                        Report PDF
-                    </a>
-                </Button>
+                <div class="flex flex-wrap gap-2">
+                    <Button @click="openAdd()">Add Attendance</Button>
+                    <Button as-child variant="outline"><a :href="exportUrl">Download Excel</a></Button>
+                    <Button as-child variant="outline">
+                        <a :href="printUrl" target="_blank" rel="noreferrer">
+                            <Printer class="size-4" />
+                            Report PDF
+                        </a>
+                    </Button>
+                </div>
             </div>
 
+            <p v-if="page.props.flash?.success" role="status" class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">
+                {{ page.props.flash.success }}
+            </p>
             <div class="grid gap-3 md:grid-cols-4">
                 <div class="rounded-lg border bg-card p-4">
                     <p class="text-sm text-muted-foreground">Staff</p>
@@ -466,12 +520,67 @@ const sessionSegments = (summary?: string | null) => {
                 </div>
             </div>
 
+            <Dialog v-model:open="addOpen">
+                <DialogScrollContent class="max-w-lg">
+                    <DialogHeader
+                        ><DialogTitle>Add Office Attendance</DialogTitle
+                        ><DialogDescription
+                            >Select a staff member and any attendance date. A completed session will be saved.</DialogDescription
+                        ></DialogHeader
+                    >
+                    <form class="space-y-4" @submit.prevent="submitAttendance">
+                        <label class="grid gap-2 text-sm"
+                            >Staff<select v-model="addForm.office_staff_id" required class="rounded-md border bg-background p-2">
+                                <option value="" disabled>Select staff</option>
+                                <option v-for="staff in props.staff" :key="staff.id" :value="String(staff.id)">{{ staff.label }}</option></select
+                            ><InputError :message="addForm.errors.office_staff_id"
+                        /></label>
+                        <label class="grid gap-2 text-sm"
+                            >Date<Input v-model="addForm.attendance_date" type="date" required /><InputError
+                                :message="addForm.errors.attendance_date"
+                        /></label>
+                        <label class="grid gap-2 text-sm"
+                            >Work Mode<select v-model="addForm.work_mode" class="rounded-md border bg-background p-2">
+                                <option v-for="(label, mode) in workModes" :key="mode" :value="mode">{{ label }}</option></select
+                            ><InputError :message="addForm.errors.work_mode"
+                        /></label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="grid gap-2 text-sm"
+                                >Check In<Input v-model="addForm.check_in_time" type="time" required /><InputError
+                                    :message="addForm.errors.check_in_time"
+                            /></label>
+                            <label class="grid gap-2 text-sm"
+                                >Check Out<Input v-model="addForm.check_out_time" type="time" required /><InputError
+                                    :message="addForm.errors.check_out_time"
+                            /></label>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            {{
+                                addStaff?.attendanceMode === 'fixed'
+                                    ? 'Fixed attendance: all recorded hours count, including breaks.'
+                                    : 'Office hours follow attendance rules. Remote hours use the recorded duration.'
+                            }}
+                        </p>
+                        <label class="grid gap-2 text-sm"
+                            >Note<Input v-model="addForm.note" maxlength="1000" placeholder="Optional note" /><InputError
+                                :message="addForm.errors.note"
+                        /></label>
+                        <Button type="submit" :disabled="addForm.processing">Save Attendance</Button>
+                    </form>
+                </DialogScrollContent>
+            </Dialog>
             <OfficeLeaveSummary :rows="leaveRows" />
             <Dialog v-model:open="detailOpen">
                 <DialogScrollContent class="w-[96vw] max-w-[1500px]">
                     <DialogHeader>
                         <DialogTitle>{{ detailStaff ? `${detailStaff.code} - ${detailStaff.name}` : 'Staff Attendance Details' }}</DialogTitle>
-                        <DialogDescription> Review, edit, and print attendance details for the selected staff member. </DialogDescription>
+                        <DialogDescription
+                            >{{ detailStaff?.designation || 'Staff member' }} ? Review, edit, and download attendance details.</DialogDescription
+                        >
+                        <div class="flex flex-wrap gap-2">
+                            <Button @click="openAdd(detailStaff?.id)">Add Attendance</Button
+                            ><Button as-child variant="outline"><a :href="detailExportUrl">Download Excel</a></Button>
+                        </div>
                     </DialogHeader>
 
                     <div class="grid gap-3 md:grid-cols-[150px_150px_170px_minmax(220px,1fr)_auto_auto] md:items-end">

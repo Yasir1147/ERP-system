@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { matchesEmployeeSearch, sortByEmployeeSearch } from '@/lib/employee-search';
+import { overtimeLabel } from '@/lib/overtime';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { CalendarRange, FileSpreadsheet, Printer, Search } from 'lucide-vue-next';
@@ -147,10 +148,6 @@ const query = computed(() => {
 
 const exportUrl = computed(() => `/attendance/statement/export?${query.value}`);
 const printUrl = computed(() => `/attendance/statement/print?${query.value}`);
-const hasSubject = computed(() => {
-    if (mode.value === 'type') return true;
-    return mode.value === 'employee' ? Boolean(employeeId.value) : Boolean(projectId.value);
-});
 
 const applyFilters = () => {
     router.get(`/attendance/statement?${query.value}`, {}, { preserveState: false });
@@ -273,14 +270,23 @@ const statusClass = (status: string) => {
 
                     <div class="grid gap-1">
                         <label class="text-xs text-muted-foreground" for="statement-from">From</label>
-                        <input id="statement-from" v-model="from" type="date" class="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+                        <input
+                            id="statement-from"
+                            v-model="from"
+                            type="date"
+                            class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        />
                     </div>
                     <div class="grid gap-1">
                         <label class="text-xs text-muted-foreground" for="statement-to">To</label>
                         <input id="statement-to" v-model="to" type="date" class="h-10 rounded-md border border-input bg-background px-3 text-sm" />
                     </div>
                     <div class="flex items-end">
-                        <button type="button" class="h-10 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground" @click="applyFilters">
+                        <button
+                            type="button"
+                            class="h-10 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground"
+                            @click="applyFilters"
+                        >
                             Show
                         </button>
                     </div>
@@ -365,7 +371,7 @@ const statusClass = (status: string) => {
                         </div>
                         <div class="rounded-md border p-3">
                             <p class="text-xs text-muted-foreground">Overtime Hours</p>
-                            <p class="mt-1 text-2xl font-semibold">{{ statement.totals.overtimeHours }}</p>
+                            <p class="mt-1 text-2xl font-semibold">{{ overtimeLabel(statement.totals.overtimeHours) }}</p>
                         </div>
                         <div v-if="statement.withSalary" class="rounded-md border p-3">
                             <p class="text-xs text-muted-foreground">Basic Cost</p>
@@ -415,7 +421,7 @@ const statusClass = (status: string) => {
                                         class="min-w-[42px] px-1 py-2 text-center align-bottom font-medium"
                                         :class="date.isSunday ? 'bg-neutral-500' : ''"
                                     >
-                                        <span class="inline-block whitespace-nowrap [writing-mode:vertical-rl] [transform:rotate(180deg)]">
+                                        <span class="inline-block whitespace-nowrap [transform:rotate(180deg)] [writing-mode:vertical-rl]">
                                             {{ date.label }}
                                         </span>
                                     </th>
@@ -471,7 +477,8 @@ const statusClass = (status: string) => {
                     </div>
 
                     <p class="border-t p-3 text-xs text-muted-foreground">
-                        <b>P</b> Present · <b>½</b> Half day · <b>A</b> Absent · <b>L</b> Leave · <b>H</b> Holiday · <b>S</b> Sunday · <b>–</b> Not listed that day
+                        <b>P</b> Present · <b>½</b> Half day · <b>A</b> Absent · <b>L</b> Leave · <b>H</b> Holiday · <b>S</b> Sunday · <b>–</b> Not
+                        listed that day
                     </p>
                 </section>
 
@@ -514,7 +521,9 @@ const statusClass = (status: string) => {
                                     <td class="px-3 py-2">{{ row.date }}</td>
                                     <td class="px-3 py-2 text-xs text-muted-foreground">{{ row.weekday }}</td>
                                     <td v-if="statement.mode === 'project'" class="px-3 py-2">
-                                        <p class="truncate font-medium">{{ row.employeeCode ? `${row.employeeCode} - ` : '' }}{{ row.employeeName }}</p>
+                                        <p class="truncate font-medium">
+                                            {{ row.employeeCode ? `${row.employeeCode} - ` : '' }}{{ row.employeeName }}
+                                        </p>
                                         <p class="truncate text-xs text-muted-foreground">{{ row.profession || '-' }}</p>
                                     </td>
                                     <td class="px-3 py-2 text-muted-foreground">{{ row.projectName || '-' }}</td>
@@ -524,8 +533,12 @@ const statusClass = (status: string) => {
                                         </span>
                                     </td>
                                     <td class="px-3 py-2 text-right tabular-nums">{{ row.dayValue }}</td>
-                                    <td class="px-3 py-2 text-right tabular-nums">{{ row.overtimeHours || '-' }}</td>
-                                    <td v-if="statement.mode === 'employee'" class="px-3 py-2 text-xs text-muted-foreground">{{ row.note || '-' }}</td>
+                                    <td class="px-3 py-2 text-right tabular-nums">
+                                        {{ row.overtimeHours ? overtimeLabel(row.overtimeHours) : '-' }}
+                                    </td>
+                                    <td v-if="statement.mode === 'employee'" class="px-3 py-2 text-xs text-muted-foreground">
+                                        {{ row.note || '-' }}
+                                    </td>
                                     <td v-if="statement.withSalary" class="px-3 py-2 text-right tabular-nums">{{ money(row.basicCost) }}</td>
                                     <td v-if="statement.withSalary" class="px-3 py-2 text-right tabular-nums">{{ money(row.overtimeCost) }}</td>
                                     <td v-if="statement.withSalary" class="px-3 py-2 text-right font-medium tabular-nums">

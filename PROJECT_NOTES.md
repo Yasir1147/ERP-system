@@ -925,6 +925,13 @@ Database tables:
 - `office_staff_attendances`
 - `office_staff_attendance_sessions`
 
+## Office Attendance Admin Entry and Excel Reports (September 2026)
+
+- Office Staff > Attendance Report and the staff Details dialog provide Add Attendance. Admins can select any date, including backdated/future dates, and save a completed check-in/check-out session. Fixed staff default to their saved schedule; other staff default to office rules. The admin is recorded as submitted_by. Duplicate staff/date entries and pending/approved leave conflicts are blocked.
+- Download Excel is available on both report views at /office-attendance/report-export. It shares the PDF's data and filters, includes company header, summary, attendance, worked-hour totals and leave, and preserves note values as text.
+- Single-staff PDF/Excel place code/name/designation in the header and omit repeated Staff/Designation detail columns. All-staff reports retain identity columns.
+- Remote records with stored times now contribute their actual duration even without session rows or is_fixed. Office break, late and overtime rules are not applied to remote records; no historical rows are rewritten.
+
 ## Sorting And Search
 
 Core admin/report tables should use clickable sortable headers with ascending/descending indicators.
@@ -1134,3 +1141,9 @@ Database tables:
 - The scheduled command is `php artisan documents:send-expiry-reminders`. Admins can enable/disable automatic reminders, edit the UAE reminder time, run a dry due check, or run reminders immediately from the Documents page.
 - Laravel Scheduler evaluates the document task every minute, but the command sends automatically only once per UAE calendar day after the configured time. Production cPanel cron must therefore execute `php artisan schedule:run` every minute.
 - WhatsApp messages use an approved four-variable template for employee, category, expiry date, and expiry status. Unofficial WhatsApp Web automation is not used.
+
+## 2026-09-24 — Rope Access overtime minutes
+- Public Rope Access attendance and admin editing now accept separate Hours and Minutes (0–59), including 2 hr 25 min and minute-only durations. Existing maximum remains 10 total hours; contracting retains whole-hour input.
+- Overtime storage widened to decimal(12,8); model/calculations normalize to whole minutes. Payroll and project costs preserve fractional hours, and report/print displays use hour/minute labels.
+- MySQL backed up to storage/app/private/backups/before-overtime-minutes-20260924-172243.sql before applying the new migration locally. Production deployment requires php artisan migrate --force after its own backup.
+- Added OvertimeMinutesTest for minute precision, invalid durations, admin editing, payroll money and disabled overtime fields.

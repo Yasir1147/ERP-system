@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use App\Models\Holiday;
 use App\Models\Project;
+use App\Support\Overtime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -186,7 +187,7 @@ class AttendanceStatementService
         $dailySalary = (float) ($setting?->daily_salary ?? 0);
         $standardHours = max(1, (int) ($setting?->standard_hours_per_day ?? 8));
         $fraction = (float) ($record->attendance_fraction ?? AttendanceRecord::FULL_DAY_FRACTION);
-        $overtimeHours = (int) ($record->overtime_hours ?? 0);
+        $overtimeHours = Overtime::hours($record->overtime_hours ?? 0);
 
         $isPresent = $record->status === AttendanceRecord::STATUS_PRESENT;
         $basicCost = $isPresent ? $dailySalary * $fraction : 0.0;
@@ -447,7 +448,7 @@ class AttendanceStatementService
             'present' => $rows->where('status', AttendanceRecord::STATUS_PRESENT)->count(),
             'absent' => $rows->where('status', AttendanceRecord::STATUS_ABSENT)->count(),
             'leave' => $rows->where('status', AttendanceRecord::STATUS_LEAVE)->count(),
-            'overtimeHours' => (int) $rows->sum('overtimeHours'),
+            'overtimeHours' => (float) $rows->sum('overtimeHours'),
             'uniqueEmployees' => $rows->pluck('employeeCode')->filter()->unique()->count(),
             'projects' => $rows->pluck('projectName')->filter()->unique()->count(),
             'basicCost' => $withSalary ? round($rows->sum('basicCost'), 2) : null,

@@ -238,7 +238,7 @@
                             <td class="amount">{{ number_format($row['dailySalary'], 2) }}</td>
                             <td class="amount">{{ number_format($row['basicSalary'], 2) }}</td>
                             <td class="amount">{{ number_format($row['absenceDeduction'], 2) }}</td>
-                            <td class="amount">{{ $row['overtimeHours'] }}</td>
+                            <td class="amount">{{ \App\Support\Overtime::label($row['overtimeHours']) }}</td>
                             <td class="amount">{{ number_format($row['overtimeAmount'], 2) }}</td>
                             <td class="amount"><strong>{{ number_format($row['totalSalary'], 2) }}</strong></td>
                             <td class="amount">{{ number_format($row['bonusExtra'], 2) }}</td>
@@ -257,7 +257,7 @@
                         <td></td>
                         <td class="amount">{{ number_format($totals['basicSalary'], 2) }}</td>
                         <td class="amount">{{ number_format($totals['absenceDeduction'], 2) }}</td>
-                        <td class="amount">{{ $totals['overtimeHours'] }}</td>
+                        <td class="amount">{{ \App\Support\Overtime::label($totals['overtimeHours']) }}</td>
                         <td class="amount">{{ number_format($totals['overtimeAmount'], 2) }}</td>
                         <td class="amount">{{ number_format($totals['totalSalary'], 2) }}</td>
                         <td class="amount">{{ number_format($totals['bonusExtra'], 2) }}</td>
@@ -275,7 +275,7 @@
         <section class="summary">
             <div class="summary-card"><span>Present Days</span><strong>{{ $totals['presentDays'] }}</strong></div>
             <div class="summary-card"><span>Absent Days</span><strong>{{ $totals['absentDays'] }}</strong></div>
-            <div class="summary-card"><span>OT Hours</span><strong>{{ $totals['overtimeHours'] }}</strong></div>
+            <div class="summary-card"><span>OT Hours</span><strong>{{ \App\Support\Overtime::label($totals['overtimeHours']) }}</strong></div>
             <div class="summary-card"><span>Total Salary</span><strong>{{ number_format($totals['totalSalary'], 2) }}</strong></div>
             <div class="summary-card"><span>Absent Deduction</span><strong>{{ number_format($totals['absenceDeduction'], 2) }}</strong></div>
             <div class="summary-card"><span>Ending Balance</span><strong>{{ number_format($totals['endingBalance'], 2) }}</strong></div>

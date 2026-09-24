@@ -12,6 +12,7 @@ use App\Models\PurchaseBill;
 use App\Models\SupplierPayment;
 use App\Services\Projects\ProjectEmployeeHistoryExporter;
 use App\Services\Projects\ProjectEmployeeHistoryService;
+use App\Support\Overtime;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -26,9 +27,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectController extends Controller
 {
-    public function __construct(private readonly ProjectEmployeeHistoryService $history)
-    {
-    }
+    public function __construct(private readonly ProjectEmployeeHistoryService $history) {}
 
     public function overview(Request $request): Response
     {
@@ -239,7 +238,7 @@ class ProjectController extends Controller
             || $project->purchaseBills()->exists()
             || $project->expenses()->exists()
             || $project->equipment()->exists()
-            || \App\Models\ContractingDutyAssignment::query()
+            || ContractingDutyAssignment::query()
                 ->where('project_id', $project->id)
                 ->orWhere('overtime_project_id', $project->id)
                 ->exists()
@@ -308,7 +307,7 @@ class ProjectController extends Controller
             $dailySalary = (float) ($setting?->daily_salary ?? 0);
             $standardHours = max(1, (int) ($setting?->standard_hours_per_day ?? 8));
             $effectiveOvertimeProjectId = $record->overtime_project_id ?: $record->project_id;
-            $overtimeHours = (int) $effectiveOvertimeProjectId === (int) $project->id ? (int) ($record->overtime_hours ?? 0) : 0;
+            $overtimeHours = (int) $effectiveOvertimeProjectId === (int) $project->id ? Overtime::hours($record->overtime_hours ?? 0) : 0;
 
             if (! $setting) {
                 $missingPayrollSettings->push($employee?->name);
@@ -368,7 +367,7 @@ class ProjectController extends Controller
             'workedDays' => $workedDates->count(),
             'labourCount' => $labourIds->count(),
             'labourEntries' => $records->count(),
-            'overtimeHours' => (int) $records->sum(fn (AttendanceRecord $record) => (int) ((int) ($record->overtime_project_id ?: $record->project_id) === (int) $project->id ? ($record->overtime_hours ?? 0) : 0)),
+            'overtimeHours' => (float) $records->sum(fn (AttendanceRecord $record) => (float) ((int) ($record->overtime_project_id ?: $record->project_id) === (int) $project->id ? Overtime::hours($record->overtime_hours ?? 0) : 0)),
             'basicCost' => round($basicCost, 2),
             'overtimeCost' => round($overtimeCost, 2),
             'labourCost' => $labourCost,

@@ -5,6 +5,7 @@ namespace App\Services\Projects;
 use App\Models\AppSetting;
 use App\Models\AttendanceRecord;
 use App\Models\Project;
+use App\Support\Overtime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -45,7 +46,7 @@ class ProjectEmployeeHistoryService
             'uniqueEmployees' => $rows->pluck('employeeId')->filter()->unique()->count(),
             'entries' => $rows->count(),
             'workedDays' => $rows->pluck('dateValue')->filter()->unique()->count(),
-            'overtimeHours' => (int) $rows->sum('overtimeHours'),
+            'overtimeHours' => (float) $rows->sum('overtimeHours'),
             'basicCost' => round($rows->sum('basicCost'), 2),
             'overtimeCost' => round($rows->sum('overtimeCost'), 2),
             'overheadCost' => round($rows->sum('overheadCost'), 2),
@@ -102,7 +103,7 @@ class ProjectEmployeeHistoryService
 
         $effectiveOvertimeProjectId = $record->overtime_project_id ?: $record->project_id;
         $overtimeHours = (int) $effectiveOvertimeProjectId === (int) $project->id
-            ? (int) ($record->overtime_hours ?? 0)
+            ? Overtime::hours($record->overtime_hours ?? 0)
             : 0;
 
         $overtimeCost = $setting?->is_overtime_enabled === false
@@ -158,7 +159,7 @@ class ProjectEmployeeHistoryService
                     'profession' => $first['profession'],
                     'entries' => $employeeRows->count(),
                     'workedDays' => round($employeeRows->sum('attendanceFraction'), 2),
-                    'overtimeHours' => (int) $employeeRows->sum('overtimeHours'),
+                    'overtimeHours' => (float) $employeeRows->sum('overtimeHours'),
                     'basicCost' => round($employeeRows->sum('basicCost'), 2),
                     'overtimeCost' => round($employeeRows->sum('overtimeCost'), 2),
                     'overheadCost' => round($employeeRows->sum('overheadCost'), 2),

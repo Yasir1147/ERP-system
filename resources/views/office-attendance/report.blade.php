@@ -55,6 +55,10 @@
         .detail th:nth-child(10), .detail td:nth-child(10) { width: 7%; }
         .detail th:nth-child(11), .detail td:nth-child(11) { width: 10%; }
         .detail th:nth-child(12), .detail td:nth-child(12) { width: 7%; }
+        .detail.single th, .detail.single td { width: auto; }
+        .detail.single th:nth-child(1) { width: 9%; }
+        .detail.single th:nth-child(5) { width: 18%; }
+        .detail.single th:nth-child(6), .detail.single th:nth-child(7) { width: 6%; }
         @media print {
             body { background: #fff; }
             .toolbar { display: none; }
@@ -78,6 +82,7 @@
             </div>
             <div class="meta">
                 <strong>{{ $staffLabel }}</strong><br>
+                @if ($selectedStaff)<span>{{ $selectedStaff->designation ?: '-' }}</span><br>@endif
                 {{ $fromLabel }} to {{ $toLabel }}<br>
                 Generated {{ now()->format('d/m/Y h:i A') }}
             </div>
@@ -119,6 +124,7 @@
             Grace {{ $officeRules['late_grace_minutes'] }} minutes.
         </div>
 
+        @if (! $selectedStaff)
         <h2>Staff Summary</h2>
         <table class="summary">
             <thead>
@@ -147,13 +153,13 @@
             </tbody>
         </table>
 
+        @endif
         <h2>Attendance Detail</h2>
-        <table class="detail">
+        <table class="detail {{ $selectedStaff ? 'single' : '' }}">
             <thead>
                 <tr>
                     <th>Date</th>
-                    <th>Staff</th>
-                    <th>Designation</th>
+                    @if (! $selectedStaff)<th>Staff</th><th>Designation</th>@endif
                     <th>Work Mode</th>
                     <th>Check In</th>
                     <th>Check Out</th>
@@ -169,8 +175,10 @@
                 @forelse ($attendanceRows as $row)
                     <tr>
                         <td>{{ $row['dateLabel'] }}</td>
+                        @if (! $selectedStaff)
                         <td><strong>{{ $row['staffCode'] }} - {{ $row['staffName'] }}</strong></td>
                         <td>{{ $row['designation'] ?: '-' }}</td>
+                        @endif
                         <td><span class="pill">{{ $row['workModeLabel'] }}</span></td>
                         <td><span class="time">{{ $row['checkInDisplay'] ?: '-' }}</span></td>
                         <td><span class="time">{{ $row['checkOutDisplay'] ?: '-' }}</span></td>
@@ -192,7 +200,7 @@
                         <td>{{ $row['submittedBy'] ?: '-' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="12" class="center muted">No attendance records found.</td></tr>
+                    <tr><td colspan="{{ $selectedStaff ? 10 : 12 }}" class="center muted">No attendance records found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -200,10 +208,10 @@
             <h3>Leave in Selected Date Range</h3>
             <p>Leave days are separate from worked days and hours.</p>
             <table>
-                <thead><tr><th>Date</th><th>Staff</th><th>Leave Status</th></tr></thead>
+                <thead><tr><th>Date</th>@if (! $selectedStaff)<th>Staff</th>@endif<th>Leave Status</th></tr></thead>
                 <tbody>
                     @foreach ($leaveRows as $leave)
-                        <tr><td>{{ $leave['date'] }}</td><td>{{ $leave['staffName'] }}</td><td>{{ $leave['label'] }}</td></tr>
+                        <tr><td>{{ $leave['date'] }}</td>@if (! $selectedStaff)<td>{{ $leave['staffName'] }}</td>@endif<td>{{ $leave['label'] }}</td></tr>
                     @endforeach
                 </tbody>
             </table>

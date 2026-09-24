@@ -6,10 +6,12 @@ use App\Models\AppSetting;
 use App\Models\OfficeLeaveRequest;
 use App\Models\OfficeStaff;
 use App\Models\OfficeStaffAttendance;
+use App\Services\Excel\OfficeAttendanceExporter;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -44,6 +46,52 @@ class OfficeAttendanceReportController extends Controller
 
     public function print(Request $request): View
     {
+        return view('office-attendance.report', $this->reportData($request));
+    }
+
+    public function export(Request $request, OfficeAttendanceExporter $exporter)
+    {
+        return $exporter->download($this->reportData($request));
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'office_staff_id' => ['required', 'integer', 'exists:office_staff,id'],
+            'attendance_date' => ['required', 'date_format:Y-m-d'],
+            'work_mode' => ['required', Rule::in(array_keys(OfficeStaffAttendance::MODES))],
+            'check_in_time' => ['required', 'date_format:H:i'],
+            'check_out_time' => ['required', 'date_format:H:i', 'after:check_in_time'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        DB::transaction(function () use ($request, $data) {
+            $staff = OfficeStaff::whereKey($data['office_staff_id'])->lockForUpdate()->firstOrFail();
+            if ($staff->attendances()->whereDate('attendance_date', $data['attendance_date'])->exists()) {
+                throw ValidationException::withMessages(['attendance_date' => 'Attendance already exists for this staff member and date. Edit the existing record instead.']);
+            }
+            if (OfficeLeaveRequest::where('office_staff_id', $staff->id)->whereDate('leave_date', $data['attendance_date'])->whereIn('status', ['pending', 'approved'])->exists()) {
+                throw ValidationException::withMessages(['attendance_date' => 'A pending or approved leave request exists for this date. Review the leave request first.']);
+            }
+            $attendance = $staff->attendances()->create([
+                ...$data,
+                'submitted_by' => $request->user()->id,
+                'check_in_time' => $data['check_in_time'].':00',
+                'check_out_time' => $data['check_out_time'].':00',
+                'is_fixed' => $staff->attendance_mode === 'fixed',
+                'marked_at' => now(),
+            ]);
+            $attendance->sessions()->create([
+                'check_in_time' => $attendance->check_in_time,
+                'check_out_time' => $attendance->check_out_time,
+            ]);
+        });
+
+        return back()->with('success', 'Office attendance added.');
+    }
+
+    private function reportData(Request $request): array
+    {
         $filters = $this->filters($request, false);
         $rules = $this->officeRules();
         $rows = $this->attendanceQuery($filters)
@@ -52,20 +100,21 @@ class OfficeAttendanceReportController extends Controller
             ->get()
             ->map(fn (OfficeStaffAttendance $attendance) => $this->attendanceRow($attendance, $rules));
 
-        return view('office-attendance.report', [
+        $selectedStaff = $filters['staffId'] !== '' ? OfficeStaff::findOrFail($filters['staffId']) : null;
+
+        return [
             'filters' => $filters,
             'summaryRows' => $this->summaryRows($filters),
             'leaveRows' => $this->leaveRows($filters),
             'attendanceRows' => $rows,
             'workModes' => OfficeStaffAttendance::MODES,
-            'staffLabel' => $filters['staffId']
-                ? OfficeStaff::query()->find($filters['staffId'])?->name
-                : 'All Staff',
+            'selectedStaff' => $selectedStaff,
+            'staffLabel' => $selectedStaff ? $selectedStaff->code.' - '.$selectedStaff->name : 'All Staff',
             'fromLabel' => Carbon::parse($filters['from'])->format('d/m/Y'),
             'toLabel' => Carbon::parse($filters['to'])->format('d/m/Y'),
             'officeRules' => $rules,
             'reportTotals' => $this->reportTotals($rows),
-        ]);
+        ];
     }
 
     public function updateRules(Request $request): RedirectResponse
@@ -185,6 +234,13 @@ class OfficeAttendanceReportController extends Controller
 
     private function filters(Request $request, bool $paginate = true): array
     {
+        $request->validate([
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'staff_id' => ['nullable', 'integer', 'exists:office_staff,id'],
+            'work_mode' => ['nullable', Rule::in(array_keys(OfficeStaffAttendance::MODES))],
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
         $perPage = (int) $request->query('per_page', 15);
 
         return [
@@ -259,11 +315,15 @@ class OfficeAttendanceReportController extends Controller
     {
         return OfficeStaff::query()
             ->orderBy('code')
-            ->get(['id', 'code', 'name', 'designation'])
+            ->get(['id', 'code', 'name', 'designation', 'staff_type', 'attendance_mode', 'fixed_start_time', 'fixed_end_time'])
             ->map(fn (OfficeStaff $staff) => [
                 'id' => $staff->id,
                 'label' => $staff->code.' - '.$staff->name,
                 'designation' => $staff->designation,
+                'workMode' => $staff->staff_type === 'remote' ? 'remote' : 'office',
+                'attendanceMode' => $staff->attendance_mode,
+                'fixedStartTime' => substr($staff->fixed_start_time, 0, 5),
+                'fixedEndTime' => substr($staff->fixed_end_time, 0, 5),
             ]);
     }
 
@@ -345,9 +405,11 @@ class OfficeAttendanceReportController extends Controller
                 'overtimeMinutes' => 0, 'overtimeLabel' => '-', 'lateMinutes' => 0, 'lateLabel' => 'Fixed Attendance', 'isLate' => false];
         }
         if ($attendance->work_mode !== OfficeStaffAttendance::MODE_OFFICE) {
+            $minutes = $this->workedMinutes($attendance, [...$rules, 'break_included' => true], $sessions);
+
             return [
-                'workMinutes' => 0,
-                'workHoursLabel' => '-',
+                'workMinutes' => $minutes,
+                'workHoursLabel' => $minutes > 0 ? $this->formatMinutesLabel($minutes) : '-',
                 'overtimeMinutes' => 0,
                 'overtimeLabel' => '-',
                 'lateMinutes' => 0,

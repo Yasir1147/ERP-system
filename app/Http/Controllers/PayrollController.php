@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AttendanceRecord;
 use App\Models\AppSetting;
+use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use App\Models\EmployeePayrollSetting;
 use App\Models\Holiday;
 use App\Models\PayrollAdjustment;
+use App\Support\Overtime;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\JsonResponse;
@@ -667,7 +668,7 @@ class PayrollController extends Controller
         $leaveDeductions ??= collect();
         $leaveDeductedAsAbsentDays = (int) $leaveDeductions->sum('days');
         $leaveDays = $employeeRecords->where('status', AttendanceRecord::STATUS_LEAVE)->count();
-        $overtimeHours = (int) $employeeRecords->sum(fn ($record) => (int) ($record->overtime_hours ?? 0));
+        $overtimeHours = (float) $employeeRecords->sum(fn ($record) => Overtime::hours($record->overtime_hours ?? 0));
         $dailySalary = (float) ($setting?->daily_salary ?? 0);
         $salaryRule = $setting?->salary_rule ?? EmployeePayrollSetting::RULE_PRESENT_DAYS;
         $monthlySalary = $salaryRule === EmployeePayrollSetting::RULE_FIXED_30_DAYS

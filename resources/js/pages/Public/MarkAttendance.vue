@@ -4,10 +4,11 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { matchesEmployeeSearch } from '@/lib/employee-search';
+import { overtimeLabel } from '@/lib/overtime';
+import type { User } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, LogOut, Search, UserCircle2, X } from 'lucide-vue-next';
-import type { User } from '@/types';
-import { matchesEmployeeSearch } from '@/lib/employee-search';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 interface Project {
@@ -108,7 +109,8 @@ const form = useForm({
     attendance_date: today,
     attendance_end_date: today,
     has_overtime: false,
-    overtime_hours: '',
+    overtime_hours: '0',
+    overtime_minutes: '0',
 });
 
 const isPresent = computed(() => form.status === 'present');
@@ -221,7 +223,7 @@ const submittedRecordDetail = (record: SubmittedRecord) => {
     if (record.status === 'present') {
         const overtime =
             record.overtimeHours && Number(record.overtimeHours) > 0
-                ? `, OT ${record.overtimeHours}h${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
+                ? `, OT ${overtimeLabel(record.overtimeHours)}${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
                 : '';
 
         const dayType = Number(record.attendanceFraction) === 0.5 ? 'Half Day, ' : '';
@@ -388,7 +390,8 @@ watch(
             form.project_name = '';
             form.overtime_project_name = '';
             form.has_overtime = false;
-            form.overtime_hours = '';
+            form.overtime_hours = '0';
+            form.overtime_minutes = '0';
             projectSearch.value = '';
             overtimeProjectSearch.value = '';
             projectOpen.value = false;
@@ -425,7 +428,8 @@ watch(
     () => form.has_overtime,
     (hasOvertime) => {
         if (!hasOvertime) {
-            form.overtime_hours = '';
+            form.overtime_hours = '0';
+            form.overtime_minutes = '0';
             form.overtime_project_id = '';
             overtimeProjectSearch.value = '';
             overtimeProjectOpen.value = false;
@@ -446,7 +450,8 @@ const submit = () => {
             form.leave_reason = '';
             form.attendance_end_date = form.attendance_date;
             form.has_overtime = false;
-            form.overtime_hours = '';
+            form.overtime_hours = '0';
+            form.overtime_minutes = '0';
             projectSearch.value = '';
             overtimeProjectSearch.value = '';
             employeeSearch.value = '';
@@ -487,7 +492,10 @@ const submit = () => {
                     <h1 class="text-2xl font-semibold tracking-normal">Mark Attendance</h1>
                     <p class="mt-1 text-sm text-muted-foreground">{{ employeeTypeLabel }} attendance form.</p>
                 </div>
-                <Link :href="`/fines/create?type=${encodeURIComponent(employeeType)}`" class="text-sm font-medium text-primary underline underline-offset-4">
+                <Link
+                    :href="`/fines/create?type=${encodeURIComponent(employeeType)}`"
+                    class="text-sm font-medium text-primary underline underline-offset-4"
+                >
                     Create Fine Ticket
                 </Link>
                 <Link v-if="dutyPlanUrl" :href="dutyPlanUrl" class="text-sm font-medium text-primary underline underline-offset-4">
@@ -519,7 +527,10 @@ const submit = () => {
                                     <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input id="employee-search" v-model="employeeSearch" type="search" class="pl-9" placeholder="Search employees" />
                                 </div>
-                                <div v-if="selectedEmployeeCount" class="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
+                                <div
+                                    v-if="selectedEmployeeCount"
+                                    class="mt-2 flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs"
+                                >
                                     <span>{{ selectedEmployeeCount }} selected</span>
                                     <button type="button" class="font-medium text-primary" @click="clearSelectedEmployees">Clear</button>
                                 </div>
@@ -534,18 +545,25 @@ const submit = () => {
                                     >
                                         <span
                                             class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-input"
-                                            :class="form.employee_ids.includes(String(employee.id)) ? 'border-primary bg-primary text-primary-foreground' : 'bg-background'"
+                                            :class="
+                                                form.employee_ids.includes(String(employee.id))
+                                                    ? 'border-primary bg-primary text-primary-foreground'
+                                                    : 'bg-background'
+                                            "
                                         >
                                             <CheckCircle2 v-if="form.employee_ids.includes(String(employee.id))" class="size-3" />
                                         </span>
                                         <span class="min-w-0">
                                             <span class="block font-medium">{{ employee.code }} - {{ employee.name }}</span>
                                             <span class="block text-xs text-muted-foreground">
-                                                {{ employee.profession }}<template v-if="employeeLeaveLabel(employee)"> - {{ employeeLeaveLabel(employee) }}</template>
+                                                {{ employee.profession
+                                                }}<template v-if="employeeLeaveLabel(employee)"> - {{ employeeLeaveLabel(employee) }}</template>
                                             </span>
                                         </span>
                                     </button>
-                                    <div v-if="filteredEmployees.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">No employees found.</div>
+                                    <div v-if="filteredEmployees.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">
+                                        No employees found.
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -571,7 +589,11 @@ const submit = () => {
                                 v-for="option in statusOptions"
                                 :key="option.value"
                                 class="flex h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium transition hover:bg-accent"
-                                :class="form.status === option.value ? 'border-primary bg-primary text-primary-foreground hover:bg-primary' : 'border-input bg-background'"
+                                :class="
+                                    form.status === option.value
+                                        ? 'border-primary bg-primary text-primary-foreground hover:bg-primary'
+                                        : 'border-input bg-background'
+                                "
                             >
                                 <input v-model="form.status" type="radio" name="status" :value="option.value" class="sr-only" />
                                 {{ option.label }}
@@ -631,7 +653,13 @@ const submit = () => {
                                             : 'border-input bg-background'
                                     "
                                 >
-                                    <input v-model="form.attendance_fraction" type="radio" name="attendance_fraction" :value="option.value" class="sr-only" />
+                                    <input
+                                        v-model="form.attendance_fraction"
+                                        type="radio"
+                                        name="attendance_fraction"
+                                        :value="option.value"
+                                        class="sr-only"
+                                    />
                                     {{ option.label }}
                                 </label>
                             </div>
@@ -671,7 +699,9 @@ const submit = () => {
                                             <span class="font-medium">{{ project.name }}</span>
                                             <span class="text-xs capitalize text-muted-foreground">{{ project.status }}</span>
                                         </button>
-                                        <div v-if="filteredProjects.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">No projects found.</div>
+                                        <div v-if="filteredProjects.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">
+                                            No projects found.
+                                        </div>
                                         <button
                                             type="button"
                                             class="mt-1 flex w-full flex-col rounded-md border-t px-3 py-2 text-left text-sm hover:bg-accent"
@@ -726,7 +756,13 @@ const submit = () => {
                                 <div v-if="overtimeProjectOpen" class="absolute z-20 mt-2 w-full rounded-md border bg-popover p-2 shadow-lg">
                                     <div class="relative">
                                         <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                                        <Input id="overtime-project-search" v-model="overtimeProjectSearch" type="search" class="pl-9" placeholder="Search overtime project" />
+                                        <Input
+                                            id="overtime-project-search"
+                                            v-model="overtimeProjectSearch"
+                                            type="search"
+                                            class="pl-9"
+                                            placeholder="Search overtime project"
+                                        />
                                     </div>
                                     <div class="mt-2 max-h-56 overflow-y-auto">
                                         <button
@@ -739,7 +775,9 @@ const submit = () => {
                                             "
                                         >
                                             <span class="font-medium">Same as main project</span>
-                                            <span class="text-xs text-muted-foreground">{{ selectedProject ? selectedProject.name : 'Select main project first' }}</span>
+                                            <span class="text-xs text-muted-foreground">{{
+                                                selectedProject ? selectedProject.name : 'Select main project first'
+                                            }}</span>
                                         </button>
                                         <button
                                             v-for="project in filteredProjects"
@@ -751,7 +789,9 @@ const submit = () => {
                                             <span class="font-medium">{{ project.name }}</span>
                                             <span class="text-xs capitalize text-muted-foreground">{{ project.status }}</span>
                                         </button>
-                                        <div v-if="filteredProjects.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">No projects found.</div>
+                                        <div v-if="filteredProjects.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">
+                                            No projects found.
+                                        </div>
                                         <button
                                             type="button"
                                             class="mt-1 flex w-full flex-col rounded-md border-t px-3 py-2 text-left text-sm hover:bg-accent"
@@ -783,7 +823,30 @@ const submit = () => {
 
                         <div v-if="form.has_overtime" class="grid gap-2">
                             <Label for="overtime-hours">Overtime Hours</Label>
+                            <div v-if="employeeType === 'rope_access'" class="grid grid-cols-2 gap-3">
+                                <label class="grid gap-1 text-sm"
+                                    >Hours<input
+                                        v-model="form.overtime_hours"
+                                        type="number"
+                                        min="0"
+                                        max="10"
+                                        step="1"
+                                        placeholder="0"
+                                        required
+                                        class="h-11 w-full rounded-md border border-input bg-background px-3"
+                                /></label>
+                                <label class="grid gap-1 text-sm"
+                                    >Minutes<select
+                                        v-model="form.overtime_minutes"
+                                        class="h-11 w-full rounded-md border border-input bg-background px-3"
+                                    >
+                                        <option v-for="minute in 60" :key="minute" :value="String(minute - 1)">{{ minute - 1 }}</option>
+                                    </select></label
+                                >
+                                <p class="col-span-2 text-xs text-muted-foreground">Example: 2 hours + 25 minutes. Maximum 10 hours total.</p>
+                            </div>
                             <select
+                                v-else
                                 id="overtime-hours"
                                 v-model="form.overtime_hours"
                                 class="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -792,6 +855,7 @@ const submit = () => {
                                 <option v-for="hour in overtimeHours" :key="hour" :value="String(hour)">{{ hour }}</option>
                             </select>
                             <InputError :message="form.errors.overtime_hours" />
+                            <InputError :message="form.errors.overtime_minutes" />
                         </div>
                     </template>
 
@@ -810,10 +874,15 @@ const submit = () => {
                     <InputError :message="form.errors.attendance_date" />
 
                     <Button type="submit" class="h-11 w-full" :disabled="form.processing">
-                        Submit Attendance<template v-if="selectedEmployeeCount"> for {{ selectedEmployeeCount }} {{ selectedEmployeeCount === 1 ? 'Employee' : 'Employees' }}</template>
+                        Submit Attendance<template v-if="selectedEmployeeCount">
+                            for {{ selectedEmployeeCount }} {{ selectedEmployeeCount === 1 ? 'Employee' : 'Employees' }}</template
+                        >
                     </Button>
 
-                    <div v-if="form.recentlySuccessful" class="flex items-center justify-center gap-2 rounded-md border border-green-600/30 bg-green-600/10 px-3 py-2 text-sm text-green-600">
+                    <div
+                        v-if="form.recentlySuccessful"
+                        class="flex items-center justify-center gap-2 rounded-md border border-green-600/30 bg-green-600/10 px-3 py-2 text-sm text-green-600"
+                    >
                         <CheckCircle2 class="size-4" />
                         Attendance submitted.
                     </div>

@@ -284,7 +284,7 @@
                         <td>{{ number_format($row['dailySalary'], 2) }}</td>
                         <td>{{ number_format($row['basicSalary'], 2) }}</td>
                         <td>{{ number_format($row['absenceDeduction'], 2) }}</td>
-                        <td>{{ $row['overtimeHours'] }}</td>
+                        <td>{{ \App\Support\Overtime::label($row['overtimeHours']) }}</td>
                         <td>{{ number_format($row['overtimeAmount'], 2) }}</td>
                         <td class="amount"><strong>{{ number_format($row['totalSalary'], 2) }}</strong></td>
                     </tr>

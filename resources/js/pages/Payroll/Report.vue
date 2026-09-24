@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import SortableHeader from '@/components/SortableHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { overtimeLabel } from '@/lib/overtime';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { Banknote, BookOpen, CalendarCheck, Clock3, FileDown, FileSpreadsheet, Save, Search, Users, X } from 'lucide-vue-next';
@@ -141,10 +142,23 @@ const ledgerFromMonth = ref(props.filters.month);
 const ledgerToMonth = ref(props.filters.month);
 
 const adjustments = reactive<
-    Record<number, { bonusExtra: string; previousBalance: string; previousBalanceOverridden: boolean; deduction: string; paidByCash: string; remarks: string }>
+    Record<
+        number,
+        { bonusExtra: string; previousBalance: string; previousBalanceOverridden: boolean; deduction: string; paidByCash: string; remarks: string }
+    >
 >(
     props.payrollRows.reduce<
-        Record<number, { bonusExtra: string; previousBalance: string; previousBalanceOverridden: boolean; deduction: string; paidByCash: string; remarks: string }>
+        Record<
+            number,
+            {
+                bonusExtra: string;
+                previousBalance: string;
+                previousBalanceOverridden: boolean;
+                deduction: string;
+                paidByCash: string;
+                remarks: string;
+            }
+        >
     >((values, row) => {
         values[row.employeeId] = {
             bonusExtra: String(row.bonusExtra),
@@ -160,7 +174,10 @@ const adjustments = reactive<
 );
 
 const ledgerAdjustments = reactive<
-    Record<string, { bonusExtra: string; previousBalance: string; previousBalanceOverridden: boolean; deduction: string; paidByCash: string; remarks: string }>
+    Record<
+        string,
+        { bonusExtra: string; previousBalance: string; previousBalanceOverridden: boolean; deduction: string; paidByCash: string; remarks: string }
+    >
 >({});
 
 const employeeOptions = computed(() => props.employees.filter((employee) => filterType.value === 'all' || employee.type === filterType.value));
@@ -183,9 +200,12 @@ const filteredRows = computed(() => {
         : props.payrollRows;
 
     return [...rows].sort((first, second) => {
-        const numericAdjustment = (employeeId: number, key: 'bonusExtra' | 'previousBalance' | 'deduction' | 'paidByCash') => Number(adjustments[employeeId]?.[key] || 0);
-        const totalBalance = (row: PayrollRow) => row.totalSalary + numericAdjustment(row.employeeId, 'bonusExtra') + numericAdjustment(row.employeeId, 'previousBalance');
-        const balance = (row: PayrollRow) => totalBalance(row) - numericAdjustment(row.employeeId, 'deduction') - numericAdjustment(row.employeeId, 'paidByCash');
+        const numericAdjustment = (employeeId: number, key: 'bonusExtra' | 'previousBalance' | 'deduction' | 'paidByCash') =>
+            Number(adjustments[employeeId]?.[key] || 0);
+        const totalBalance = (row: PayrollRow) =>
+            row.totalSalary + numericAdjustment(row.employeeId, 'bonusExtra') + numericAdjustment(row.employeeId, 'previousBalance');
+        const balance = (row: PayrollRow) =>
+            totalBalance(row) - numericAdjustment(row.employeeId, 'deduction') - numericAdjustment(row.employeeId, 'paidByCash');
         const valueFor = (row: PayrollRow) => {
             if (sortKey.value === 'employee') return row.employeeCode || row.employeeName;
             if (sortKey.value === 'days') return row.presentDays;
@@ -415,7 +435,10 @@ const rowPreviousBalance = (row: PayrollRow) => {
 const liveTotalBalance = (row: PayrollRow) => row.totalSalary + numeric(adjustments[row.employeeId]?.bonusExtra || '0') + rowPreviousBalance(row);
 
 const liveBalance = (row: PayrollRow) =>
-    liveTotalBalance(row) - row.absenceDeduction - numeric(adjustments[row.employeeId]?.deduction || '0') - numeric(adjustments[row.employeeId]?.paidByCash || '0');
+    liveTotalBalance(row) -
+    row.absenceDeduction -
+    numeric(adjustments[row.employeeId]?.deduction || '0') -
+    numeric(adjustments[row.employeeId]?.paidByCash || '0');
 
 const ledgerKey = (row: LedgerRow) => `${row.employeeId}-${row.month}`;
 
@@ -429,7 +452,10 @@ const liveLedgerTotalBalance = (row: LedgerRow) =>
     row.totalSalary + numeric(ledgerAdjustments[ledgerKey(row)]?.bonusExtra || '0') + ledgerPreviousBalance(row);
 
 const liveLedgerBalance = (row: LedgerRow) =>
-    liveLedgerTotalBalance(row) - row.absenceDeduction - numeric(ledgerAdjustments[ledgerKey(row)]?.deduction || '0') - numeric(ledgerAdjustments[ledgerKey(row)]?.paidByCash || '0');
+    liveLedgerTotalBalance(row) -
+    row.absenceDeduction -
+    numeric(ledgerAdjustments[ledgerKey(row)]?.deduction || '0') -
+    numeric(ledgerAdjustments[ledgerKey(row)]?.paidByCash || '0');
 
 const applyFilters = () => {
     router.get(
@@ -754,7 +780,7 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                     <div class="flex items-center justify-between gap-3">
                         <div>
                             <p class="text-sm text-muted-foreground">Overtime Hours</p>
-                            <p class="mt-2 text-3xl font-semibold">{{ summary.overtimeHours }}</p>
+                            <p class="mt-2 text-3xl font-semibold">{{ overtimeLabel(summary.overtimeHours) }}</p>
                         </div>
                         <Clock3 class="size-6 text-sky-600" />
                     </div>
@@ -793,7 +819,9 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                         >
                             <FileDown class="size-4" />
                             Selected Payslips
-                            <span v-if="selectedEmployeeIds.length" class="rounded bg-muted px-1.5 py-0.5 text-xs">{{ selectedEmployeeIds.length }}</span>
+                            <span v-if="selectedEmployeeIds.length" class="rounded bg-muted px-1.5 py-0.5 text-xs">{{
+                                selectedEmployeeIds.length
+                            }}</span>
                         </button>
                         <a
                             :href="reportPrintUrl"
@@ -806,7 +834,12 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                         </a>
                         <div class="relative w-full sm:w-72">
                             <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                            <input v-model="search" type="search" class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm" placeholder="Search payroll" />
+                            <input
+                                v-model="search"
+                                type="search"
+                                class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
+                                placeholder="Search payroll"
+                            />
                         </div>
                     </div>
                 </div>
@@ -834,11 +867,17 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                     >
                         <Save class="size-4" />
                         Save Selected
-                        <span v-if="selectedEmployeeIds.length" class="rounded bg-primary-foreground/15 px-1.5 py-0.5 text-xs">{{ selectedEmployeeIds.length }}</span>
+                        <span v-if="selectedEmployeeIds.length" class="rounded bg-primary-foreground/15 px-1.5 py-0.5 text-xs">{{
+                            selectedEmployeeIds.length
+                        }}</span>
                     </button>
                 </div>
 
-                <div v-if="saveMessage || saveError" class="mt-3 rounded-md border px-3 py-2 text-sm" :class="saveError ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'">
+                <div
+                    v-if="saveMessage || saveError"
+                    class="mt-3 rounded-md border px-3 py-2 text-sm"
+                    :class="saveError ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'"
+                >
                     {{ saveError || saveMessage }}
                 </div>
 
@@ -859,57 +898,157 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                     </th>
                                     <th class="w-[54px] px-3 py-2 font-medium">S.No</th>
                                     <th class="w-[230px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Employee"
+                                            column="employee"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[70px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Days" column="days" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Days"
+                                            column="days"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[70px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Absent" column="absent" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Absent"
+                                            column="absent"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[90px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Per Day" column="per_day" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Per Day"
+                                            column="per_day"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[100px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Salary" column="salary" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Salary"
+                                            column="salary"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[110px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Absent Ded." column="absent_deduction" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Absent Ded."
+                                            column="absent_deduction"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[80px] px-3 py-2 font-medium">
-                                        <SortableHeader label="OT Hrs" column="ot_hours" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="OT Hrs"
+                                            column="ot_hours"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[100px] px-3 py-2 font-medium">
-                                        <SortableHeader label="OT Salary" column="ot_salary" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="OT Salary"
+                                            column="ot_salary"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[110px] px-3 py-2 font-medium">
-                                        <SortableHeader label="New Total" column="new_total" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="New Total"
+                                            column="new_total"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[130px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Bonus" column="bonus" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Bonus"
+                                            column="bonus"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[130px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Pr. Balance" column="previous_balance" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Pr. Balance"
+                                            column="previous_balance"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[120px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Total Balance" column="total_balance" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Total Balance"
+                                            column="total_balance"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[130px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Deduction" column="deduction" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Deduction"
+                                            column="deduction"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[130px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Paid Cash" column="paid_cash" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Paid Cash"
+                                            column="paid_cash"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[110px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Balance" column="balance" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Balance"
+                                            column="balance"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[180px] px-3 py-2 font-medium">
-                                        <SortableHeader label="Remarks" column="remarks" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortPayrollRows" />
+                                        <SortableHeader
+                                            label="Remarks"
+                                            column="remarks"
+                                            :sort-key="sortKey"
+                                            :sort-direction="sortDirection"
+                                            @sort="sortPayrollRows"
+                                        />
                                     </th>
                                     <th class="w-[42px] px-1 py-2 text-center font-medium">Ledger</th>
                                     <th class="w-[42px] px-1 py-2 text-center font-medium">PDF</th>
                                     <th class="w-[42px] px-1 py-2 text-center font-medium">Excel</th>
-                                    <th class="sticky right-0 z-20 w-[52px] bg-card px-1 py-2 text-center font-medium shadow-[-8px_0_14px_-14px_rgba(0,0,0,0.75)]">Save</th>
+                                    <th
+                                        class="sticky right-0 z-20 w-[52px] bg-card px-1 py-2 text-center font-medium shadow-[-8px_0_14px_-14px_rgba(0,0,0,0.75)]"
+                                    >
+                                        Save
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -927,22 +1066,31 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                     <td class="px-3 py-3">
                                         <div class="min-w-0">
                                             <p class="truncate font-medium">{{ employeeDisplayName(row) }}</p>
-                                            <p class="truncate text-xs text-muted-foreground">{{ row.employeeProfession }} - {{ employeeTypes[row.employeeType] }}</p>
+                                            <p class="truncate text-xs text-muted-foreground">
+                                                {{ row.employeeProfession }} - {{ employeeTypes[row.employeeType] }}
+                                            </p>
                                         </div>
                                     </td>
                                     <td class="px-3 py-3">
                                         <div>{{ row.presentDays }}</div>
-                                        <div v-if="row.halfDays" class="text-[10px] text-orange-700">{{ row.halfDays }} half {{ row.halfDays === 1 ? 'day' : 'days' }}</div>
+                                        <div v-if="row.halfDays" class="text-[10px] text-orange-700">
+                                            {{ row.halfDays }} half {{ row.halfDays === 1 ? 'day' : 'days' }}
+                                        </div>
                                     </td>
                                     <td class="px-3 py-3">{{ row.absentDays }}</td>
                                     <td class="px-3 py-3">{{ money(row.dailySalary) }}</td>
                                     <td class="px-3 py-3">{{ money(row.basicSalary) }}</td>
                                     <td class="px-3 py-3">{{ money(row.absenceDeduction) }}</td>
-                                    <td class="px-3 py-3">{{ row.overtimeHours }}</td>
+                                    <td class="px-3 py-3">{{ overtimeLabel(row.overtimeHours) }}</td>
                                     <td class="px-3 py-3">{{ money(row.overtimeAmount) }}</td>
                                     <td class="px-3 py-3 font-semibold">{{ money(row.totalSalary) }}</td>
                                     <td class="px-3 py-3">
-                                        <input v-model="adjustments[row.employeeId].bonusExtra" type="number" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                        <input
+                                            v-model="adjustments[row.employeeId].bonusExtra"
+                                            type="number"
+                                            step="0.01"
+                                            class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                        />
                                     </td>
                                     <td class="px-3 py-3">
                                         <input
@@ -964,14 +1112,31 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                     </td>
                                     <td class="px-3 py-3 font-medium">{{ money(liveTotalBalance(row)) }}</td>
                                     <td class="px-3 py-3">
-                                        <input v-model="adjustments[row.employeeId].deduction" type="number" min="0" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                        <input
+                                            v-model="adjustments[row.employeeId].deduction"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                        />
                                     </td>
                                     <td class="px-3 py-3">
-                                        <input v-model="adjustments[row.employeeId].paidByCash" type="number" min="0" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                        <input
+                                            v-model="adjustments[row.employeeId].paidByCash"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                        />
                                     </td>
                                     <td class="px-3 py-3 font-semibold">{{ money(liveBalance(row)) }}</td>
                                     <td class="px-3 py-3">
-                                        <input v-model="adjustments[row.employeeId].remarks" type="text" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" placeholder="Remarks" />
+                                        <input
+                                            v-model="adjustments[row.employeeId].remarks"
+                                            type="text"
+                                            class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                            placeholder="Remarks"
+                                        />
                                     </td>
                                     <td class="px-1 py-3 text-center">
                                         <button
@@ -1025,12 +1190,17 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
             </div>
 
             <div v-if="ledgerOpen" class="fixed inset-0 z-50 bg-black/50 p-2 sm:p-4">
-                <div class="mx-auto flex max-h-[94vh] w-[calc(100vw-1rem)] max-w-none flex-col overflow-hidden rounded-lg border bg-background shadow-xl sm:w-[calc(100vw-2rem)]">
+                <div
+                    class="mx-auto flex max-h-[94vh] w-[calc(100vw-1rem)] max-w-none flex-col overflow-hidden rounded-lg border bg-background shadow-xl sm:w-[calc(100vw-2rem)]"
+                >
                     <div class="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Employee Ledger</h2>
                             <p class="mt-1 text-sm text-muted-foreground">
-                                {{ ledgerEmployee?.name }}<template v-if="ledgerEmployee"> - {{ ledgerEmployee.profession }} - {{ employeeTypes[ledgerEmployee.type] }}</template>
+                                {{ ledgerEmployee?.name
+                                }}<template v-if="ledgerEmployee">
+                                    - {{ ledgerEmployee.profession }} - {{ employeeTypes[ledgerEmployee.type] }}</template
+                                >
                             </p>
                         </div>
                         <div class="grid gap-2 sm:grid-cols-[160px_160px_auto_auto_auto_auto]">
@@ -1044,7 +1214,12 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                 type="month"
                                 class="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             />
-                            <button type="button" class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" :disabled="ledgerLoading" @click="loadLedger()">
+                            <button
+                                type="button"
+                                class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+                                :disabled="ledgerLoading"
+                                @click="loadLedger()"
+                            >
                                 Filter
                             </button>
                             <a
@@ -1072,7 +1247,10 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                     </div>
 
                     <div class="min-h-0 flex-1 overflow-auto p-4">
-                        <div v-if="ledgerLoading" class="flex min-h-56 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+                        <div
+                            v-if="ledgerLoading"
+                            class="flex min-h-56 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground"
+                        >
                             Loading ledger...
                         </div>
 
@@ -1105,17 +1283,24 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                             <td class="px-3 py-3 font-medium">{{ row.monthLabel }}</td>
                                             <td class="px-3 py-3">
                                                 <div>{{ row.presentDays }}</div>
-                                                <div v-if="row.halfDays" class="text-[10px] text-orange-700">{{ row.halfDays }} half {{ row.halfDays === 1 ? 'day' : 'days' }}</div>
+                                                <div v-if="row.halfDays" class="text-[10px] text-orange-700">
+                                                    {{ row.halfDays }} half {{ row.halfDays === 1 ? 'day' : 'days' }}
+                                                </div>
                                             </td>
                                             <td class="px-3 py-3">{{ row.absentDays }}</td>
                                             <td class="px-3 py-3">{{ money(row.dailySalary) }}</td>
                                             <td class="px-3 py-3">{{ money(row.basicSalary) }}</td>
                                             <td class="px-3 py-3">{{ money(row.absenceDeduction) }}</td>
-                                            <td class="px-3 py-3">{{ row.overtimeHours }}</td>
+                                            <td class="px-3 py-3">{{ overtimeLabel(row.overtimeHours) }}</td>
                                             <td class="px-3 py-3">{{ money(row.overtimeAmount) }}</td>
                                             <td class="px-3 py-3 font-semibold">{{ money(row.totalSalary) }}</td>
                                             <td class="px-3 py-3">
-                                                <input v-model="ledgerAdjustments[ledgerKey(row)].bonusExtra" type="number" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                                <input
+                                                    v-model="ledgerAdjustments[ledgerKey(row)].bonusExtra"
+                                                    type="number"
+                                                    step="0.01"
+                                                    class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                                />
                                             </td>
                                             <td class="px-3 py-3">
                                                 <input
@@ -1137,14 +1322,31 @@ const syncLedgerPreviousBalanceMode = (row: LedgerRow) => {
                                             </td>
                                             <td class="px-3 py-3 font-medium">{{ money(liveLedgerTotalBalance(row)) }}</td>
                                             <td class="px-3 py-3">
-                                                <input v-model="ledgerAdjustments[ledgerKey(row)].deduction" type="number" min="0" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                                <input
+                                                    v-model="ledgerAdjustments[ledgerKey(row)].deduction"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                                />
                                             </td>
                                             <td class="px-3 py-3">
-                                                <input v-model="ledgerAdjustments[ledgerKey(row)].paidByCash" type="number" min="0" step="0.01" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+                                                <input
+                                                    v-model="ledgerAdjustments[ledgerKey(row)].paidByCash"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                                />
                                             </td>
                                             <td class="px-3 py-3 font-semibold">{{ money(liveLedgerBalance(row)) }}</td>
                                             <td class="px-3 py-3">
-                                                <input v-model="ledgerAdjustments[ledgerKey(row)].remarks" type="text" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" placeholder="Remarks" />
+                                                <input
+                                                    v-model="ledgerAdjustments[ledgerKey(row)].remarks"
+                                                    type="text"
+                                                    class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                                    placeholder="Remarks"
+                                                />
                                             </td>
                                             <td class="px-3 py-3 text-right">
                                                 <button

@@ -8,6 +8,7 @@ use App\Models\ContractingDutyPlan;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use App\Models\Project;
+use App\Support\Overtime;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\RedirectResponse;
@@ -70,8 +71,8 @@ class AttendanceReportController extends Controller
                 ->count(),
             'absent' => $records->where('status', AttendanceRecord::STATUS_ABSENT)->count(),
             'leave' => $records->where('status', AttendanceRecord::STATUS_LEAVE)->count(),
-            'overtimeDays' => $records->filter(fn ($record) => (int) ($record['overtimeHours'] ?? 0) > 0)->count(),
-            'overtimeHours' => $records->sum(fn ($record) => (int) ($record['overtimeHours'] ?? 0)),
+            'overtimeDays' => $records->filter(fn ($record) => Overtime::hours($record['overtimeHours'] ?? 0) > 0)->count(),
+            'overtimeHours' => $records->sum(fn ($record) => Overtime::hours($record['overtimeHours'] ?? 0)),
             'totalRecords' => $records->count(),
         ];
 
@@ -88,11 +89,11 @@ class AttendanceReportController extends Controller
                     ];
                 }
 
-                if ((int) ($record['overtimeHours'] ?? 0) > 0) {
+                if (Overtime::hours($record['overtimeHours'] ?? 0) > 0) {
                     $items[] = [
                         'projectName' => $record['overtimeProjectName'] ?: $record['projectName'],
                         'days' => 0,
-                        'overtimeHours' => (int) $record['overtimeHours'],
+                        'overtimeHours' => Overtime::hours($record['overtimeHours']),
                     ];
                 }
 
@@ -144,6 +145,9 @@ class AttendanceReportController extends Controller
         $isPresent = $status === AttendanceRecord::STATUS_PRESENT;
         $isLeave = $status === AttendanceRecord::STATUS_LEAVE;
 
+        $request->validate(['employee_id' => ['required', 'integer', 'exists:employees,id']]);
+        $employeeType = Employee::find($request->input('employee_id'))?->type;
+        Overtime::prepare($request, $employeeType);
         $data = $request->validate([
             'employee_id' => [
                 'required',
@@ -163,8 +167,7 @@ class AttendanceReportController extends Controller
             'overtime_hours' => [
                 'nullable',
                 Rule::requiredIf($isPresent && $request->boolean('has_overtime')),
-                'integer',
-                'between:1,10',
+                ...Overtime::rules($employeeType),
             ],
             'overtime_project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')],
             'leave_reason' => ['nullable', Rule::requiredIf($isLeave), 'string', 'max:1000'],

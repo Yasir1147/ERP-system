@@ -6,9 +6,13 @@ use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\Project;
 use App\Models\User;
+use App\Support\Overtime;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
@@ -25,6 +29,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class AttendanceImportService
 {
     public const SHEET_ATTENDANCE = 'Attendance';
+
     public const SHEET_MAP = 'Employee Map';
 
     /**
@@ -134,7 +139,7 @@ class AttendanceImportService
     }
 
     /**
-     * @return array<string, string>  chat name (lowercased) => employee code
+     * @return array<string, string> chat name (lowercased) => employee code
      */
     private function readMap(Worksheet $sheet): array
     {
@@ -191,8 +196,8 @@ class AttendanceImportService
 
     /**
      * @param  array<string, string>  $map
-     * @param  \Illuminate\Support\Collection<string, Employee>  $employees
-     * @param  \Illuminate\Support\Collection<int, Project>  $projects
+     * @param  Collection<string, Employee>  $employees
+     * @param  Collection<int, Project>  $projects
      * @return array<string, mixed>
      */
     private function resolve(array $row, array $map, $employees, $projects): array
@@ -226,10 +231,10 @@ class AttendanceImportService
             $errors[] = 'Project "'.$row['project'].'" not found.';
         }
 
-        $overtimeHours = $row['overtimeHours'] === '' ? null : (int) $row['overtimeHours'];
+        $overtimeHours = $row['overtimeHours'] === '' ? null : (float) $row['overtimeHours'];
 
-        if ($overtimeHours !== null && ($overtimeHours < 1 || $overtimeHours > 10)) {
-            $errors[] = 'Overtime hours must be between 1 and 10.';
+        if ($overtimeHours !== null && Validator::make(['hours' => $row['overtimeHours']], ['hours' => Overtime::rules($employee?->type)])->fails()) {
+            $errors[] = 'Overtime must be valid whole hours (1?10), or whole minutes up to 10 hours for rope access.';
         }
 
         return [
@@ -325,7 +330,7 @@ class AttendanceImportService
         // Excel may hand back a serial number rather than a string.
         if (is_numeric($value)) {
             try {
-                return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $value)
+                return Date::excelToDateTimeObject((float) $value)
                     ->format('Y-m-d');
             } catch (\Throwable) {
                 return null;
@@ -354,7 +359,7 @@ class AttendanceImportService
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Project>  $projects
+     * @param  Collection<int, Project>  $projects
      */
     private function findProject($projects, string $name): ?Project
     {

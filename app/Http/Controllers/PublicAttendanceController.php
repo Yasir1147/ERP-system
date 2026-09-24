@@ -7,6 +7,7 @@ use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use App\Models\Project;
+use App\Support\Overtime;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -90,6 +91,7 @@ class PublicAttendanceController extends Controller
             'overtime_project_id' => 'overtime_project_name',
         ]);
 
+        Overtime::prepare($request, $type);
         $data = $request->validate([
             'employee_ids' => ['required', 'array', 'min:1'],
             'employee_ids.*' => [
@@ -124,8 +126,7 @@ class PublicAttendanceController extends Controller
             'overtime_hours' => [
                 'nullable',
                 Rule::requiredIf($isPresent && $request->boolean('has_overtime')),
-                'integer',
-                'between:1,10',
+                ...Overtime::rules($type),
             ],
             'overtime_project_id' => [
                 'nullable',

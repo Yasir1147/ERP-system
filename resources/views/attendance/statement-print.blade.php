@@ -230,7 +230,7 @@
             <div class="stat"><span>Present Days</span><strong>{{ $totals['presentDays'] }}</strong></div>
             <div class="stat"><span>Absent</span><strong>{{ $totals['absent'] }}</strong></div>
             <div class="stat"><span>Leave</span><strong>{{ $totals['leave'] }}</strong></div>
-            <div class="stat"><span>Overtime Hours</span><strong>{{ $totals['overtimeHours'] }}</strong></div>
+            <div class="stat"><span>Overtime Hours</span><strong>{{ \App\Support\Overtime::label($totals['overtimeHours']) }}</strong></div>
             @if ($isProject)
                 <div class="stat"><span>Employees</span><strong>{{ $totals['uniqueEmployees'] }}</strong></div>
             @else
@@ -349,7 +349,7 @@
                         <td>{{ $row['projectName'] ?: '-' }}</td>
                         <td><span class="pill {{ $row['status'] }}">{{ ucfirst($row['status']) }}</span></td>
                         <td class="num">{{ $row['dayValue'] }}</td>
-                        <td class="num">{{ $row['overtimeHours'] ?: '-' }}</td>
+                        <td class="num">{{ $row['overtimeHours'] ? \App\Support\Overtime::label($row['overtimeHours']) : '-' }}</td>
                         @unless ($isProject)
                             <td class="code">{{ $row['note'] ?: '-' }}</td>
                         @endunless
@@ -373,7 +373,7 @@
                         <td colspan="{{ $isProject ? 6 : 3 }}">TOTAL</td>
                         <td></td>
                         <td class="num">{{ $totals['presentDays'] }}</td>
-                        <td class="num">{{ $totals['overtimeHours'] }}</td>
+                        <td class="num">{{ \App\Support\Overtime::label($totals['overtimeHours']) }}</td>
                         @unless ($isProject)
                             <td></td>
                         @endunless

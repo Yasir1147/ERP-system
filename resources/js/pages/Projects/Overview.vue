@@ -2,6 +2,7 @@
 import SortableHeader from '@/components/SortableHeader.vue';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { overtimeLabel } from '@/lib/overtime';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Banknote, BookOpen, BriefcaseBusiness, FileSpreadsheet, LoaderCircle, Printer, Search, Users, X } from 'lucide-vue-next';
@@ -417,14 +418,14 @@ const closeProjectHistory = () => {
                     <div class="min-w-0">
                         <h2 class="text-base font-medium">Labour Overhead</h2>
                         <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-                            A worked day costs more than the day's wage - accommodation, visa, transport, food, insurance. This prices basic
-                            salary at its real cost in every project. It replaces basic salary rather than being added beside it. Overtime,
-                            purchases, and expenses stay at their own cost.
+                            A worked day costs more than the day's wage - accommodation, visa, transport, food, insurance. This prices basic salary at
+                            its real cost in every project. It replaces basic salary rather than being added beside it. Overtime, purchases, and
+                            expenses stay at their own cost.
                         </p>
                         <p v-if="overheadForm.errors.multiplier" class="mt-2 text-sm text-red-600">{{ overheadForm.errors.multiplier }}</p>
                         <p v-else-if="overheadForm.enabled" class="mt-2 max-w-2xl text-sm text-muted-foreground">
-                            A worker on AED 100 a day costs the project AED {{ (100 * Number(overheadForm.multiplier || 0)).toFixed(2) }} a
-                            day, of which AED {{ (100 * Number(overheadForm.multiplier || 0) - 100).toFixed(2) }} is overhead.
+                            A worker on AED 100 a day costs the project AED {{ (100 * Number(overheadForm.multiplier || 0)).toFixed(2) }} a day, of
+                            which AED {{ (100 * Number(overheadForm.multiplier || 0) - 100).toFixed(2) }} is overhead.
                         </p>
                     </div>
                     <div class="flex shrink-0 flex-wrap items-end gap-3 lg:flex-nowrap">
@@ -951,7 +952,7 @@ const closeProjectHistory = () => {
                             </div>
                             <div class="rounded-md border p-3">
                                 <p class="text-xs text-muted-foreground">OT Hours</p>
-                                <p class="mt-1 text-xl font-semibold">{{ historyTotals.overtimeHours }}</p>
+                                <p class="mt-1 text-xl font-semibold">{{ overtimeLabel(historyTotals.overtimeHours) }}</p>
                             </div>
                             <div class="rounded-md border p-3">
                                 <p class="text-xs text-muted-foreground">Basic Cost</p>
@@ -1023,7 +1024,7 @@ const closeProjectHistory = () => {
                                             <td class="px-3 py-3 text-muted-foreground">{{ summaryRow.profession }}</td>
                                             <td class="px-3 py-3 text-right">{{ summaryRow.entries }}</td>
                                             <td class="px-3 py-3 text-right">{{ summaryRow.workedDays }}</td>
-                                            <td class="px-3 py-3 text-right">{{ summaryRow.overtimeHours }}</td>
+                                            <td class="px-3 py-3 text-right">{{ overtimeLabel(summaryRow.overtimeHours) }}</td>
                                             <td class="px-3 py-3 text-right">{{ money(summaryRow.basicCost) }}</td>
                                             <td class="px-3 py-3 text-right">{{ money(summaryRow.overtimeCost) }}</td>
                                             <td v-if="overheadSettings.enabled" class="px-3 py-3 text-right">{{ money(summaryRow.overheadCost) }}</td>

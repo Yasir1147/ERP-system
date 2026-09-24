@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import SortableHeader from '@/components/SortableHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { overtimeLabel } from '@/lib/overtime';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { BriefcaseBusiness, CalendarCheck, Clock3, ClipboardX, Pencil, Plane, Search, Trash2, X } from 'lucide-vue-next';
+import { BriefcaseBusiness, CalendarCheck, ClipboardX, Clock3, Pencil, Plane, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Employee {
@@ -199,7 +200,8 @@ const submittedByLabel = (record: AttendanceRecord) => {
     return record.submittedByRole === 'admin' ? `${record.submittedBy} (Admin)` : record.submittedBy;
 };
 
-const employeeDisplayName = (record: AttendanceRecord) => (record.employeeCode ? `${record.employeeCode} - ${record.employeeName}` : record.employeeName);
+const employeeDisplayName = (record: AttendanceRecord) =>
+    record.employeeCode ? `${record.employeeCode} - ${record.employeeName}` : record.employeeName;
 
 const actualAttendanceId = (record: AttendanceRecord) => {
     const match = record.id.match(/^attendance-(\d+)$/);
@@ -216,6 +218,7 @@ const editForm = useForm({
     has_overtime: false,
     overtime_project_id: '',
     overtime_hours: '',
+    overtime_minutes: '0',
     leave_reason: '',
 });
 
@@ -235,7 +238,8 @@ const startEditing = (record: AttendanceRecord) => {
     editForm.project_id = record.projectId ? String(record.projectId) : '';
     editForm.has_overtime = Boolean(record.hasOvertime || record.overtimeHours);
     editForm.overtime_project_id = record.overtimeProjectId ? String(record.overtimeProjectId) : '';
-    editForm.overtime_hours = record.overtimeHours ? String(record.overtimeHours) : '';
+    editForm.overtime_hours = record.overtimeHours ? String(Math.floor(Math.round(record.overtimeHours * 60) / 60)) : '0';
+    editForm.overtime_minutes = String(Math.round((record.overtimeHours || 0) * 60) % 60);
     editForm.leave_reason = record.reason || '';
 };
 
@@ -254,6 +258,7 @@ watch(
             editForm.has_overtime = false;
             editForm.overtime_project_id = '';
             editForm.overtime_hours = '';
+            editForm.overtime_minutes = '0';
         }
 
         if (status !== 'leave') {
@@ -268,6 +273,7 @@ watch(
         if (!hasOvertime) {
             editForm.overtime_project_id = '';
             editForm.overtime_hours = '';
+            editForm.overtime_minutes = '0';
         }
     },
 );
@@ -383,7 +389,9 @@ const deleteAttendance = (record: AttendanceRecord) => {
                         <div>
                             <p class="text-sm text-muted-foreground">Present</p>
                             <p class="mt-2 text-3xl font-semibold">{{ summary.present }}</p>
-                            <p v-if="summary.halfDays" class="mt-1 text-xs text-muted-foreground">{{ summary.halfDays }} half {{ summary.halfDays === 1 ? 'day' : 'days' }}</p>
+                            <p v-if="summary.halfDays" class="mt-1 text-xs text-muted-foreground">
+                                {{ summary.halfDays }} half {{ summary.halfDays === 1 ? 'day' : 'days' }}
+                            </p>
                         </div>
                         <CalendarCheck class="size-6 text-green-600" />
                     </div>
@@ -410,7 +418,7 @@ const deleteAttendance = (record: AttendanceRecord) => {
                     <div class="flex items-center justify-between gap-3">
                         <div>
                             <p class="text-sm text-muted-foreground">Overtime</p>
-                            <p class="mt-2 text-3xl font-semibold">{{ summary.overtimeHours }}</p>
+                            <p class="mt-2 text-3xl font-semibold">{{ overtimeLabel(summary.overtimeHours) }}</p>
                             <p class="text-xs text-muted-foreground">{{ summary.overtimeDays }} days</p>
                         </div>
                         <Clock3 class="size-6 text-sky-600" />
@@ -470,7 +478,7 @@ const deleteAttendance = (record: AttendanceRecord) => {
                             <div class="flex items-center justify-between gap-3 text-sm">
                                 <div class="min-w-0">
                                     <p class="truncate font-medium">{{ project.projectName }}</p>
-                                    <p class="text-xs text-muted-foreground">Overtime: {{ project.overtimeHours }} hrs</p>
+                                    <p class="text-xs text-muted-foreground">Overtime: {{ overtimeLabel(project.overtimeHours) }}</p>
                                 </div>
                                 <span class="shrink-0 font-semibold">{{ project.days }} days</span>
                             </div>
@@ -493,19 +501,38 @@ const deleteAttendance = (record: AttendanceRecord) => {
                     </div>
                     <div class="relative w-full sm:w-72">
                         <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <input v-model="search" type="search" class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm" placeholder="Search table" />
+                        <input
+                            v-model="search"
+                            type="search"
+                            class="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
+                            placeholder="Search table"
+                        />
                     </div>
                 </div>
 
                 <div v-if="filteredRecords.length" class="mt-4 overflow-hidden rounded-md border">
-                    <div class="grid min-w-[1120px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_120px] border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+                    <div
+                        class="grid min-w-[1120px] grid-cols-[0.7fr_1fr_0.75fr_0.75fr_0.55fr_0.6fr_0.85fr_120px] border-b px-3 py-2 text-xs font-medium text-muted-foreground"
+                    >
                         <SortableHeader label="Date" column="date" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
                         <SortableHeader label="Employee" column="employee" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
                         <SortableHeader label="Type" column="type" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
-                        <SortableHeader label="Project / Reason" column="project" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
+                        <SortableHeader
+                            label="Project / Reason"
+                            column="project"
+                            :sort-key="sortKey"
+                            :sort-direction="sortDirection"
+                            @sort="sortRecords"
+                        />
                         <SortableHeader label="Status" column="status" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
                         <SortableHeader label="Overtime" column="overtime" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
-                        <SortableHeader label="Submitted By" column="submitted_by" :sort-key="sortKey" :sort-direction="sortDirection" @sort="sortRecords" />
+                        <SortableHeader
+                            label="Submitted By"
+                            column="submitted_by"
+                            :sort-key="sortKey"
+                            :sort-direction="sortDirection"
+                            @sort="sortRecords"
+                        />
                         <span class="text-right">Action</span>
                     </div>
                     <div class="max-h-[520px] overflow-auto">
@@ -522,12 +549,13 @@ const deleteAttendance = (record: AttendanceRecord) => {
                             <span class="truncate text-muted-foreground">{{ employeeTypes[record.employeeType] }}</span>
                             <span class="truncate text-muted-foreground">{{ record.reason || record.projectName || '-' }}</span>
                             <span class="w-fit rounded-full border px-2 py-1 text-xs font-medium" :class="statusClass(record.status)">
-                                {{ statusLabel(record.status) }}<template v-if="record.status === 'present' && Number(record.attendanceFraction) === 0.5"> · Half Day</template>
+                                {{ statusLabel(record.status)
+                                }}<template v-if="record.status === 'present' && Number(record.attendanceFraction) === 0.5"> · Half Day</template>
                             </span>
                             <span class="truncate text-muted-foreground">
                                 {{
                                     record.overtimeHours
-                                        ? `${record.overtimeHours} hrs${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
+                                        ? `${overtimeLabel(record.overtimeHours)}${record.overtimeProjectName && record.overtimeProjectName !== record.projectName ? ` - ${record.overtimeProjectName}` : ''}`
                                         : '-'
                                 }}
                             </span>
@@ -588,7 +616,11 @@ const deleteAttendance = (record: AttendanceRecord) => {
 
                         <div class="grid gap-2">
                             <label class="text-sm font-medium">Date</label>
-                            <input v-model="editForm.attendance_date" type="date" class="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+                            <input
+                                v-model="editForm.attendance_date"
+                                type="date"
+                                class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            />
                             <p v-if="editForm.errors.attendance_date" class="text-sm text-red-600">{{ editForm.errors.attendance_date }}</p>
                         </div>
                     </div>
@@ -600,7 +632,9 @@ const deleteAttendance = (record: AttendanceRecord) => {
                                 v-for="status in ['present', 'absent', 'leave']"
                                 :key="status"
                                 class="flex h-10 cursor-pointer items-center justify-center rounded-md border text-sm font-medium capitalize"
-                                :class="editForm.status === status ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-background'"
+                                :class="
+                                    editForm.status === status ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-background'
+                                "
                             >
                                 <input v-model="editForm.status" type="radio" name="edit-status" :value="status" class="sr-only" />
                                 {{ status }}
@@ -626,7 +660,13 @@ const deleteAttendance = (record: AttendanceRecord) => {
                                             : 'border-input bg-background'
                                     "
                                 >
-                                    <input v-model="editForm.attendance_fraction" type="radio" name="edit-attendance-fraction" :value="option.value" class="sr-only" />
+                                    <input
+                                        v-model="editForm.attendance_fraction"
+                                        type="radio"
+                                        name="edit-attendance-fraction"
+                                        :value="option.value"
+                                        class="sr-only"
+                                    />
                                     {{ option.label }}
                                 </label>
                             </div>
@@ -660,11 +700,39 @@ const deleteAttendance = (record: AttendanceRecord) => {
                                         {{ project.label }}
                                     </option>
                                 </select>
-                                <p v-if="editForm.errors.overtime_project_id" class="text-sm text-red-600">{{ editForm.errors.overtime_project_id }}</p>
+                                <p v-if="editForm.errors.overtime_project_id" class="text-sm text-red-600">
+                                    {{ editForm.errors.overtime_project_id }}
+                                </p>
                             </div>
                             <div class="grid gap-2">
                                 <label class="text-sm font-medium">Overtime Hours</label>
-                                <select v-model="editForm.overtime_hours" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                                <div v-if="editingRecord?.employeeType === 'rope_access'" class="grid grid-cols-2 gap-3">
+                                    <label class="grid gap-1 text-sm"
+                                        >Hours<input
+                                            v-model="editForm.overtime_hours"
+                                            type="number"
+                                            min="0"
+                                            max="10"
+                                            step="1"
+                                            placeholder="0"
+                                            required
+                                            class="h-11 w-full rounded-md border border-input bg-background px-3"
+                                    /></label>
+                                    <label class="grid gap-1 text-sm"
+                                        >Minutes<select
+                                            v-model="editForm.overtime_minutes"
+                                            class="h-11 w-full rounded-md border border-input bg-background px-3"
+                                        >
+                                            <option v-for="minute in 60" :key="minute" :value="String(minute - 1)">{{ minute - 1 }}</option>
+                                        </select></label
+                                    >
+                                    <p class="col-span-2 text-xs text-muted-foreground">Example: 2 hours + 25 minutes. Maximum 10 hours total.</p>
+                                </div>
+                                <select
+                                    v-else
+                                    v-model="editForm.overtime_hours"
+                                    class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                >
                                     <option value="">Select hours</option>
                                     <option v-for="hour in 10" :key="hour" :value="String(hour)">{{ hour }}</option>
                                 </select>
@@ -675,13 +743,24 @@ const deleteAttendance = (record: AttendanceRecord) => {
 
                     <div v-if="editForm.status === 'leave'" class="grid gap-2">
                         <label class="text-sm font-medium">Leave Reason</label>
-                        <textarea v-model="editForm.leave_reason" rows="3" class="rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Leave reason" />
+                        <textarea
+                            v-model="editForm.leave_reason"
+                            rows="3"
+                            class="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            placeholder="Leave reason"
+                        />
                         <p v-if="editForm.errors.leave_reason" class="text-sm text-red-600">{{ editForm.errors.leave_reason }}</p>
                     </div>
 
                     <div class="flex justify-end gap-2 border-t pt-4">
-                        <button type="button" class="h-10 rounded-md border px-4 text-sm font-medium hover:bg-accent" @click="closeEdit">Cancel</button>
-                        <button type="submit" class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" :disabled="editForm.processing">
+                        <button type="button" class="h-10 rounded-md border px-4 text-sm font-medium hover:bg-accent" @click="closeEdit">
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            class="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+                            :disabled="editForm.processing"
+                        >
                             Save Attendance
                         </button>
                     </div>

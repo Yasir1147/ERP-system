@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { overtimeLabel } from '@/lib/overtime';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { FileSpreadsheet, FileText, Search } from 'lucide-vue-next';
@@ -230,7 +231,9 @@ const selectEmployeeRow = (employeeId: number) => {
                                     <div>{{ date.day }}</div>
                                     <div class="mt-0.5 text-[11px] font-normal text-muted-foreground">{{ date.weekday }}</div>
                                 </th>
-                                <th class="sticky right-0 z-30 w-24 min-w-24 border-b border-l bg-indigo-50 px-2 py-2 text-center font-semibold text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100">
+                                <th
+                                    class="sticky right-0 z-30 w-24 min-w-24 border-b border-l bg-indigo-50 px-2 py-2 text-center font-semibold text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100"
+                                >
                                     Present<br />Days
                                 </th>
                             </tr>
@@ -256,7 +259,10 @@ const selectEmployeeRow = (employeeId: number) => {
                                     v-for="day in employee.days"
                                     :key="`${employee.id}-${day.date}`"
                                     class="h-[70px] w-[92px] min-w-[92px] border-b border-r p-1 align-top"
-                                    :class="[cellClass(day), selectedEmployeeId === employee.id ? 'ring-1 ring-inset ring-primary/30 brightness-[0.98]' : '']"
+                                    :class="[
+                                        cellClass(day),
+                                        selectedEmployeeId === employee.id ? 'ring-1 ring-inset ring-primary/30 brightness-[0.98]' : '',
+                                    ]"
                                 >
                                     <div v-if="day.status" class="flex h-full flex-col justify-between gap-1 overflow-hidden rounded-sm px-1 py-1">
                                         <p class="truncate text-[11px] font-medium leading-tight">
@@ -268,15 +274,26 @@ const selectEmployeeRow = (employeeId: number) => {
                                         >
                                             Half Day
                                         </p>
-                                        <p v-if="day.status === 'present' && day.overtimeHours" class="truncate text-[11px] leading-tight text-muted-foreground">
-                                            OT {{ day.overtimeHours }}H<template v-if="day.overtimeProjectName && day.overtimeProjectName !== day.projectName"> - {{ day.overtimeProjectName }}</template>
+                                        <p
+                                            v-if="day.status === 'present' && day.overtimeHours"
+                                            class="truncate text-[11px] leading-tight text-muted-foreground"
+                                        >
+                                            OT {{ overtimeLabel(day.overtimeHours)
+                                            }}<template v-if="day.overtimeProjectName && day.overtimeProjectName !== day.projectName">
+                                                - {{ day.overtimeProjectName }}</template
+                                            >
                                         </p>
-                                        <p v-else-if="day.status === 'leave' && day.leaveReason" class="truncate text-[11px] leading-tight text-muted-foreground">
+                                        <p
+                                            v-else-if="day.status === 'leave' && day.leaveReason"
+                                            class="truncate text-[11px] leading-tight text-muted-foreground"
+                                        >
                                             {{ day.leaveReason }}
                                         </p>
                                     </div>
                                 </td>
-                                <td class="sticky right-0 z-10 w-24 min-w-24 border-b border-l bg-indigo-50 px-2 text-center align-middle text-base font-semibold text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100">
+                                <td
+                                    class="sticky right-0 z-10 w-24 min-w-24 border-b border-l bg-indigo-50 px-2 text-center align-middle text-base font-semibold text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100"
+                                >
                                     <div>{{ employee.presentDays }}</div>
                                     <div v-if="employee.halfDays" class="text-[10px] font-normal text-orange-700 dark:text-orange-300">
                                         {{ employee.halfDays }} half {{ employee.halfDays === 1 ? 'day' : 'days' }}

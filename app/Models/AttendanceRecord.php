@@ -11,7 +11,9 @@ class AttendanceRecord extends Model
     use HasFactory;
 
     public const STATUS_PRESENT = 'present';
+
     public const STATUS_ABSENT = 'absent';
+
     public const STATUS_LEAVE = 'leave';
 
     public const STATUSES = [
@@ -21,6 +23,7 @@ class AttendanceRecord extends Model
     ];
 
     public const FULL_DAY_FRACTION = 1.0;
+
     public const HALF_DAY_FRACTION = 0.5;
 
     public const ATTENDANCE_FRACTIONS = [
@@ -29,7 +32,9 @@ class AttendanceRecord extends Model
     ];
 
     public const PAYROLL_DEDUCTION_PENDING = 'pending';
+
     public const PAYROLL_DEDUCTION_APPLIED = 'applied';
+
     public const PAYROLL_DEDUCTION_WAIVED = 'waived';
 
     public const PAYROLL_DEDUCTION_STATUSES = [
@@ -62,11 +67,21 @@ class AttendanceRecord extends Model
         'attendance_date' => 'date',
         'attendance_fraction' => 'decimal:2',
         'has_overtime' => 'boolean',
-        'overtime_hours' => 'integer',
+        'overtime_hours' => 'float',
         'payroll_deduction_month' => 'date',
         'payroll_deduction_reviewed_at' => 'datetime',
         'payroll_deduct_days' => 'integer',
     ];
+
+    public function getOvertimeHoursAttribute(mixed $value): int|float|null
+    {
+        if ($value === null) {
+            return null;
+        }
+        $minutes = (int) round((float) $value * 60);
+
+        return $minutes % 60 === 0 ? intdiv($minutes, 60) : $minutes / 60;
+    }
 
     public function employee(): BelongsTo
     {

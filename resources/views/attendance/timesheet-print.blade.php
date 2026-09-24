@@ -287,7 +287,7 @@
                                         <span class="detail"><strong>Half Day</strong></span>
                                     @endif
                                     @if ($day['overtimeHours'])
-                                        <span class="detail">OT {{ $day['overtimeHours'] }}H{{ $hasDifferentOvertimeProject ? ' - '.$day['overtimeProjectName'] : '' }}</span>
+                                        <span class="detail">OT {{ \App\Support\Overtime::label($day['overtimeHours']) }}{{ $hasDifferentOvertimeProject ? ' - '.$day['overtimeProjectName'] : '' }}</span>
                                     @endif
                                 @elseif ($status === 'absent')
                                     Absent
