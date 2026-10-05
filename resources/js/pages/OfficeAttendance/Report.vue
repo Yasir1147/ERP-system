@@ -94,12 +94,24 @@ const addOpen = ref(false);
 const addForm = useForm({
     office_staff_id: '',
     attendance_date: props.filters.to,
+    attendance_date_to: props.filters.to,
     work_mode: 'office',
     check_in_time: '09:00',
     check_out_time: '17:00',
     note: '',
 });
 const addStaff = computed(() => props.staff.find((staff) => String(staff.id) === addForm.office_staff_id));
+const attendanceDayCount = computed(() => {
+    const fromDate = Date.parse(addForm.attendance_date);
+    const toDate = Date.parse(addForm.attendance_date_to);
+    return Number.isFinite(fromDate) && Number.isFinite(toDate) && toDate >= fromDate ? Math.floor((toDate - fromDate) / 86400000) + 1 : 0;
+});
+watch(
+    () => addForm.attendance_date,
+    (date) => {
+        if (!addForm.attendance_date_to || addForm.attendance_date_to < date) addForm.attendance_date_to = date;
+    },
+);
 watch(
     () => addForm.office_staff_id,
     () => {
@@ -113,6 +125,7 @@ const openAdd = (id?: number) => {
     addForm.clearErrors();
     addForm.office_staff_id = id ? String(id) : staffId.value;
     addForm.attendance_date = id ? detailTo.value : to.value;
+    addForm.attendance_date_to = addForm.attendance_date;
     addForm.note = '';
     addOpen.value = true;
 };
@@ -123,7 +136,7 @@ const submitAttendance = () =>
             addOpen.value = false;
             if (detailOpen.value && detailStaff.value?.id === Number(addForm.office_staff_id)) {
                 detailFrom.value = detailFrom.value < addForm.attendance_date ? detailFrom.value : addForm.attendance_date;
-                detailTo.value = detailTo.value > addForm.attendance_date ? detailTo.value : addForm.attendance_date;
+                detailTo.value = detailTo.value > addForm.attendance_date_to ? detailTo.value : addForm.attendance_date_to;
                 await fetchStaffDetails();
             }
         },
@@ -347,6 +360,11 @@ const sessionSegments = (summary?: string | null) => {
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <Button @click="openAdd()">Add Attendance</Button>
+                    <Button as-child variant="outline"
+                        ><a :href="`/office-attendance/timesheet?month=${filters.from.slice(0, 7)}&staff_id=${filters.staffId}`"
+                            >Monthly Timesheet</a
+                        ></Button
+                    >
                     <Button as-child variant="outline"><a :href="exportUrl">Download Excel</a></Button>
                     <Button as-child variant="outline">
                         <a :href="printUrl" target="_blank" rel="noreferrer">
@@ -525,7 +543,8 @@ const sessionSegments = (summary?: string | null) => {
                     <DialogHeader
                         ><DialogTitle>Add Office Attendance</DialogTitle
                         ><DialogDescription
-                            >Select a staff member and any attendance date. A completed session will be saved.</DialogDescription
+                            >Select a staff member and a date range. The same completed session will be saved for every date, including weekends. Use
+                            the same start and end date for one day.</DialogDescription
                         ></DialogHeader
                     >
                     <form class="space-y-4" @submit.prevent="submitAttendance">
@@ -536,9 +555,17 @@ const sessionSegments = (summary?: string | null) => {
                             ><InputError :message="addForm.errors.office_staff_id"
                         /></label>
                         <label class="grid gap-2 text-sm"
-                            >Date<Input v-model="addForm.attendance_date" type="date" required /><InputError
+                            >From Date<Input v-model="addForm.attendance_date" type="date" required /><InputError
                                 :message="addForm.errors.attendance_date"
                         /></label>
+                        <label class="grid gap-2 text-sm"
+                            >To Date<Input v-model="addForm.attendance_date_to" type="date" :min="addForm.attendance_date" required /><InputError
+                                :message="addForm.errors.attendance_date_to"
+                        /></label>
+                        <p class="rounded-md bg-muted p-3 text-sm">
+                            {{ attendanceDayCount }} day(s) selected. Submitted By: {{ addStaff?.label || 'Select staff' }}. Existing attendance or
+                            pending/approved leave blocks the entire range.
+                        </p>
                         <label class="grid gap-2 text-sm"
                             >Work Mode<select v-model="addForm.work_mode" class="rounded-md border bg-background p-2">
                                 <option v-for="(label, mode) in workModes" :key="mode" :value="mode">{{ label }}</option></select
@@ -565,7 +592,9 @@ const sessionSegments = (summary?: string | null) => {
                             >Note<Input v-model="addForm.note" maxlength="1000" placeholder="Optional note" /><InputError
                                 :message="addForm.errors.note"
                         /></label>
-                        <Button type="submit" :disabled="addForm.processing">Save Attendance</Button>
+                        <Button type="submit" :disabled="addForm.processing || !attendanceDayCount"
+                            >Save Attendance ({{ attendanceDayCount }} days)</Button
+                        >
                     </form>
                 </DialogScrollContent>
             </Dialog>

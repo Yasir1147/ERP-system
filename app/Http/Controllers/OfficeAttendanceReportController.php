@@ -7,11 +7,13 @@ use App\Models\OfficeLeaveRequest;
 use App\Models\OfficeStaff;
 use App\Models\OfficeStaffAttendance;
 use App\Services\Excel\OfficeAttendanceExporter;
+use App\Services\Excel\OfficeTimesheetExporter;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -49,6 +51,94 @@ class OfficeAttendanceReportController extends Controller
         return view('office-attendance.report', $this->reportData($request));
     }
 
+    public function timesheet(Request $request): Response
+    {
+        return Inertia::render('OfficeAttendance/Timesheet', [
+            ...$this->timesheetData($request),
+            'staff' => $this->staffOptions(),
+        ]);
+    }
+
+    public function timesheetPrint(Request $request): View
+    {
+        return view('office-attendance.timesheet', $this->timesheetData($request));
+    }
+
+    public function timesheetExport(Request $request, OfficeTimesheetExporter $exporter)
+    {
+        return $exporter->download($this->timesheetData($request));
+    }
+
+    private function timesheetData(Request $request): array
+    {
+        $validated = $request->validate([
+            'month' => ['nullable', 'date_format:Y-m'],
+            'staff_id' => ['nullable', 'integer', 'exists:office_staff,id'],
+            'staff_ids' => ['nullable', 'array'],
+            'staff_ids.*' => ['required', 'integer', 'distinct', 'exists:office_staff,id'],
+            'selection' => ['nullable', Rule::in(['all', 'selected'])],
+            'search' => ['nullable', 'string', 'max:200'],
+        ]);
+        $month = Carbon::createFromFormat('!Y-m', $validated['month'] ?? now('Asia/Dubai')->format('Y-m'), 'Asia/Dubai');
+        $staffIds = array_map('intval', $validated['staff_ids'] ?? (isset($validated['staff_id']) ? [$validated['staff_id']] : []));
+        $allStaff = ($validated['selection'] ?? ($staffIds ? 'selected' : 'all')) === 'all';
+        $filters = [
+            'month' => $month->format('Y-m'),
+            'staffId' => (string) ($validated['staff_id'] ?? ''),
+            'staffIds' => $allStaff ? [] : $staffIds,
+            'allStaff' => $allStaff,
+            'search' => trim($validated['search'] ?? ''),
+        ];
+        $from = $month->toDateString();
+        $to = $month->copy()->endOfMonth()->toDateString();
+        $days = [];
+        for ($day = $month->copy(); $day->toDateString() <= $to; $day->addDay()) {
+            $days[] = ['date' => $day->toDateString(), 'number' => $day->day, 'weekday' => $day->format('D')];
+        }
+        $inMonth = fn ($query) => $query->whereDate('attendance_date', '>=', $from)->whereDate('attendance_date', '<=', $to);
+        $staff = OfficeStaff::query()
+            ->when(! $allStaff, fn ($q) => $q->whereIn('id', $staffIds))
+            ->when($filters['search'] !== '', fn ($q) => $q->where(function ($q) use ($filters) {
+                $q->where('code', 'like', '%'.$filters['search'].'%')->orWhere('name', 'like', '%'.$filters['search'].'%')->orWhere('designation', 'like', '%'.$filters['search'].'%');
+            }))
+            ->with(['attendances' => fn ($q) => $inMonth($q)->with(['sessions' => fn ($sessions) => $sessions->orderBy('check_in_time')->orderBy('id'), 'officeStaff', 'submitter'])])
+            ->orderBy('code')->get();
+        $leaves = OfficeLeaveRequest::whereIn('office_staff_id', $staff->pluck('id'))
+            ->whereBetween('leave_date', [$from, $to])->whereIn('status', ['approved', 'pending'])->get()
+            ->groupBy('office_staff_id');
+        $rules = $this->officeRules();
+        $rows = $staff->map(function (OfficeStaff $person) use ($days, $leaves, $rules) {
+            $attendance = $person->attendances->keyBy(fn ($record) => $record->attendance_date->toDateString());
+            $leave = ($leaves->get($person->id) ?? collect())->keyBy(fn ($record) => $record->leave_date->toDateString());
+            $cells = [];
+            $present = $approved = $pending = $minutes = 0;
+            foreach ($days as $day) {
+                $record = $attendance->get($day['date']);
+                $detail = $record ? $this->attendanceRow($record, $rules) : null;
+                // Blank placeholder rows are not proof of attendance.
+                $isPresent = $record && ($detail['checkInTime'] || $detail['checkOutTime']);
+                $status = $isPresent ? 'P' : match ($leave->get($day['date'])?->status) {
+                    'approved' => 'L', 'pending' => 'LP', default => '-',
+                };
+                $present += $status === 'P' ? 1 : 0;
+                $approved += $status === 'L' ? 1 : 0;
+                $pending += $status === 'LP' ? 1 : 0;
+                $minutes += $isPresent ? $detail['workMinutes'] : 0;
+                $cells[] = ['date' => $day['date'], 'status' => $status, 'detail' => $isPresent ? $detail : null];
+            }
+
+            return ['id' => $person->id, 'code' => $person->code, 'name' => $person->name,
+                'designation' => $person->designation, 'cells' => $cells, 'present' => $present,
+                'leave' => $approved, 'pending' => $pending, 'workMinutes' => $minutes,
+                'workLabel' => $this->formatMinutesLabel($minutes)];
+        });
+
+        return ['filters' => $filters, 'monthLabel' => $month->format('F Y'), 'days' => $days, 'rows' => $rows,
+            'dailyPresent' => array_map(fn ($index) => $rows->filter(fn ($row) => $row['cells'][$index]['status'] === 'P')->count(), array_keys($days)),
+            'totals' => ['staff' => $rows->count(), 'present' => $rows->sum('present'), 'leave' => $rows->sum('leave'),
+                'pending' => $rows->sum('pending'), 'workMinutes' => $rows->sum('workMinutes'), 'workLabel' => $this->formatMinutesLabel($rows->sum('workMinutes'))]];
+    }
+
     public function export(Request $request, OfficeAttendanceExporter $exporter)
     {
         return $exporter->download($this->reportData($request));
@@ -59,35 +149,59 @@ class OfficeAttendanceReportController extends Controller
         $data = $request->validate([
             'office_staff_id' => ['required', 'integer', 'exists:office_staff,id'],
             'attendance_date' => ['required', 'date_format:Y-m-d'],
+            'attendance_date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:attendance_date'],
             'work_mode' => ['required', Rule::in(array_keys(OfficeStaffAttendance::MODES))],
             'check_in_time' => ['required', 'date_format:H:i'],
             'check_out_time' => ['required', 'date_format:H:i', 'after:check_in_time'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        DB::transaction(function () use ($request, $data) {
+        $from = Carbon::parse($data['attendance_date']);
+        $to = Carbon::parse($data['attendance_date_to'] ?? $data['attendance_date']);
+        if ($from->diffInDays($to) >= 366) {
+            throw ValidationException::withMessages(['attendance_date_to' => 'Select up to 366 days at a time.']);
+        }
+        $count = DB::transaction(function () use ($data, $from, $to) {
             $staff = OfficeStaff::whereKey($data['office_staff_id'])->lockForUpdate()->firstOrFail();
-            if ($staff->attendances()->whereDate('attendance_date', $data['attendance_date'])->exists()) {
-                throw ValidationException::withMessages(['attendance_date' => 'Attendance already exists for this staff member and date. Edit the existing record instead.']);
+            if (! $staff->user_id) {
+                throw ValidationException::withMessages(['office_staff_id' => 'This staff member needs a linked user account before attendance can be saved.']);
             }
-            if (OfficeLeaveRequest::where('office_staff_id', $staff->id)->whereDate('leave_date', $data['attendance_date'])->whereIn('status', ['pending', 'approved'])->exists()) {
-                throw ValidationException::withMessages(['attendance_date' => 'A pending or approved leave request exists for this date. Review the leave request first.']);
+            $duplicate = $staff->attendances()->whereDate('attendance_date', '>=', $from->toDateString())->whereDate('attendance_date', '<=', $to->toDateString())->orderBy('attendance_date')->first();
+            if ($duplicate) {
+                throw ValidationException::withMessages(['attendance_date' => 'Attendance already exists on '.$duplicate->attendance_date->format('d/m/Y').'. No dates were saved. Edit that record or change the range.']);
             }
-            $attendance = $staff->attendances()->create([
-                ...$data,
-                'submitted_by' => $request->user()->id,
-                'check_in_time' => $data['check_in_time'].':00',
-                'check_out_time' => $data['check_out_time'].':00',
-                'is_fixed' => $staff->attendance_mode === 'fixed',
-                'marked_at' => now(),
-            ]);
-            $attendance->sessions()->create([
-                'check_in_time' => $attendance->check_in_time,
-                'check_out_time' => $attendance->check_out_time,
-            ]);
+            $leave = OfficeLeaveRequest::where('office_staff_id', $staff->id)->whereDate('leave_date', '>=', $from->toDateString())->whereDate('leave_date', '<=', $to->toDateString())->whereIn('status', ['pending', 'approved'])->orderBy('leave_date')->first();
+            if ($leave) {
+                throw ValidationException::withMessages(['attendance_date' => 'Pending or approved leave exists on '.$leave->leave_date->format('d/m/Y').'. No dates were saved. Review the leave or change the range.']);
+            }
+            $count = 0;
+            for ($date = $from->copy(); $date->lte($to); $date->addDay()) {
+                $attendance = $staff->attendances()->create([
+                    'attendance_date' => $date->toDateString(),
+                    'work_mode' => $data['work_mode'],
+                    'note' => $data['note'] ?? null,
+                    'submitted_by' => $staff->user_id,
+                    'check_in_time' => $data['check_in_time'].':00',
+                    'check_out_time' => $data['check_out_time'].':00',
+                    'is_fixed' => $staff->attendance_mode === 'fixed',
+                    'marked_at' => now(),
+                ]);
+                $attendance->sessions()->create([
+                    'check_in_time' => $attendance->check_in_time,
+                    'check_out_time' => $attendance->check_out_time,
+                ]);
+                $count++;
+            }
+
+            return $count;
         });
 
-        return back()->with('success', 'Office attendance added.');
+        Log::info('Office attendance entered by admin', [
+            'admin_id' => $request->user()->id, 'office_staff_id' => $data['office_staff_id'],
+            'from' => $from->toDateString(), 'to' => $to->toDateString(), 'days' => $count,
+        ]);
+
+        return back()->with('success', 'Office attendance saved for '.$count.' day(s).');
     }
 
     private function reportData(Request $request): array

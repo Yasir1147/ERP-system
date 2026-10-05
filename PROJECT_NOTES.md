@@ -1147,3 +1147,19 @@ Database tables:
 - Overtime storage widened to decimal(12,8); model/calculations normalize to whole minutes. Payroll and project costs preserve fractional hours, and report/print displays use hour/minute labels.
 - MySQL backed up to storage/app/private/backups/before-overtime-minutes-20260924-172243.sql before applying the new migration locally. Production deployment requires php artisan migrate --force after its own backup.
 - Added OvertimeMinutesTest for minute precision, invalid durations, admin editing, payroll money and disabled overtime fields.
+
+## Office Staff Monthly Timesheet (October 2026)
+
+- Office Staff > Monthly Timesheet (`/office-attendance/timesheet`) provides a full calendar-month grid with month, staff, and code/name/designation search filters. Attendance Report also links to it.
+- P means recorded attendance with a check-in or check-out; blank placeholder rows are not present. L means approved leave, LP means pending leave, and a dash means no record, never automatic absence. Rejected leave is excluded; attendance takes precedence over leave.
+- Active staff appear even without records. Inactive staff with attendance or pending/approved leave in the selected month remain visible; explicitly selecting inactive staff also shows their history.
+- P cells open timing/session details. Row totals and daily headcounts accompany present days, approved/pending leave and work hours. Hours reuse the existing office report calculations for fixed, remote and session-based attendance.
+- All calendar dates are shown. No Sunday or weekly-off policy is assumed because office weekly off-days are not configured.
+- Admin-only Excel (`/office-attendance/timesheet-export`) and A3 landscape print/PDF (`/office-attendance/timesheet-print`) use the same filtered data as the screen. No migration or historical data rewrite is needed.
+- Staff filter now supports checkbox multi-selection with Select All, staff-option search, and Apply Selection. Select All includes every registered staff member, including inactive staff (superseding the earlier active/history-only default). Clearing all checkboxes returns an empty sheet. Applied selections persist through month navigation and Excel/PDF exports; legacy single-staff links still work.
+
+## Office Attendance Date Range Entry (October 2026)
+
+- Add Office Attendance now accepts From Date and To Date, inclusive, with one completed session per calendar day using the same times, work mode and note. Weekends are included; identical dates save a single day. A batch supports up to 366 days.
+- The entire batch is transactional and blocked if any date already has attendance or pending/approved leave. The conflicting date is reported; no partial range is saved.
+- New admin-entered attendance now stores the selected staff member's linked user as submitted_by, replacing the earlier admin attribution rule. Historical rows are unchanged. The acting admin ID, staff ID, dates and count are recorded in the application log after a successful batch.

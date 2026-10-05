@@ -105,6 +105,7 @@ export const adminNavigation: NavItem[] = [
         items: [
             { title: 'Staff List', href: '/office-staff' },
             { title: 'Attendance Report', href: '/office-attendance/report' },
+            { title: 'Monthly Timesheet', href: '/office-attendance/timesheet' },
             { title: 'Leave Requests', href: '/office-leave-requests' },
         ],
     },

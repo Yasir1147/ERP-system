@@ -231,6 +231,9 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::resource('office-staff', OfficeStaffController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('office-attendance/report', [OfficeAttendanceReportController::class, 'store'])->name('office-attendance.admin.store');
     Route::get('office-attendance/report-export', [OfficeAttendanceReportController::class, 'export'])->name('office-attendance.report.export');
+    Route::get('office-attendance/timesheet', [OfficeAttendanceReportController::class, 'timesheet'])->name('office-attendance.timesheet');
+    Route::get('office-attendance/timesheet-print', [OfficeAttendanceReportController::class, 'timesheetPrint'])->name('office-attendance.timesheet.print');
+    Route::get('office-attendance/timesheet-export', [OfficeAttendanceReportController::class, 'timesheetExport'])->name('office-attendance.timesheet.export');
     Route::get('office-attendance/report', [OfficeAttendanceReportController::class, 'index'])->name('office-attendance.report');
     Route::get('office-attendance/report/{officeStaff}/details', [OfficeAttendanceReportController::class, 'details'])->name('office-attendance.details');
     Route::put('office-attendance/report/{officeAttendance}', [OfficeAttendanceReportController::class, 'update'])->name('office-attendance.update');

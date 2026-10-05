@@ -22,16 +22,53 @@ function reportEntry(OfficeStaff $staff, string $date, string $note = ''): array
         'check_in_time' => '09:00', 'check_out_time' => '17:00', 'note' => $note];
 }
 
-test('admin adds backdated and future complete attendance with own audit identity', function () {
+test('admin adds backdated and future complete attendance attributed to selected staff', function () {
     $staff = reportStaff();
     $admin = User::factory()->create(['role' => 'admin']);
     foreach (['2020-01-02', '2030-02-03'] as $date) {
         $this->actingAs($admin)->post('/office-attendance/report', reportEntry($staff, $date))->assertRedirect()->assertSessionHasNoErrors();
         $record = $staff->attendances()->whereDate('attendance_date', $date)->firstOrFail();
-        expect($record->submitted_by)->toBe($admin->id)->and($record->is_fixed)->toBeTrue();
+        expect($record->submitted_by)->toBe($staff->user_id)->and($record->is_fixed)->toBeTrue();
         expect($record->sessions()->count())->toBe(1);
         $this->get("/office-attendance/report/{$staff->id}/details?from={$date}&to={$date}")->assertJsonPath('rows.0.workMinutes', 480);
     }
+});
+
+test('admin saves inclusive date range with staff identity and complete sessions', function () {
+    $staff = reportStaff();
+    $this->actingAs(User::factory()->create(['role' => 'admin']));
+    $data = [...reportEntry($staff, '2026-09-20'), 'attendance_date_to' => '2026-09-30'];
+    $this->post('/office-attendance/report', $data)->assertSessionHasNoErrors();
+    $rows = $staff->attendances()->with('sessions')->orderBy('attendance_date')->get();
+    expect($rows)->toHaveCount(11);
+    expect($rows->first()->attendance_date->toDateString())->toBe('2026-09-20');
+    expect($rows->last()->attendance_date->toDateString())->toBe('2026-09-30');
+    foreach ($rows as $row) {
+        expect($row->submitted_by)->toBe($staff->user_id)->and($row->sessions)->toHaveCount(1);
+    }
+    $this->get("/office-attendance/report/{$staff->id}/details?from=2026-09-20&to=2026-09-30")
+        ->assertJsonPath('rows.0.submittedBy', $staff->user->name);
+    $this->post('/office-attendance/report', $data)->assertSessionHasErrors('attendance_date');
+    expect($staff->attendances()->count())->toBe(11);
+});
+
+test('range conflicts and invalid bounds never create partial attendance', function () {
+    $staff = reportStaff();
+    $this->actingAs(User::factory()->create(['role' => 'admin']));
+    $data = [...reportEntry($staff, '2026-09-20'), 'attendance_date_to' => '2026-09-30'];
+    $this->post('/office-attendance/report', [...$data, 'attendance_date_to' => '2026-09-19'])->assertSessionHasErrors('attendance_date_to');
+    $this->post('/office-attendance/report', [...$data, 'attendance_date_to' => '2026-09-31'])->assertSessionHasErrors('attendance_date_to');
+    $this->post('/office-attendance/report', [...$data, 'attendance_date_to' => '2028-09-30'])->assertSessionHasErrors('attendance_date_to');
+    $leave = OfficeLeaveRequest::create(['office_staff_id' => $staff->id, 'leave_date' => '2026-09-25', 'reason' => 'Leave', 'status' => 'pending']);
+    foreach (['pending', 'approved'] as $status) {
+        $leave->update(['status' => $status]);
+        $this->post('/office-attendance/report', $data)->assertSessionHasErrors('attendance_date');
+        expect($staff->attendances()->count())->toBe(0);
+    }
+    $leave->update(['status' => 'rejected']);
+    $this->post('/office-attendance/report', reportEntry($staff, '2026-09-25'))->assertSessionHasNoErrors();
+    $this->post('/office-attendance/report', $data)->assertSessionHasErrors('attendance_date');
+    expect($staff->attendances()->count())->toBe(1);
 });
 
 test('admin creation rejects duplicates invalid times and conflicting leave', function () {
