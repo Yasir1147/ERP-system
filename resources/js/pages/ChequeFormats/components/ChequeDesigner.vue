@@ -48,6 +48,7 @@ const fieldStyle = (field: ChequeFieldForm) => ({
     fontFamily: field.font_family,
     fontSize: `${field.font_size_pt * (96 / 72) * zoom.value}px`,
     fontWeight: String(field.font_weight),
+    color: field.text_color ?? '#000000',
     fontStyle: field.is_italic ? 'italic' : 'normal',
     textDecoration: field.is_underline ? 'underline' : 'none',
     textAlign: field.text_align,

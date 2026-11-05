@@ -109,6 +109,25 @@ test('field positions outside the cheque are rejected without saving partial dat
         ->and(ChequeFormatField::query()->count())->toBe(0);
 });
 
+test('blank optional signature and account payee text save on create and update', function ($blank) {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $bank = Bank::create(['name' => 'Blank Text Bank']);
+    $this->actingAs($admin)->post('/cheque-formats', chequeFormatPayload($bank, [
+        'signature_text' => $blank, 'account_payee_text' => $blank,
+    ]))->assertRedirect()->assertSessionHasNoErrors();
+    $format = ChequeFormat::firstOrFail();
+    expect($format->signature_text)->toBe('')->and($format->account_payee_text)->toBe('');
+
+    $format->update(['signature_text' => 'Signature', 'account_payee_text' => 'A/C PAYEE ONLY']);
+    $this->put("/cheque-formats/{$format->id}", chequeFormatPayload($bank, [
+        'version' => $format->version, 'signature_text' => $blank, 'account_payee_text' => $blank,
+        'label_1_text' => 'NON-NEGOTIABLE',
+    ]))->assertRedirect()->assertSessionHasNoErrors();
+    $format->refresh();
+    expect($format->signature_text)->toBe('')->and($format->account_payee_text)->toBe('')
+        ->and($format->label_1_text)->toBe('NON-NEGOTIABLE')->and($format->version)->toBe(2);
+})->with(['empty string' => [''], 'null' => [null]]);
+
 test('a cheque format can be duplicated with independent field rows and deleted', function () {
     $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
     $bank = Bank::query()->create(['name' => 'Copy Bank']);
@@ -148,4 +167,27 @@ test('stale cheque format updates cannot overwrite newer changes', function () {
 
     expect($format->fresh()->name)->toBe('Newer Name')
         ->and($format->fresh()->version)->toBe(2);
+});
+
+test('cheque field colors save update duplicate and reject unsafe values', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $bank = Bank::create(['name' => 'Color Bank']);
+    $payload = chequeFormatPayload($bank);
+    $index = array_search('account_payee', array_column($payload['fields'], 'field_key'));
+    $payload['fields'][$index]['text_color'] = '#C03030';
+    $this->actingAs($admin)->post('/cheque-formats', $payload)->assertSessionHasNoErrors();
+    $format = ChequeFormat::firstOrFail();
+    expect($format->fields()->where('field_key', 'account_payee')->first()->text_color)->toBe('#C03030');
+    expect($format->fields()->where('field_key', 'party_name_1')->first()->text_color)->toBe('#000000');
+    $payload['version'] = $format->version;
+    $payload['fields'][$index]['text_color'] = '#123ABC';
+    $this->put("/cheque-formats/{$format->id}", $payload)->assertSessionHasNoErrors();
+    expect($format->fresh()->fields()->where('field_key', 'account_payee')->first()->text_color)->toBe('#123ABC');
+    $this->post("/cheque-formats/{$format->id}/duplicate")->assertSessionHasNoErrors();
+    expect(ChequeFormat::whereKeyNot($format->id)->firstOrFail()->fields()->where('field_key', 'account_payee')->first()->text_color)->toBe('#123ABC');
+    $payload['version'] = $format->fresh()->version;
+    foreach (['red', '#fff', '#GG0000', 'url(https://example.com)', null] as $invalid) {
+        $payload['fields'][$index]['text_color'] = $invalid;
+        $this->put("/cheque-formats/{$format->id}", $payload)->assertSessionHasErrors("fields.$index.text_color");
+    }
 });

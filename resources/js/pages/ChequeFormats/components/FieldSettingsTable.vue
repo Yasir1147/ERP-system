@@ -54,6 +54,7 @@ const move = (index: number, xDirection: number, yDirection: number, event: Mous
                         <th class="sticky left-0 z-10 min-w-[210px] bg-muted px-3 py-3 font-medium">Field Name</th>
                         <th class="w-[105px] px-2 py-3 font-medium">X (mm)</th>
                         <th class="w-[105px] px-2 py-3 font-medium">Y (mm)</th>
+                        <th class="min-w-[130px] px-2 py-3 font-medium">Text Color</th>
                         <th class="w-[190px] px-2 py-3 text-center font-medium">Movement</th>
                         <th class="w-[160px] px-2 py-3 font-medium">Font</th>
                         <th class="w-[95px] px-2 py-3 font-medium">Size (pt)</th>
@@ -86,6 +87,19 @@ const move = (index: number, xDirection: number, yDirection: number, event: Mous
                                 class="h-9 w-full rounded-md border border-input bg-background px-2"
                                 @input="update(index, { y_position_mm: numberValue($event) })"
                             />
+                        </td>
+                        <td class="px-2 py-2">
+                            <div v-if="field.field_key !== 'company_logo'" class="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    :value="field.text_color ?? '#000000'"
+                                    :aria-label="`${labelFor(field.field_key)} text color`"
+                                    class="h-9 w-12 cursor-pointer rounded border border-input bg-background p-1"
+                                    @input="update(index, { text_color: stringValue($event) })"
+                                />
+                                <span class="text-xs uppercase text-muted-foreground">{{ field.text_color ?? '#000000' }}</span>
+                            </div>
+                            <span v-else class="text-xs text-muted-foreground">Image</span>
                         </td>
                         <td class="px-2 py-2">
                             <div class="flex justify-center gap-1">

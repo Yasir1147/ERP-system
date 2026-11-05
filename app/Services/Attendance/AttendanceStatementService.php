@@ -377,6 +377,7 @@ class AttendanceStatementService
                     'presentDays' => round($personRows->sum('dayValue'), 2),
                     'absentDays' => $personRows->where('status', AttendanceRecord::STATUS_ABSENT)->count(),
                     'leaveDays' => $personRows->where('status', AttendanceRecord::STATUS_LEAVE)->count(),
+                    'overtimeHours' => Overtime::hours($personRows->sum('overtimeHours')),
                     // Sundays are excluded: a rest day is not a day this person
                     // went unlisted, and counting it as one reads as neglect.
                     'notListed' => $dates
@@ -410,6 +411,7 @@ class AttendanceStatementService
                     'presentDays' => 0.0,
                     'absentDays' => 0,
                     'leaveDays' => 0,
+                    'overtimeHours' => 0.0,
                     'notListed' => $dates->reject(fn (string $date) => Carbon::parse($date)->isSunday() || $holidays->has($date))->count(),
                 ]);
 
@@ -432,6 +434,7 @@ class AttendanceStatementService
             'footerTotals' => [
                 'present' => round($footer->sum('present'), 2),
                 'absent' => (int) $footer->sum('absent'),
+                'overtimeHours' => Overtime::hours($people->sum('overtimeHours')),
             ],
         ];
     }

@@ -155,6 +155,7 @@ class ChequeFormatController extends Controller
                     'font_family',
                     'font_size_pt',
                     'font_weight',
+                    'text_color',
                     'is_italic',
                     'is_underline',
                     'text_align',
@@ -332,6 +333,7 @@ class ChequeFormatController extends Controller
             'fields.*.font_family' => ['required', Rule::in(ChequeFormatField::FONT_FAMILIES)],
             'fields.*.font_size_pt' => ['required', 'numeric', 'between:6,72'],
             'fields.*.font_weight' => ['required', 'integer', Rule::in([400, 700])],
+            'fields.*.text_color' => ['sometimes', 'required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'fields.*.is_italic' => ['required', 'boolean'],
             'fields.*.is_underline' => ['required', 'boolean'],
             'fields.*.text_align' => ['required', Rule::in(ChequeFormatField::TEXT_ALIGNS)],
@@ -386,13 +388,14 @@ class ChequeFormatController extends Controller
             'label_1_text',
             'label_2_text',
             'signature_text',
-        ])->all();
+        ])->map(fn ($value, $key) => in_array($key, ['account_payee_text', 'signature_text'], true) ? ($value ?? '') : $value)->all();
     }
 
     private function fieldAttributes(array $fields): array
     {
         return collect($fields)->values()->map(fn (array $field, int $index) => [
             ...$field,
+            'text_color' => $field['text_color'] ?? '#000000',
             'display_name' => ChequeFormatField::DEFINITIONS[$field['field_key']],
             'sort_order' => $index,
         ])->all();
@@ -432,6 +435,7 @@ class ChequeFormatController extends Controller
                 'font_family' => $field->font_family,
                 'font_size_pt' => $field->font_size_pt,
                 'font_weight' => $field->font_weight,
+                'text_color' => $field->text_color ?? '#000000',
                 'is_italic' => $field->is_italic,
                 'is_underline' => $field->is_underline,
                 'text_align' => $field->text_align,

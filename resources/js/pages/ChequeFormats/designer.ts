@@ -27,6 +27,7 @@ export const createDefaultFields = (definitions: FieldDefinition[]): ChequeField
             font_family: 'Arial',
             font_size_pt: 10,
             font_weight: 400,
+            text_color: '#000000',
             is_italic: false,
             is_underline: false,
             text_align: 'left',

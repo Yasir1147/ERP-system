@@ -1163,3 +1163,32 @@ Database tables:
 - Add Office Attendance now accepts From Date and To Date, inclusive, with one completed session per calendar day using the same times, work mode and note. Weekends are included; identical dates save a single day. A batch supports up to 366 days.
 - The entire batch is transactional and blocked if any date already has attendance or pending/approved leave. The conflicting date is reported; no partial range is saved.
 - New admin-entered attendance now stores the selected staff member's linked user as submitted_by, replacing the earlier admin attribution rule. Historical rows are unchanged. The acting admin ID, staff ID, dates and count are recorded in the application log after a successful batch.
+
+## Cheque Voucher Print Alignment (October 2026)
+
+- Voucher with Cheque Copy now places the cheque at the A4 page top-left without the former 5 mm sheet padding, Cheque Copy heading, centering margin or outline border. Saved millimetre field coordinates therefore start at the page origin. Voucher-only output retains its top spacing.
+- Print at Actual Size / 100% with browser headers/footers disabled; printer hardware margins still depend on the selected device.
+
+## Cheque Format Optional Text Save Fix (October 2026)
+
+- Blank Signature Placeholder and A/C Payee Text are normalized to empty strings before create/update. Laravel converts empty inputs to null, while these two database columns are non-nullable; previously clearing either caused a database error. Other nullable text fields retain their existing behavior. No migration is required.
+
+## Cheque Text Colors (October 2026)
+
+- Field Position and Formatting Settings includes a Text Color picker for each text field. Six-digit hex colors are validated and saved in cheque_format_fields.text_color, with black as the default. Logo images are unaffected.
+- Colors flow through the designer, preparation preview, cheque-only print and voucher cheque copy. Format duplication preserves colors. Prepared cheque snapshots retain the color saved at preparation; old snapshots without a color render black. Updating a format does not recolor existing saved cheques; editing and saving a prepared cheque takes the updated format snapshot.
+- Migration: 2026_10_20_000001_add_text_color_to_cheque_format_fields.php. Applied locally after backup storage/app/private/backups/before-cheque-text-color-20261020-182057.sql. Back up production and run migrations before deploying the updated app.
+
+## Attendance Grid Person Overtime Totals (November 2026)
+
+- Attendance Statement > Grid by person now includes Total Overtime for each person over the selected date range, with a grand total in the footer. It is visible with or without salary/cost details, and people without records have zero overtime.
+- Screen and print/PDF show hours/minutes using the shared overtime formatter. Excel includes Total Overtime (h:mm) as a numeric duration with [h]:mm formatting, so totals over 24 hours do not wrap and values remain usable in calculations.
+- The shared statement service supplies the same totals to browser, Excel and print. No migration is needed. AttendanceStatementTest covers fractional-minute storage normalization, separate person totals, selected date range, zero-record roster entries, salary visibility and matching exports.
+
+## Multiple Project Attendance Summary (November 2026)
+
+- Attendance Statement has a Project Summary tab at /attendance/project-summary. The current date range and single selected project carry into it. Searchable project checkboxes and Select All support comparing multiple projects, with no selection showing an empty report.
+- Rows contain Project, Worked Days (distinct dates with basic work or overtime), Persons (unique workers), Labour Days (main-project full/half days), Total Overtime, Salary Cost, OT Cost and Total Labour Cost. Footer persons are unique across all selected projects; worked-day totals add project dates.
+- Present records only; basic salary and labour days belong to the main project, overtime hours/cost to overtime_project_id when set or the main project otherwise. Disabled overtime pay costs zero while recorded overtime hours remain visible.
+- Current payroll settings supply the daily rate; Fixed 30 Days uses exact monthly_salary / 30 where set. OT cost is hours * daily rate / standard_hours_per_day. No overhead, purchases or expenses are included. Missing payroll settings are flagged as incomplete cost.
+- Admin-only screen, formatted Excel (/attendance/project-summary/export) and A4 landscape print/PDF (/attendance/project-summary/print) use ProjectAttendanceSummaryService and the same applied selection. Amounts are AED. No migration is required.

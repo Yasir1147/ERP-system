@@ -44,6 +44,7 @@ const fieldStyle = (field: ChequeFieldForm) => ({
     fontFamily: field.font_family,
     fontSize: `${Number(field.font_size_pt)}pt`,
     fontWeight: String(field.font_weight),
+    color: field.text_color ?? '#000000',
     fontStyle: field.is_italic ? 'italic' : 'normal',
     textDecoration: field.is_underline ? 'underline' : 'none',
     textAlign: field.text_align,
@@ -68,10 +69,9 @@ const fieldStyle = (field: ChequeFieldForm) => ({
             </div>
         </div>
 
-        <article class="voucher-sheet mx-auto min-h-[297mm] w-[210mm] bg-white p-[5mm] shadow-xl">
-            <section v-if="includeChequeCopy" class="mb-[6mm]">
-                <div class="mb-1 text-center text-[9pt] font-semibold uppercase tracking-wide">Cheque Copy</div>
-                <div class="relative mx-auto overflow-hidden border border-slate-300 bg-white" :style="chequeStyle">
+        <article class="voucher-sheet mx-auto min-h-[297mm] w-[210mm] bg-white shadow-xl" :class="{ 'pt-[5mm]': !includeChequeCopy }">
+            <section v-if="includeChequeCopy" class="mb-[6mm]" aria-label="Cheque copy">
+                <div class="relative overflow-hidden bg-white" :style="chequeStyle">
                     <div
                         v-for="field in cheque.fields"
                         v-show="field.is_visible && (field.field_key === 'company_logo' ? cheque.logoImageUrl : cheque.fieldValues[field.field_key])"
@@ -146,6 +146,9 @@ const fieldStyle = (field: ChequeFieldForm) => ({
         display: none !important;
     }
     .voucher-sheet {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+        margin: 0 !important;
         box-shadow: none !important;
     }
 }

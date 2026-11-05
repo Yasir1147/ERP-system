@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { matchesEmployeeSearch, sortByEmployeeSearch } from '@/lib/employee-search';
 import { overtimeLabel } from '@/lib/overtime';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { CalendarRange, FileSpreadsheet, Printer, Search } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -56,13 +56,14 @@ interface MatrixPerson {
     absentDays: number;
     leaveDays: number;
     notListed: number;
+    overtimeHours: number;
 }
 
 interface Matrix {
     dates: Array<{ value: string; label: string; weekday: string; isSunday: boolean }>;
     people: MatrixPerson[];
     footer: Array<{ present: number; absent: number }>;
-    footerTotals: { present: number; absent: number };
+    footerTotals: { present: number; absent: number; overtimeHours: number };
 }
 
 interface Statement {
@@ -227,6 +228,11 @@ const statusClass = (status: string) => {
                     >
                         {{ option.label }}
                     </button>
+                    <Link
+                        :href="`/attendance/project-summary?from=${from}&to=${to}${projectId ? `&project_ids[]=${projectId}` : ''}`"
+                        class="rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                        >Project Summary</Link
+                    >
                 </div>
 
                 <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_auto_auto_auto]">
@@ -428,6 +434,7 @@ const statusClass = (status: string) => {
                                     <th class="min-w-[70px] px-2 py-2 text-center font-medium">Present</th>
                                     <th class="min-w-[70px] px-2 py-2 text-center font-medium">Absent</th>
                                     <th class="min-w-[80px] px-2 py-2 text-center font-medium">Not listed</th>
+                                    <th class="min-w-[115px] px-2 py-2 text-center font-medium">Total Overtime</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -447,6 +454,9 @@ const statusClass = (status: string) => {
                                     <td class="border-r px-2 py-1.5 text-center font-semibold">{{ person.presentDays }}</td>
                                     <td class="border-r px-2 py-1.5 text-center">{{ person.absentDays }}</td>
                                     <td class="px-2 py-1.5 text-center text-muted-foreground">{{ person.notListed }}</td>
+                                    <td class="whitespace-nowrap border-l px-2 py-1.5 text-center font-semibold">
+                                        {{ overtimeLabel(person.overtimeHours) }}
+                                    </td>
                                 </tr>
                             </tbody>
                             <tfoot class="border-t-2 font-semibold text-[#9b2c2c]">
@@ -458,6 +468,9 @@ const statusClass = (status: string) => {
                                     <td class="border-r px-2 py-1.5 text-center">{{ statement.matrix.footerTotals.present }}</td>
                                     <td class="border-r"></td>
                                     <td></td>
+                                    <td class="whitespace-nowrap border-l px-2 py-1.5 text-center">
+                                        {{ overtimeLabel(statement.matrix.footerTotals.overtimeHours) }}
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td class="sticky left-0 z-10 whitespace-nowrap border-r bg-card px-3 py-1.5">Marked absent that day</td>
@@ -467,6 +480,7 @@ const statusClass = (status: string) => {
                                     <td class="border-r px-2 py-1.5 text-center">{{ statement.matrix.footerTotals.absent }}</td>
                                     <td class="border-r"></td>
                                     <td></td>
+                                    <td class="border-l"></td>
                                 </tr>
                             </tfoot>
                         </table>

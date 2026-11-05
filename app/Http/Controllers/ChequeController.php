@@ -470,6 +470,7 @@ class ChequeController extends Controller
                 'font_family' => $field->font_family,
                 'font_size_pt' => (float) $field->font_size_pt,
                 'font_weight' => $field->font_weight,
+                'text_color' => $field->text_color ?? '#000000',
                 'is_italic' => $field->is_italic,
                 'is_underline' => $field->is_underline,
                 'text_align' => $field->text_align,

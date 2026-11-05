@@ -25,6 +25,7 @@ use App\Http\Controllers\OfficeStaffController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PersonalOfficeAttendanceController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectAttendanceSummaryController;
 use App\Http\Controllers\PublicAttendanceController;
 use App\Http\Controllers\PurchaseBillController;
 use App\Http\Controllers\Settings\WhatsAppSettingsController;
@@ -71,6 +72,11 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
 Route::get('attendance/statement', [AttendanceStatementController::class, 'index'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.statement');
 Route::get('attendance/statement/export', [AttendanceStatementController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.statement.export');
 Route::get('attendance/statement/print', [AttendanceStatementController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.statement.print');
+Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+    Route::get('attendance/project-summary', [ProjectAttendanceSummaryController::class, 'index'])->name('attendance.project-summary');
+    Route::get('attendance/project-summary/export', [ProjectAttendanceSummaryController::class, 'export'])->name('attendance.project-summary.export');
+    Route::get('attendance/project-summary/print', [ProjectAttendanceSummaryController::class, 'print'])->name('attendance.project-summary.print');
+});
 Route::get('attendance/timesheet', AttendanceTimesheetController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet');
 Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.export');
 Route::get('attendance/timesheet-print', [AttendanceTimesheetController::class, 'print'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.print');

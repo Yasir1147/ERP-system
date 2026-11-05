@@ -260,6 +260,7 @@
                         <th>Days Present</th>
                         <th>Days Absent</th>
                         <th>Not listed</th>
+                        <th>Total Overtime</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -274,10 +275,11 @@
                             <td>{{ $person['presentDays'] }}</td>
                             <td>{{ $person['absentDays'] }}</td>
                             <td>{{ $person['notListed'] }}</td>
+                            <td style="white-space: nowrap;">{{ \App\Support\Overtime::label($person['overtimeHours']) }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ count($matrix['dates']) + 4 }}" style="text-align: center; padding: 22px; color: #6b7280;">
+                            <td colspan="{{ count($matrix['dates']) + 5 }}" style="text-align: center; padding: 22px; color: #6b7280;">
                                 No attendance recorded in this date range.
                             </td>
                         </tr>
@@ -293,6 +295,7 @@
                             <td>{{ $matrix['footerTotals']['present'] }}</td>
                             <td></td>
                             <td></td>
+                            <td style="white-space: nowrap;">{{ \App\Support\Overtime::label($matrix['footerTotals']['overtimeHours']) }}</td>
                         </tr>
                         <tr>
                             <td class="label">Marked absent that day</td>
@@ -300,6 +303,7 @@
                                 <td>{{ $day['absent'] }}</td>
                             @endforeach
                             <td>{{ $matrix['footerTotals']['absent'] }}</td>
+                            <td></td>
                             <td></td>
                             <td></td>
                         </tr>

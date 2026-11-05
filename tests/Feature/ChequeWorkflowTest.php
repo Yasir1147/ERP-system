@@ -79,6 +79,7 @@ function workflowChequeBook(User $user, ChequeFormat $format, int $start = 10010
 test('an administrator can add a party and prepare a cheque with a format snapshot', function () {
     $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
     $format = workflowChequeFormat($admin);
+    $format->fields()->where('field_key', 'account_payee')->update(['text_color' => '#C03030']);
     $book = workflowChequeBook($admin, $format);
     $party = ChequeParty::query()->create(['name' => 'Acme LLC', 'is_active' => true]);
 
@@ -103,6 +104,9 @@ test('an administrator can add a party and prepare a cheque with a format snapsh
     ])->assertSessionHasNoErrors()->assertRedirect();
 
     $cheque = Cheque::query()->firstOrFail();
+    $colorIndex = array_search('account_payee', array_column($cheque->format_snapshot['fields'], 'field_key'));
+    expect($cheque->format_snapshot['fields'][$colorIndex]['text_color'])->toBe('#C03030');
+    $format->fields()->where('field_key', 'account_payee')->update(['text_color' => '#0000FF']);
 
     expect($cheque->cheque_number)->toBe('10010')
         ->and($book->fresh()->next_number)->toBe(10011)
@@ -118,6 +122,7 @@ test('an administrator can add a party and prepare a cheque with a format snapsh
         ->get("/cheques/{$cheque->id}/print")
         ->assertInertia(fn (Assert $page) => $page
             ->component('Cheques/Print')
+            ->where("cheque.fields.$colorIndex.text_color", '#C03030')
             ->where('cheque.fieldValues.amount_words_1', 'Five Hundred')
             ->where('cheque.fieldValues.amount_words_2', 'And Fils Fifty'));
 
@@ -125,6 +130,7 @@ test('an administrator can add a party and prepare a cheque with a format snapsh
         ->get("/cheques/{$cheque->id}/voucher")
         ->assertInertia(fn (Assert $page) => $page
             ->component('Cheques/Voucher')
+            ->where("cheque.fields.$colorIndex.text_color", '#C03030')
             ->where('includeCheque', true)
             ->where('voucher.beneficiary', 'Acme LLC')
             ->where('voucher.purpose', 'Invoice payment')

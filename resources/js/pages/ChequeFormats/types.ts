@@ -17,6 +17,7 @@ export interface ChequeFieldForm {
     font_family: string;
     font_size_pt: number;
     font_weight: number;
+    text_color: string;
     is_italic: boolean;
     is_underline: boolean;
     text_align: 'left' | 'center' | 'right';

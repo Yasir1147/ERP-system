@@ -45,6 +45,7 @@ class ChequeFormatField extends Model
         'font_family',
         'font_size_pt',
         'font_weight',
+        'text_color',
         'is_italic',
         'is_underline',
         'text_align',

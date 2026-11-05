@@ -79,8 +79,8 @@ class AttendanceStatementExporter
         $dates = $matrix['dates'];
         $people = $matrix['people'];
 
-        // Name column, then one per date, then Present / Absent / Not listed.
-        $lastColumn = $this->columnLetter(1 + count($dates) + 3);
+        // Name column, then one per date, then the summary columns.
+        $lastColumn = $this->columnLetter(1 + count($dates) + 4);
 
         $sheet->setCellValue('A1', 'Al Mohafiz Building Contracting LLC');
         $sheet->mergeCells('A1:'.$lastColumn.'1');
@@ -105,6 +105,7 @@ class AttendanceStatementExporter
         $sheet->setCellValue($this->columnLetter($summaryStart).$headerRow, 'Days Present');
         $sheet->setCellValue($this->columnLetter($summaryStart + 1).$headerRow, 'Days Absent');
         $sheet->setCellValue($this->columnLetter($summaryStart + 2).$headerRow, 'Not listed');
+        $sheet->setCellValue($this->columnLetter($summaryStart + 3).$headerRow, 'Total Overtime (h:mm)');
 
         $sheet->getStyle('A'.$headerRow.':'.$lastColumn.$headerRow)->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 9],
@@ -150,6 +151,7 @@ class AttendanceStatementExporter
             $sheet->setCellValue($this->columnLetter($summaryStart).$row, $person['presentDays']);
             $sheet->setCellValue($this->columnLetter($summaryStart + 1).$row, $person['absentDays']);
             $sheet->setCellValue($this->columnLetter($summaryStart + 2).$row, $person['notListed']);
+            $sheet->setCellValue($lastColumn.$row, $person['overtimeHours'] / 24);
 
             $row++;
         }
@@ -168,6 +170,8 @@ class AttendanceStatementExporter
 
         $sheet->setCellValue($this->columnLetter($summaryStart).$row, $matrix['footerTotals']['present']);
         $sheet->setCellValue($this->columnLetter($summaryStart).($row + 1), $matrix['footerTotals']['absent']);
+        $sheet->setCellValue($lastColumn.$row, $matrix['footerTotals']['overtimeHours'] / 24);
+        $sheet->getStyle($lastColumn.$firstDataRow.':'.$lastColumn.$row)->getNumberFormat()->setFormatCode('[h]:mm');
 
         $sheet->getStyle('A'.$row.':'.$lastColumn.($row + 1))->applyFromArray([
             'font' => ['bold' => true, 'size' => 9, 'color' => ['argb' => 'FF9B2C2C']],
@@ -189,7 +193,7 @@ class AttendanceStatementExporter
             $sheet->getColumnDimension($this->columnLetter(2 + $index))->setWidth(4.5);
         }
 
-        foreach (range(0, 2) as $offset) {
+        foreach (range(0, 3) as $offset) {
             $sheet->getColumnDimension($this->columnLetter($summaryStart + $offset))->setWidth(12);
         }
 

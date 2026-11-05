@@ -35,6 +35,7 @@ const normalizeFields = (fields: ChequeFieldForm[]) =>
         height_mm: field.height_mm === null ? null : Number(field.height_mm),
         font_size_pt: Number(field.font_size_pt),
         font_weight: Number(field.font_weight),
+        text_color: field.text_color ?? '#000000',
     }));
 
 const source = props.chequeFormat;

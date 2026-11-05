@@ -58,6 +58,47 @@ function statementRecord(Employee $employee, ?Project $project, string $date, st
     ]);
 }
 
+it('shows each persons total overtime in the grid and matching print and Excel exports', function () {
+    $admin = statementAdmin();
+    $project = statementProject();
+    $first = statementEmployee('701', 'Overtime First');
+    $second = statementEmployee('702', 'Overtime Second');
+    statementEmployee('703', 'No Records');
+    statementRecord($first, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin)->update(['overtime_hours' => 85 / 60]);
+    foreach (['2026-08-04', '2026-08-05', '2026-08-06'] as $date) {
+        statementRecord($first, $project, $date, AttendanceRecord::STATUS_PRESENT, $admin, overtime: 9);
+    }
+    statementRecord($second, $project, '2026-08-03', AttendanceRecord::STATUS_PRESENT, $admin)->update(['overtime_hours' => 155 / 60]);
+    statementRecord($first, $project, '2026-07-31', AttendanceRecord::STATUS_PRESENT, $admin, overtime: 10);
+    $query = '?mode=project&project_id='.$project->id.'&from=2026-08-01&to=2026-08-31&layout=grid';
+    $this->actingAs($admin);
+    foreach ([0, 1] as $withSalary) {
+        $this->get('/attendance/statement'.$query.'&with_salary='.$withSalary)->assertInertia(fn (Assert $page) => $page
+            ->where('statement.matrix.people.0.employeeName', 'Overtime First')
+            ->where('statement.matrix.people.0.overtimeHours', fn ($hours) => abs($hours - 1705 / 60) < 0.000001)
+            ->where('statement.matrix.people.1.overtimeHours', fn ($hours) => abs($hours - 155 / 60) < 0.000001)
+            ->where('statement.matrix.footerTotals.overtimeHours', 31)
+            ->where('statement.totals.overtimeHours', 31));
+    }
+    $this->get('/attendance/statement/print'.$query)->assertOk()->assertSee('Total Overtime')->assertSee('28 hr 25 min')->assertSee('2 hr 35 min')->assertSee('31 hr');
+    $response = $this->get('/attendance/statement/export'.$query)->assertOk();
+    $path = tempnam(sys_get_temp_dir(), 'grid-overtime-');
+    try {
+        file_put_contents($path, $response->streamedContent());
+        $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet();
+        $column = $sheet->getHighestColumn();
+        expect($sheet->getCell($column.'5')->getValue())->toBe('Total Overtime (h:mm)');
+        $this->assertEqualsWithDelta(1705 / 1440, $sheet->getCell($column.'6')->getValue(), 0.000001);
+        $this->assertEqualsWithDelta(155 / 1440, $sheet->getCell($column.'7')->getValue(), 0.000001);
+        $this->assertEqualsWithDelta(31 / 24, $sheet->getCell($column.'8')->getValue(), 0.000001);
+        expect($sheet->getCell($column.'6')->getFormattedValue())->toBe('28:25');
+    } finally {
+        @unlink($path);
+    }
+    $this->get('/attendance/statement?mode=type&employee_type=rope_access&from=2026-08-01&to=2026-08-31&layout=grid')
+        ->assertInertia(fn (Assert $page) => $page->where('statement.matrix.people.2.employeeName', 'No Records')->where('statement.matrix.people.2.overtimeHours', 0));
+});
+
 it('lists an employee day by day with its totals', function () {
     $admin = statementAdmin();
     $employee = statementEmployee('601', 'Statement Worker');
