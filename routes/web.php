@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AttendanceImportController;
+use App\Http\Controllers\AttendanceCardController;
+use App\Http\Controllers\AttendanceCardTemplateController;
 use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AttendanceStatementController;
 use App\Http\Controllers\AttendanceTimesheetController;
@@ -63,6 +65,14 @@ Route::get('attendance/import', [AttendanceImportController::class, 'create'])->
 Route::post('attendance/import/preview', [AttendanceImportController::class, 'preview'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.import.preview');
 Route::post('attendance/import', [AttendanceImportController::class, 'store'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.import.store');
 Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+    Route::get('attendance-cards', [AttendanceCardController::class, 'index'])->name('attendance-cards.index');
+    Route::get('attendance-cards/print', [AttendanceCardController::class, 'print'])->name('attendance-cards.print');
+    Route::get('attendance-card-templates/create', [AttendanceCardTemplateController::class, 'create'])->name('attendance-card-templates.create');
+    Route::post('attendance-card-templates', [AttendanceCardTemplateController::class, 'store'])->name('attendance-card-templates.store');
+    Route::get('attendance-card-templates/{template}/edit', [AttendanceCardTemplateController::class, 'edit'])->name('attendance-card-templates.edit');
+    Route::put('attendance-card-templates/{template}', [AttendanceCardTemplateController::class, 'update'])->name('attendance-card-templates.update');
+    Route::post('attendance-card-templates/{template}/duplicate', [AttendanceCardTemplateController::class, 'duplicate'])->name('attendance-card-templates.duplicate');
+    Route::post('attendance-card-templates/{template}/asset', [AttendanceCardTemplateController::class, 'asset'])->name('attendance-card-templates.asset');
     Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
     Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');
     Route::put('holidays/{holiday}', [HolidayController::class, 'update'])->name('holidays.update');
@@ -76,6 +86,9 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('attendance/project-summary', [ProjectAttendanceSummaryController::class, 'index'])->name('attendance.project-summary');
     Route::get('attendance/project-summary/export', [ProjectAttendanceSummaryController::class, 'export'])->name('attendance.project-summary.export');
     Route::get('attendance/project-summary/print', [ProjectAttendanceSummaryController::class, 'print'])->name('attendance.project-summary.print');
+    Route::get('attendance/project-summary/{project}/history', [ProjectAttendanceSummaryController::class, 'history'])->name('attendance.project-summary.history');
+    Route::get('attendance/project-summary/{project}/history/export', [ProjectAttendanceSummaryController::class, 'historyExport'])->name('attendance.project-summary.history.export');
+    Route::get('attendance/project-summary/{project}/history/print', [ProjectAttendanceSummaryController::class, 'historyPrint'])->name('attendance.project-summary.history.print');
 });
 Route::get('attendance/timesheet', AttendanceTimesheetController::class)->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet');
 Route::get('attendance/timesheet-export', [AttendanceTimesheetController::class, 'export'])->middleware(['auth', 'verified', 'role:admin'])->name('attendance.timesheet.export');

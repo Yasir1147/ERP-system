@@ -9,10 +9,10 @@ use App\Support\Overtime;
 
 class ProjectAttendanceSummaryService
 {
-    public function build(array $filters): array
+    public function build(array $filters, bool $includeHistory = false): array
     {
         $projects = Project::whereIn('id', $filters['projectIds'])->orderBy('name')->get();
-        $records = AttendanceRecord::with('employee.payrollSetting')
+        $records = AttendanceRecord::with($includeHistory ? ['employee.payrollSetting', 'submitter', 'project', 'overtimeProject'] : ['employee.payrollSetting'])
             ->where('status', AttendanceRecord::STATUS_PRESENT)
             ->whereDate('attendance_date', '>=', $filters['from'])
             ->whereDate('attendance_date', '<=', $filters['to'])
@@ -23,7 +23,7 @@ class ProjectAttendanceSummaryService
         foreach ($projects as $project) {
             $buckets[$project->id] = ['projectId' => $project->id, 'code' => $project->project_code, 'name' => $project->name,
                 'typeLabel' => Project::TYPES[$project->type] ?? $project->type, 'dates' => [], 'people' => [], 'missing' => [],
-                'labourDays' => 0.0, 'overtimeMinutes' => 0, 'basicCost' => 0.0, 'overtimeCost' => 0.0];
+                'labourDays' => 0.0, 'overtimeMinutes' => 0, 'basicCost' => 0.0, 'overtimeCost' => 0.0, 'history' => []];
         }
         foreach ($records as $record) {
             $setting = $record->employee?->payrollSetting;
@@ -55,12 +55,29 @@ class ProjectAttendanceSummaryService
                     $bucket['basicCost'] += $daily * $fraction;
                 }
                 $bucket['overtimeMinutes'] += $ot;
-                $bucket['overtimeCost'] += $setting?->is_overtime_enabled === false ? 0 : ($ot / 60) * $daily / max(1, (int) ($setting?->standard_hours_per_day ?? 8));
+                $otCost = $setting?->is_overtime_enabled === false ? 0 : ($ot / 60) * $daily / max(1, (int) ($setting?->standard_hours_per_day ?? 8));
+                $bucket['overtimeCost'] += $otCost;
+                if ($includeHistory) {
+                    $basicCost = $basic ? $daily * $fraction : 0;
+                    $bucket['history'][] = [
+                        'id' => $record->id, 'date' => $record->attendance_date->toDateString(),
+                        'employeeId' => $record->employee_id, 'employeeCode' => $record->employee?->code,
+                        'employeeName' => $record->employee?->name ?? 'Unknown Employee', 'profession' => $record->employee?->profession,
+                        'labourDays' => $basic ? $fraction : 0, 'overtimeHours' => $ot / 60,
+                        'dailySalary' => $daily, 'basicCost' => $basicCost, 'overtimeCost' => $otCost,
+                        'totalCost' => $basicCost + $otCost, 'missingPayroll' => ! $setting,
+                        'mainProject' => $record->project?->name, 'overtimeProject' => $record->overtimeProject?->name ?? $record->project?->name,
+                        'submittedBy' => $record->submitter?->name ?? '-', 'note' => $record->leave_reason,
+                    ];
+                }
                 unset($bucket);
             }
         }
-        $rows = collect($buckets)->map(function ($bucket) {
-            $row = array_diff_key($bucket, array_flip(['dates', 'people', 'missing', 'overtimeMinutes']));
+        $rows = collect($buckets)->map(function ($bucket) use ($includeHistory) {
+            $row = array_diff_key($bucket, array_flip(['dates', 'people', 'missing', 'overtimeMinutes', 'history']));
+            if ($includeHistory) {
+                $row['history'] = $bucket['history'];
+            }
             $row['workedDays'] = count($bucket['dates']);
             $row['persons'] = count($bucket['people']);
             $row['missingPayroll'] = count($bucket['missing']);
@@ -79,5 +96,31 @@ class ProjectAttendanceSummaryService
             'basicCost' => round($rows->sum('basicCost'), 2), 'overtimeCost' => round($rows->sum('overtimeCost'), 2),
             'totalCost' => round($rows->sum('totalCost'), 2), 'missingPayroll' => count($missingPeople),
         ]];
+    }
+
+    public function history(Project $project, array $filters): array
+    {
+        $filters['projectIds'] = [$project->id];
+        $row = $this->build($filters, true)['rows']->first();
+        $records = collect($row['history'])->sortBy([['date', 'asc'], ['employeeName', 'asc']])->values();
+        unset($row['history']);
+        $employees = $records->groupBy('employeeId')->map(function ($rows) use ($row) {
+            $first = $rows->first();
+            $cost = round($rows->sum('totalCost'), 2);
+
+            return [
+                'employeeId' => $first['employeeId'], 'employeeCode' => $first['employeeCode'],
+                'employeeName' => $first['employeeName'], 'profession' => $first['profession'],
+                'entries' => $rows->count(), 'workedDays' => $rows->pluck('date')->unique()->count(),
+                'labourDays' => round($rows->sum('labourDays'), 2), 'overtimeHours' => Overtime::hours($rows->sum('overtimeHours')),
+                'basicCost' => round($rows->sum('basicCost'), 2), 'overtimeCost' => round($rows->sum('overtimeCost'), 2),
+                'totalCost' => $cost, 'costShare' => $row['totalCost'] > 0 ? round($cost / $row['totalCost'] * 100, 1) : 0,
+                'missingPayroll' => $rows->contains('missingPayroll', true),
+                'submittedBy' => $rows->pluck('submittedBy')->unique()->implode(', '),
+            ];
+        })->sortByDesc('totalCost')->values();
+
+        return ['project' => ['id' => $project->id, 'name' => $project->name, 'code' => $project->project_code, 'typeLabel' => $row['typeLabel']],
+            'filters' => $filters, 'totals' => $row, 'employees' => $employees, 'records' => $records];
     }
 }

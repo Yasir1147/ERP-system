@@ -29,6 +29,21 @@ class ProjectAttendanceSummaryController extends Controller
         return view('attendance.project-summary', $service->build($this->filters($request)));
     }
 
+    public function history(Request $request, Project $project, ProjectAttendanceSummaryService $service)
+    {
+        return response()->json($service->history($project, $this->filters($request)));
+    }
+
+    public function historyExport(Request $request, Project $project, ProjectAttendanceSummaryService $service, ProjectAttendanceSummaryExporter $exporter)
+    {
+        return $exporter->downloadHistory($service->history($project, $this->filters($request)));
+    }
+
+    public function historyPrint(Request $request, Project $project, ProjectAttendanceSummaryService $service)
+    {
+        return view('attendance.project-summary-history', $service->history($project, $this->filters($request)));
+    }
+
     private function filters(Request $request): array
     {
         $data = $request->validate([

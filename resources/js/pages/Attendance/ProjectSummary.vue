@@ -6,6 +6,7 @@ import { overtimeLabel } from '@/lib/overtime';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { onClickOutside } from '@vueuse/core';
 import { computed, ref } from 'vue';
+import ProjectSummaryHistory from './components/ProjectSummaryHistory.vue';
 
 interface Summary {
     workedDays: number;
@@ -32,6 +33,12 @@ const from = ref(props.report.filters.from);
 const to = ref(props.report.filters.to);
 const selectedIds = ref([...props.report.filters.projectIds]);
 const search = ref('');
+const historyOpen = ref(false);
+const historyProject = ref<ProjectRow | null>(null);
+function openHistory(row: ProjectRow) {
+    historyProject.value = row;
+    historyOpen.value = true;
+}
 const picker = ref<HTMLElement | null>(null);
 const pickerOpen = ref(false);
 onClickOutside(picker, () => {
@@ -157,6 +164,7 @@ const headings = ['Worked Days', 'Persons', 'Labour Days', 'Total Overtime', 'Sa
                         <tr>
                             <th scope="col" class="min-w-60 px-4 py-3 text-left">Project</th>
                             <th v-for="heading in headings" :key="heading" scope="col" class="min-w-28 px-3 py-3 text-right">{{ heading }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">History</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -179,9 +187,14 @@ const headings = ['Worked Days', 'Persons', 'Labour Days', 'Total Overtime', 'Sa
                             <td class="px-3 py-3 text-right tabular-nums">{{ money(row.basicCost) }}</td>
                             <td class="px-3 py-3 text-right tabular-nums">{{ money(row.overtimeCost) }}</td>
                             <td class="px-3 py-3 text-right font-semibold tabular-nums">{{ money(row.totalCost) }}</td>
+                            <td class="px-3 py-3 text-right">
+                                <Button type="button" variant="outline" :aria-label="`Employee history for ${row.name}`" @click="openHistory(row)"
+                                    >Employee History</Button
+                                >
+                            </td>
                         </tr>
                         <tr v-if="!report.rows.length">
-                            <td colspan="8" class="p-10 text-center text-muted-foreground">Select one or more projects and click Show.</td>
+                            <td colspan="9" class="p-10 text-center text-muted-foreground">Select one or more projects and click Show.</td>
                         </tr>
                     </tbody>
                     <tfoot v-if="report.rows.length" class="border-t-2 bg-muted font-semibold">
@@ -194,6 +207,7 @@ const headings = ['Worked Days', 'Persons', 'Labour Days', 'Total Overtime', 'Sa
                             <td class="px-3 py-3 text-right">{{ money(report.totals.basicCost) }}</td>
                             <td class="px-3 py-3 text-right">{{ money(report.totals.overtimeCost) }}</td>
                             <td class="px-3 py-3 text-right">{{ money(report.totals.totalCost) }}</td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -205,5 +219,6 @@ const headings = ['Worked Days', 'Persons', 'Labour Days', 'Total Overtime', 'Sa
                 disabled. Overtime assigned to another project belongs to that project. Overhead, purchases and expenses are excluded.
             </p>
         </div>
+        <ProjectSummaryHistory v-model:open="historyOpen" :project="historyProject" :from="report.filters.from" :to="report.filters.to" />
     </AppLayout>
 </template>

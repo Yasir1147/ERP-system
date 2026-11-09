@@ -11,6 +11,55 @@ class ProjectAttendanceSummaryExporter
 {
     use FormatsWorkbook;
 
+    public function downloadHistory(array $history)
+    {
+        $book = new Spreadsheet;
+        foreach (['Employee Summary', 'Daily Attendance'] as $index => $title) {
+            $sheet = $index === 0 ? $book->getActiveSheet() : $book->createSheet();
+            $sheet->setTitle($title);
+            $last = $index === 0 ? 'L' : 'K';
+            $row = $this->writeCompanyHeader($sheet, 'Project Employee History - '.$history['project']['name'], $last, []);
+            $sheet->mergeCells('A'.$row.':'.$last.$row);
+            $sheet->setCellValue('A'.$row++, $history['filters']['from'].' to '.$history['filters']['to'].' | Internal | AED | Salary + overtime only');
+            $total = $history['totals'];
+            $sheet->mergeCells('A'.$row.':'.$last.$row);
+            $sheet->setCellValue('A'.$row++, 'Salary Cost: '.number_format($total['basicCost'], 2).' | OT Cost: '.number_format($total['overtimeCost'], 2).' | Total: '.number_format($total['totalCost'], 2).' | Missing payroll: '.$total['missingPayroll']);
+            $headings = $index === 0
+                ? ['Code', 'Employee', 'Profession', 'Entries', 'Worked Days', 'Labour Days', 'OT (h:mm)', 'Salary Cost', 'OT Cost', 'Total Cost', 'Share %', 'Submitted By']
+                : ['Date', 'Employee', 'Main Project', 'OT Project', 'Labour Days', 'Daily Salary', 'OT (h:mm)', 'Salary Cost', 'OT Cost', 'Total Cost', 'Submitted By'];
+            $header = ++$row;
+            $this->writeTableHeadings($sheet, $headings, $row++);
+            foreach ($history[$index === 0 ? 'employees' : 'records'] as $item) {
+                $values = $index === 0
+                    ? [$item['employeeCode'] ?? '-', $item['employeeName'].($item['missingPayroll'] ? ' (Missing payroll)' : ''), $item['profession'] ?? '-', $item['entries'], $item['workedDays'], $item['labourDays'], $item['overtimeHours'] / 24, $item['basicCost'], $item['overtimeCost'], $item['totalCost'], $item['costShare'], $item['submittedBy']]
+                    : [$item['date'], trim(($item['employeeCode'] ?? '').' - '.$item['employeeName']), $item['mainProject'] ?? '-', $item['overtimeProject'] ?? '-', $item['labourDays'], $item['dailySalary'], $item['overtimeHours'] / 24, round($item['basicCost'], 2), round($item['overtimeCost'], 2), round($item['totalCost'], 2), $item['submittedBy']];
+                foreach ($values as $column => $value) {
+                    $sheet->setCellValueExplicit(Coordinate::stringFromColumnIndex($column + 1).$row, $value, is_int($value) || is_float($value) ? DataType::TYPE_NUMERIC : DataType::TYPE_STRING);
+                }
+                $sheet->getRowDimension($row++)->setRowHeight(32);
+            }
+            $sheet->setCellValue('A'.$row, 'Project Total');
+            foreach (['H' => 'basicCost', 'I' => 'overtimeCost', 'J' => 'totalCost'] as $column => $key) {
+                $sheet->setCellValue($column.$row, $total[$key]);
+            }
+            $sheet->setCellValue('G'.$row, $total['overtimeHours'] / 24);
+            $sheet->getStyle('G'.($header + 1).':G'.$row)->getNumberFormat()->setFormatCode('[h]:mm');
+            $sheet->getStyle('H'.($header + 1).':J'.$row)->getNumberFormat()->setFormatCode('#,##0.00');
+            $this->styleTotalRow($sheet, 'A'.$row.':'.$last.$row);
+            $this->drawGrid($sheet, 'A'.$header.':'.$last.$row);
+            foreach (range('A', $last) as $column) {
+                $sheet->getColumnDimension($column)->setWidth(in_array($column, ['B', 'C', 'D', $last]) ? 28 : 16);
+            }
+            $sheet->getStyle('A1:'.$last.$row)->getAlignment()->setWrapText(true);
+            $sheet->setAutoFilter('A'.$header.':'.$last.max($header, $row - 1));
+            $sheet->freezePane('C'.($header + 1));
+            $sheet->getPageSetup()->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)->setPaperSize(PageSetup::PAPERSIZE_A3)->setFitToWidth(1)->setFitToHeight(0)->setRowsToRepeatAtTopByStartAndEnd($header, $header);
+        }
+        $book->setActiveSheetIndex(0);
+
+        return $this->streamWorkbook($book, 'project-'.$history['project']['id'].'-employee-history-'.$history['filters']['from'].'-to-'.$history['filters']['to'].'.xlsx');
+    }
+
     public function download(array $report)
     {
         $book = new Spreadsheet;

@@ -57,19 +57,55 @@ test('multi project summary attributes salary and overtime and exports the appli
         @unlink($path);
     }
     $this->get('/attendance/project-summary')->assertInertia(fn (Assert $page) => $page->has('report.rows', 0));
+    $historyUrl = '/attendance/project-summary/'.$beta->id.'/history';
+    $range = '?from=2026-08-01&to=2026-08-31';
+    $history = $this->getJson($historyUrl.$range)->assertOk()
+        ->assertJsonPath('totals.totalCost', 74.38)->assertJsonPath('totals.basicCost', 56.67)
+        ->assertJsonPath('totals.persons', 2)->assertJsonCount(2, 'employees')->assertJsonCount(2, 'records')->json();
+    $otOnly = collect($history['employees'])->firstWhere('employeeId', $daily->id);
+    expect($otOnly['labourDays'])->toBe(0)->and($otOnly['basicCost'])->toBe(0)
+        ->and($otOnly['overtimeCost'])->toBe(17.71)->and($otOnly['submittedBy'])->toBe($admin->name);
+    $this->getJson('/attendance/project-summary/'.$alpha->id.'/history'.$range)
+        ->assertJsonPath('totals.totalCost', 175)->assertJsonPath('totals.missingPayroll', 1)->assertJsonCount(3, 'records');
+    $this->getJson($historyUrl.'?from=2026-08-03&to=2026-08-03')
+        ->assertJsonPath('totals.totalCost', 17.71)->assertJsonPath('totals.persons', 1)->assertJsonCount(1, 'records');
+    $this->getJson('/attendance/project-summary/'.$empty->id.'/history'.$range)
+        ->assertJsonPath('totals.totalCost', 0)->assertJsonCount(0, 'employees')->assertJsonCount(0, 'records');
+    $this->get($historyUrl.'/print'.$range)->assertOk()->assertSee('Employee Summary')->assertSee('Daily Attendance')->assertSee('74.38')->assertSee($admin->name)->assertDontSee('Missing');
+    $response = $this->get($historyUrl.'/export'.$range)->assertOk();
+    $path = tempnam(sys_get_temp_dir(), 'project-history-');
+    try {
+        file_put_contents($path, $response->streamedContent());
+        $book = IOFactory::load($path);
+        expect($book->getSheetNames())->toBe(['Employee Summary', 'Daily Attendance']);
+        $text = json_encode($book->getSheet(0)->toArray());
+        expect($text)->toContain('Daily')->toContain('Monthly');
+        $rows = $book->getSheet(0)->toArray();
+        expect(array_column($rows, 1))->not->toContain('Missing');
+        $totalRow = collect($rows)->first(fn ($row) => $row[0] === 'Project Total');
+        expect($totalRow[9])->toBe('74.38');
+    } finally {
+        @unlink($path);
+    }
 });
 
 test('project summary validates selection and date range and restricts all outputs to admins', function () {
+    $project = Project::create(['name' => 'Protected Project', 'type' => 'rope_access', 'status' => 'ongoing']);
     $this->actingAs(User::factory()->create(['role' => 'admin']));
     foreach (['', '/export', '/print'] as $suffix) {
         $this->getJson('/attendance/project-summary'.$suffix.'?project_ids[]=99999')->assertUnprocessable();
         $this->getJson('/attendance/project-summary'.$suffix.'?from=2026-08-30&to=2026-08-01')->assertUnprocessable();
         $this->getJson('/attendance/project-summary'.$suffix.'?from=2026-02-30')->assertUnprocessable();
     }
+    foreach (['', '/export', '/print'] as $suffix) {
+        $this->getJson('/attendance/project-summary/'.$project->id.'/history'.$suffix.'?from=2026-08-30&to=2026-08-01')->assertUnprocessable();
+    }
+    $this->getJson('/attendance/project-summary/99999/history')->assertNotFound();
     foreach (['attendance_user', 'office_staff'] as $role) {
         $this->actingAs(User::factory()->create(['role' => $role]));
         foreach (['', '/export', '/print'] as $suffix) {
             $this->get('/attendance/project-summary'.$suffix)->assertForbidden();
+            $this->get('/attendance/project-summary/'.$project->id.'/history'.$suffix)->assertForbidden();
         }
     }
 });
