@@ -135,7 +135,9 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="flex gap-2">
                     <Button as-child variant="outline"><Link href="/attendance-cards">Attendance Cards</Link></Button
-                    ><Button type="button" :disabled="form.processing || asset.processing" @click="save">{{ form.processing ? 'Saving...' : 'Save Format' }}</Button>
+                    ><Button type="button" :disabled="form.processing || asset.processing" @click="save">{{
+                        form.processing ? 'Saving...' : 'Save Format'
+                    }}</Button>
                 </div>
             </div>
             <p v-if="page.props.flash?.success" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -152,7 +154,11 @@ onBeforeUnmount(() => {
                     </p>
                 </div>
                 <label class="grid gap-1 text-sm"
-                    >Image Type<select v-model="asset.kind" :disabled="form.processing || asset.processing" class="h-10 rounded-md border bg-background px-2">
+                    >Image Type<select
+                        v-model="asset.kind"
+                        :disabled="form.processing || asset.processing"
+                        class="h-10 rounded-md border bg-background px-2"
+                    >
                         <option value="signature">Admin Signature</option>
                         <option value="logo">Company Logo</option>
                     </select></label
@@ -189,7 +195,7 @@ onBeforeUnmount(() => {
                             /></label>
                         </div>
                         <p class="text-xs text-muted-foreground">
-                            Two per A4 page needs a height of 136.5 mm or less. Taller cards can use one per page, or the scaled four-card layout.
+                            Two per A4 page needs a height of 136.5 mm or less. Four cards use A3 landscape; taller formats scale down to fit.
                         </p>
                         <label class="grid gap-1 text-sm"
                             >Font<select v-model="form.layout.font" class="h-10 rounded-md border bg-background px-2">

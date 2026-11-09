@@ -57,8 +57,8 @@ const cards = Array.from({ length: 13 }, (_, i) => ({ employeeId: i + 1, code: S
     profession: 'FOREMAN', month: 'Nov', monthLabel: 'November 2026', year: 2026, days,
     presentDays: 30, absentDays: 0, leaveDays: 0, overtimeMinutes: 2700, overtimeLabel: '45 hr' }));
 const report = { filters: { month: '2026-11', perPage: 4 }, template, cards };
-const scale = 93 / 132;
-const html = await renderToString(createSSRApp(Print, { report, printLayout: { pageWidth: 297, pageHeight: 210, columns: 2, scale } }));
+const scale = 1;
+const html = await renderToString(createSSRApp(Print, { report, printLayout: { pageWidth: 420, pageHeight: 297, columns: 2, scale } }));
 assert.equal((html.match(/class="attendance-card-canvas"/g) ?? []).length, 13);
 assert.ok(!html.includes('transform:scale('), 'Printing must scale actual card geometry, not use CSS transform');
 const htmlPath = path.join(output, 'four-cards.html');
@@ -102,6 +102,7 @@ assert.equal(pages.length, 4, '13 cards must produce exactly four pages at four 
 for (const [index, page] of pages.entries()) {
     const box = page.match(/\/MediaBox\s*\[([^\]]+)\]/)?.[1].trim().split(/\s+/).map(Number);
     assert.ok(box && box[2] > box[3], `Page ${index + 1} must be landscape`);
+    assert.ok(Math.abs(box[2] - 420 * 72 / 25.4) < 1 && Math.abs(box[3] - 297 * 72 / 25.4) < 1, `Page ${index + 1} must be A3, not A4`);
     const fontRefs = new Map([...page.matchAll(/\/(F\d+) (\d+) 0 R/g)].map((match) => [match[1], match[2]]));
     const contentRef = page.match(/\/Contents (\d+) 0 R/);
     assert.ok(contentRef, 'Expected a page content stream');
@@ -117,5 +118,5 @@ for (const [index, page] of pages.entries()) {
     assert.deepEqual(names, expected, `Page ${index + 1}: cards must not spill across pages`);
     assert.equal((text.match(/ADMIN FOOTER/g) ?? []).length, expected.length, `Page ${index + 1}: every card footer must remain on its own page`);
 }
-console.log('PASS: 13 cards, 4 landscape PDF pages, each card name and footer on the expected page.');
+console.log('PASS: 13 cards, 4 A3 landscape PDF pages, each card name and footer on the expected page.');
 console.log(`QA PDF: ${pdfPath}`);

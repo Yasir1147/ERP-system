@@ -16,11 +16,13 @@ function slotStyle(index: number) {
     const width = props.report.template.layout.width * props.printLayout.scale;
     const height = props.report.template.layout.height * props.printLayout.scale;
     const four = props.printLayout.columns === 2;
+    const slotWidth = (props.printLayout.pageWidth - 24) / 2;
+    const slotHeight = (props.printLayout.pageHeight - 24) / 2;
     return {
         width: `${width}mm`,
         height: `${height}mm`,
-        left: `${four ? 10 + (index % 2) * 140.5 + (136.5 - width) / 2 : (props.printLayout.pageWidth - width) / 2}mm`,
-        top: `${four ? 10 + Math.floor(index / 2) * 97 : 10 + index * (height + 4)}mm`,
+        left: `${four ? 10 + (index % 2) * (slotWidth + 4) + (slotWidth - width) / 2 : (props.printLayout.pageWidth - width) / 2}mm`,
+        top: `${four ? 10 + Math.floor(index / 2) * (slotHeight + 4) : 10 + index * (height + 4)}mm`,
     };
 }
 async function printCards() {
@@ -45,11 +47,12 @@ async function printCards() {
             <div>
                 <h1>Monthly Attendance Cards · {{ report.filters.month }}</h1>
                 <p>
-                    {{ report.cards.length }} cards · {{ report.filters.perPage }} per A4 page. Print at 100% / Actual Size, with browser headers and
-                    footers off.
+                    {{ report.cards.length }} cards · {{ report.filters.perPage }} per {{ report.filters.perPage === 4 ? 'A3' : 'A4' }} page. Print at
+                    100% / Actual Size, with browser headers and footers off.
                 </p>
                 <p v-if="report.filters.perPage === 4">
-                    A4 landscape · 2 × 2 cards · {{ Math.round(printLayout.scale * 100) }}% card size. Keep printer Pages per sheet at 1.
+                    A3 landscape · 2 × 2 cards · {{ Math.round(printLayout.scale * 100) }}% card size. Select A3 paper and keep printer Pages per
+                    sheet at 1.
                 </p>
                 <p v-if="error" role="alert">{{ error }}</p>
             </div>
@@ -128,12 +131,12 @@ async function printCards() {
         size: A4 portrait;
         margin: 0;
     }
-    @page attendance-cards-landscape {
-        size: A4 landscape;
+    @page attendance-cards-a3 {
+        size: A3 landscape;
         margin: 0;
     }
     .card-print-four {
-        page: attendance-cards-landscape;
+        page: attendance-cards-a3;
     }
     html,
     body,

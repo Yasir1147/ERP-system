@@ -1231,3 +1231,10 @@ Database tables:
 - Print sheets use fixed positioned card slots and non-splitting card/page rules, with a 0.2 mm page-height allowance for Chromium rounding. Saved template coordinates and normal designer preview remain unchanged; print-only scaling never modifies saved formats.
 - tests/Browser/attendance-card-print.mjs renders the actual Vue print components with synthetic data in an isolated headless Chromium profile, generates a 13-card PDF and checks four landscape pages, correct workers on each page and every card footer on its expected page. Run with node tests/Browser/attendance-card-print.mjs; set CARD_PRINT_BROWSER if Chromium is installed elsewhere. QA output stays gitignored in storage/framework/testing/card-print-qa.
 - Verification: headless Chromium PDF pagination check passes; 8 AttendanceCardTest tests pass (312 assertions); frontend lint and production build pass. Live deployment must include the updated public/build assets. No migration is needed.
+
+## Attendance Card Paper Selection: Four on A3, Two on A4 (November 2026)
+
+- Paper size is now tied to the selected layout: 4 cards = A3 landscape (420 x 297 mm), 2 cards = A4 portrait (210 x 297 mm); 1 card remains A4 portrait. This replaces the earlier four-card A4 option.
+- Four-card A3 slots are 198 x 136.5 mm with 10 mm outer inset and 4 mm gaps. Standard 190 x 132 mm cards render at 100%; only taller templates shrink proportionally. Named/blank modes use the same paper rules, with actual-size rendering and fixed slots preserving the pagination fix.
+- UI labels, print instructions and named CSS pages specify A3 for four cards. Printer paper must also be A3; printer Pages per sheet stays 1 because the app already arranges the cards.
+- Verification: 8 AttendanceCardTest tests pass (328 assertions); the isolated Chromium regression confirms 13 cards on 4 actual A3 landscape PDF pages, with each worker and footer on its expected page. Frontend lint/build pass. No migration needed.

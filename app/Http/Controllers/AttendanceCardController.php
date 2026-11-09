@@ -30,10 +30,10 @@ class AttendanceCardController extends Controller
         }
 
         $four = $report['filters']['perPage'] === 4;
-        $scale = $four ? min(1, 136.5 / $report['template']['layout']['width'], 93 / $report['template']['layout']['height']) : 1;
+        $scale = $four ? min(1, 198 / $report['template']['layout']['width'], 136.5 / $report['template']['layout']['height']) : 1;
 
         return Inertia::render('AttendanceCards/Print', ['report' => $report, 'printLayout' => [
-            'pageWidth' => $four ? 297 : 210, 'pageHeight' => $four ? 210 : 297,
+            'pageWidth' => $four ? 420 : 210, 'pageHeight' => 297,
             'columns' => $four ? 2 : 1, 'scale' => $scale,
         ]]);
     }

@@ -87,17 +87,17 @@ const printTooTall = computed(() => props.report.filters.perPage === 2 && props.
                         >
                     </div>
                     <fieldset class="rounded-md border p-3">
-                        <legend class="px-1 text-sm font-medium">A4 Print Layout</legend>
+                        <legend class="px-1 text-sm font-medium">Print Layout</legend>
                         <label class="mr-5 inline-flex items-center gap-2 text-sm"
-                            ><input v-model.number="perPage" type="radio" :value="1" />1 card per page</label
+                            ><input v-model.number="perPage" type="radio" :value="1" />1 card per A4 page</label
                         ><label class="inline-flex items-center gap-2 text-sm"
-                            ><input v-model.number="perPage" type="radio" :value="2" />2 cards per page</label
+                            ><input v-model.number="perPage" type="radio" :value="2" />2 cards per A4 page</label
                         >
                         <label class="mt-2 flex items-center gap-2 text-sm"
-                            ><input v-model.number="perPage" type="radio" :value="4" />4 cards per page (2 × 2, landscape)</label
+                            ><input v-model.number="perPage" type="radio" :value="4" />4 cards per A3 page (2 × 2, landscape)</label
                         >
                         <p v-if="perPage === 4" class="mt-2 text-xs text-muted-foreground">
-                            Cards are scaled proportionally to fit A4 landscape. Text and writing spaces will be smaller.
+                            Four cards use A3 landscape. Standard cards print at their saved size; taller formats scale down to fit.
                         </p>
                     </fieldset>
                     <p v-if="tooTall" class="text-sm text-red-600">
@@ -147,7 +147,9 @@ const printTooTall = computed(() => props.report.filters.perPage === 2 && props.
             <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
                 <div>
                     <h2 class="font-semibold">{{ report.cards.length }} card(s) · {{ report.filters.month }}</h2>
-                    <p class="text-sm text-muted-foreground">{{ report.template.name }} · {{ report.filters.perPage }} per A4 page</p>
+                    <p class="text-sm text-muted-foreground">
+                        {{ report.template.name }} · {{ report.filters.perPage }} per {{ report.filters.perPage === 4 ? 'A3' : 'A4' }} page
+                    </p>
                 </div>
                 <Button v-if="report.cards.length && !printTooTall" as-child
                     ><a :href="printUrl" target="_blank" rel="noreferrer">Print All / Save PDF</a></Button

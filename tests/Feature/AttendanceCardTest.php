@@ -151,20 +151,22 @@ test('signature positioning is customizable and old saved formats receive compat
         ->and($saved->payload()['layout']['sections']['signature']['y'])->toBe(114);
 });
 
-test('four card printing fits an A4 landscape grid and preserves template measurements', function () {
+test('four card printing uses A3 landscape while one and two use A4 portrait', function () {
     $this->actingAs(User::factory()->create(['role' => 'admin']));
     $this->get('/attendance-cards/print?blank_cards=1&blank_count=5&per_page=4')->assertInertia(fn (Assert $page) => $page
         ->has('report.cards', 5)->where('report.filters.perPage', 4)
-        ->where('printLayout.columns', 2)->where('printLayout.pageWidth', 297)->where('printLayout.pageHeight', 210)
-        ->where('printLayout.scale', fn ($scale) => abs($scale - 93 / 132) < 0.000001)
+        ->where('printLayout.columns', 2)->where('printLayout.pageWidth', 420)->where('printLayout.pageHeight', 297)
+        ->where('printLayout.scale', 1)
         ->where('report.template.layout.width', 190)->where('report.template.layout.height', 132));
     $layout = AttendanceCardTemplate::defaultLayout();
     $layout['height'] = 277;
     $template = AttendanceCardTemplate::create(['name' => 'Four Tall Cards', 'layout' => $layout]);
     $this->get('/attendance-cards/print?blank_cards=1&blank_count=4&per_page=4&template_id='.$template->id)->assertInertia(fn (Assert $page) => $page
-        ->where('printLayout.scale', fn ($scale) => abs($scale - 93 / 277) < 0.000001));
+        ->where('printLayout.scale', fn ($scale) => abs($scale - 136.5 / 277) < 0.000001));
     expect($template->fresh()->layout)->toBe($layout);
     $this->get('/attendance-cards/print?blank_cards=1&per_page=1')->assertInertia(fn (Assert $page) => $page
         ->where('printLayout.scale', 1)->where('printLayout.pageWidth', 210)->where('printLayout.pageHeight', 297));
+    $this->get('/attendance-cards/print?blank_cards=1&blank_count=3&per_page=2')->assertInertia(fn (Assert $page) => $page
+        ->where('printLayout.columns', 1)->where('printLayout.scale', 1)->where('printLayout.pageWidth', 210)->where('printLayout.pageHeight', 297));
     $this->getJson('/attendance-cards/print?per_page=3')->assertUnprocessable();
 });
