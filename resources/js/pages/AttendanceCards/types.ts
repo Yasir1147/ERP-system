@@ -1,4 +1,4 @@
-export type SectionKey = 'title' | 'logo' | 'identity' | 'grid' | 'footer';
+export type SectionKey = 'title' | 'logo' | 'identity' | 'grid' | 'footer' | 'signature';
 export type CardSection = {
     x: number;
     y: number;
@@ -51,6 +51,7 @@ export interface CardDay {
     note: string | null;
 }
 export interface AttendanceCard {
+    blank?: boolean;
     employeeId: number;
     name: string;
     code: string;
@@ -72,6 +73,8 @@ export interface CardFilters {
     employeeIds: number[];
     allEmployees: boolean;
     perPage: number;
+    blankCards: boolean;
+    blankCount: number;
 }
 export interface CardReport {
     filters: CardFilters;
@@ -81,7 +84,10 @@ export interface CardReport {
 export function cardQuery(filters: CardFilters): string {
     const params = new URLSearchParams({ month: filters.month, employee_type: filters.employeeType, per_page: String(filters.perPage) });
     if (filters.templateId) params.set('template_id', String(filters.templateId));
-    if (filters.allEmployees) params.set('all_employees', '1');
+    if (filters.blankCards) {
+        params.set('blank_cards', '1');
+        params.set('blank_count', String(filters.blankCount));
+    } else if (filters.allEmployees) params.set('all_employees', '1');
     else filters.employeeIds.forEach((id) => params.append('employee_ids[]', String(id)));
     return params.toString();
 }

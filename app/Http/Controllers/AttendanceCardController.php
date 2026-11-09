@@ -29,7 +29,13 @@ class AttendanceCardController extends Controller
             throw ValidationException::withMessages(['per_page' => 'This template is too tall for two cards per page. Select one card per A4 page or reduce its height to 136.5 mm.']);
         }
 
-        return Inertia::render('AttendanceCards/Print', ['report' => $report]);
+        $four = $report['filters']['perPage'] === 4;
+        $scale = $four ? min(1, 136.5 / $report['template']['layout']['width'], 93 / $report['template']['layout']['height']) : 1;
+
+        return Inertia::render('AttendanceCards/Print', ['report' => $report, 'printLayout' => [
+            'pageWidth' => $four ? 297 : 210, 'pageHeight' => $four ? 210 : 297,
+            'columns' => $four ? 2 : 1, 'scale' => $scale,
+        ]]);
     }
 
     private function filters(Request $request): array
@@ -39,16 +45,19 @@ class AttendanceCardController extends Controller
             'template_id' => ['nullable', 'integer', 'exists:attendance_card_templates,id'],
             'employee_ids' => ['nullable', 'array', 'max:500'],
             'employee_ids.*' => ['required', 'integer', 'distinct', 'exists:employees,id'],
-            'all_employees' => ['nullable', 'boolean'], 'per_page' => ['nullable', 'integer', Rule::in([1, 2])],
+            'all_employees' => ['nullable', 'boolean'], 'per_page' => ['nullable', 'integer', Rule::in([1, 2, 4])],
+            'blank_cards' => ['nullable', 'boolean'], 'blank_count' => ['nullable', 'integer', 'between:1,100'],
         ]);
         $type = $data['employee_type'] ?? 'contracting';
         $ids = array_map('intval', $data['employee_ids'] ?? []);
-        if (Employee::whereIn('id', $ids)->where('type', '!=', $type)->exists()) {
+        $blank = (bool) ($data['blank_cards'] ?? false);
+        if (! $blank && Employee::whereIn('id', $ids)->where('type', '!=', $type)->exists()) {
             throw ValidationException::withMessages(['employee_ids' => 'Select employees from the chosen employee type.']);
         }
 
         return ['month' => $data['month'] ?? now('Asia/Dubai')->format('Y-m'), 'employeeType' => $type,
-            'templateId' => isset($data['template_id']) ? (int) $data['template_id'] : null, 'employeeIds' => $ids,
-            'allEmployees' => (bool) ($data['all_employees'] ?? false), 'perPage' => (int) ($data['per_page'] ?? 2)];
+            'templateId' => isset($data['template_id']) ? (int) $data['template_id'] : null, 'employeeIds' => $blank ? [] : $ids,
+            'allEmployees' => ! $blank && (bool) ($data['all_employees'] ?? false), 'perPage' => (int) ($data['per_page'] ?? 2),
+            'blankCards' => $blank, 'blankCount' => (int) ($data['blank_count'] ?? 1)];
     }
 }

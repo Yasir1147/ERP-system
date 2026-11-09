@@ -5,7 +5,7 @@ import type { AttendanceCard, CardDay, CardSection, CardTemplate, SectionKey } f
 const props = defineProps<{ template: CardTemplate; card: AttendanceCard; editable?: boolean; selected?: SectionKey }>();
 const emit = defineEmits<{ select: [key: SectionKey]; move: [key: SectionKey, x: number, y: number] }>();
 const canvas = ref<HTMLElement | null>(null);
-const keys: SectionKey[] = ['title', 'logo', 'identity', 'grid', 'footer'];
+const keys: SectionKey[] = ['title', 'logo', 'identity', 'grid', 'footer', 'signature'];
 const bands = computed(() => [
     Array.from({ length: 16 }, (_, i) => props.card.days[i] ?? null),
     Array.from({ length: 16 }, (_, i) => props.card.days[i + 16] ?? null),
@@ -20,6 +20,7 @@ const style = (section: CardSection) => ({
 });
 const time = (minutes: number) => (minutes ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}` : '0:00');
 function bandTotal(band: (CardDay | null)[], key: string) {
+    if (props.card.blank) return '';
     if (key === 'mark') return band.reduce((sum, day) => sum + (day?.dayValue ?? 0), 0);
     if (key === 'overtime') return time(band.reduce((sum, day) => sum + (day?.overtimeMinutes ?? 0), 0));
     return '–';
@@ -87,7 +88,10 @@ function stop() {
     >
         <section
             v-for="key in keys"
-            v-show="template.layout.sections[key].visible"
+            v-show="
+                template.layout.sections[key].visible &&
+                (key !== 'signature' || (template.layout.show_signature && (template.signatureUrl || editable)))
+            "
             :key="key"
             class="card-section"
             :class="{ 'card-editable': editable, 'card-selected': editable && selected === key }"
@@ -101,6 +105,13 @@ function stop() {
                 {{ template.layout.title.replaceAll('{year}', String(card.year)).replaceAll('{month}', card.monthLabel) }}
             </div>
             <img v-else-if="key === 'logo'" :src="template.logoUrl" alt="Company logo" class="card-logo" draggable="false" />
+            <template v-else-if="key === 'signature'"
+                ><img v-if="template.signatureUrl" :src="template.signatureUrl" alt="Admin signature" class="card-logo" draggable="false" /><span
+                    v-else-if="editable"
+                    class="card-signature-placeholder"
+                    >Signature Image</span
+                ></template
+            >
             <table v-else-if="key === 'identity'" class="card-identity">
                 <tbody>
                     <tr>
@@ -168,17 +179,10 @@ function stop() {
                 </colgroup>
                 <tbody>
                     <tr class="card-signatures">
-                        <td>
-                            <img
-                                v-if="template.signatureUrl && template.layout.show_signature"
-                                :src="template.signatureUrl"
-                                alt="Admin signature"
-                                draggable="false"
-                            />
-                        </td>
-                        <td>{{ card.presentDays }}</td>
-                        <td>{{ time(card.overtimeMinutes) }}</td>
-                        <td>{{ card.leaveDays }}</td>
+                        <td></td>
+                        <td>{{ card.blank ? '' : card.presentDays }}</td>
+                        <td>{{ card.blank ? '' : time(card.overtimeMinutes) }}</td>
+                        <td>{{ card.blank ? '' : card.leaveDays }}</td>
                         <td></td>
                     </tr>
                     <tr>

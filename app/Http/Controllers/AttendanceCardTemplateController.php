@@ -84,7 +84,7 @@ class AttendanceCardTemplateController extends Controller
             'layout.rest_day' => ['required', 'integer', 'between:-1,6'],
             'layout.show_ot_site' => ['required', 'boolean'],
             'layout.show_signature' => ['required', 'boolean'],
-            'layout.sections' => ['required', 'array:title,logo,identity,grid,footer'],
+            'layout.sections' => ['required', 'array:title,logo,identity,grid,footer,signature'],
         ];
         foreach (['text_color', 'border_color', 'header_color', 'rest_color'] as $key) {
             $rules['layout.'.$key] = ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'];

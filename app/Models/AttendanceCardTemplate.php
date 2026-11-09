@@ -28,13 +28,21 @@ class AttendanceCardTemplate extends Model
                 'identity' => ['x' => 3, 'y' => 19, 'width' => 184, 'height' => 15, 'font_size' => 8, 'visible' => true],
                 'grid' => ['x' => 3, 'y' => 37, 'width' => 184, 'height' => 75, 'font_size' => 7, 'visible' => true],
                 'footer' => ['x' => 3, 'y' => 115, 'width' => 184, 'height' => 13, 'font_size' => 7, 'visible' => true],
+                'signature' => ['x' => 5, 'y' => 115, 'width' => 45, 'height' => 8, 'font_size' => 7, 'visible' => true],
             ],
         ];
     }
 
     public function payload(): array
     {
-        return ['id' => $this->id, 'name' => $this->name, 'version' => $this->version, 'layout' => array_replace_recursive(self::defaultLayout(), $this->layout ?? []),
+        $layout = array_replace_recursive(self::defaultLayout(), $this->layout ?? []);
+        if (! isset($this->layout['sections']['signature'])) {
+            $footer = $layout['sections']['footer'];
+            $layout['sections']['signature'] = ['x' => $footer['x'] + 2, 'y' => $footer['y'],
+                'width' => max(5, $footer['width'] * 0.27 - 4), 'height' => max(5, $footer['height'] - 5), 'font_size' => 7, 'visible' => true];
+        }
+
+        return ['id' => $this->id, 'name' => $this->name, 'version' => $this->version, 'layout' => $layout,
             'logoUrl' => $this->logo_path ? Storage::disk('public')->url($this->logo_path) : '/al-mohafiz-logo.png',
             'signatureUrl' => $this->signature_path ? Storage::disk('public')->url($this->signature_path) : null];
     }

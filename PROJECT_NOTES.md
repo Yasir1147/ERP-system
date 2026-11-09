@@ -1211,3 +1211,16 @@ Database tables:
 - Admin-only template CRUD endpoints save JSON layout in attendance_card_templates. Logo/signature assets use the public storage disk with PNG/JPG/WebP validation (max 5 MB); production needs storage:link. Asset files are retained when replaced so duplicated formats remain valid.
 - Migration: 2026_11_07_000001_create_attendance_card_templates_table.php. Applied locally after storage/app/private/backups/before-attendance-cards-20261107-144853.sql. Production requires its own backup and migration before using the new routes.
 - Verification: attendance card, statement and project summary tests: 30 passed (614 assertions); frontend lint and production build pass. Direct browser visual inspection was blocked because Computer Use could not verify the current Windows browser URL.
+
+## Signature Image Controls and Blank Attendance Cards (November 2026)
+
+- Card customization has a prominent Signature Image / Company Logo panel. Choosing an image previews it immediately; Save Format also uploads the pending image, including on a new format. Admin Signature Image is an independent section with drag/X/Y/width/height/visibility controls. Old templates inherit signature placement relative to their saved footer. Existing public-disk image validation and saved-signature printing remain in use.
+- Attendance Cards has Blank Cards mode, requiring no employee selection. Choose month, format, 1-100 copies, and 1 or 2 per A4 page. Names/codes/professions, attendance/site/OT entries and calculated totals print empty for handwritten completion. Calendar dates, configured weekly off, logo and saved visible signature remain. Blank cards never read or change employee attendance and do not inherit selected employee details.
+- blank_cards and blank_count are retained in the print URL. Layout remains JSON-based; no migration is needed. AttendanceCardTest verifies blank generation, leap-year dates, stored attendance isolation, both print layouts, quantity validation and signature placement compatibility.
+
+## Four Attendance Cards per Page (November 2026)
+
+- Attendance Cards now supports 1, 2 or 4 cards per page, for both employee-filled and blank cards. Four uses a 2 x 2 A4 landscape grid with 10 mm page inset and 4 mm gaps.
+- Four-card output scales each card proportionally into a 136.5 x 93 mm slot; saved template dimensions and section coordinates are unchanged. The print screen displays the scale. Existing one/two-card layouts remain A4 portrait at actual template size, including the two-card height check.
+- Print / Save PDF at 100% with browser headers/footers off and printer Pages per sheet = 1, because the app already arranges four cards. Card text/writing spaces are smaller in four-card output.
+- AttendanceCardTest covers 1/2/4 output, both card modes, scaling geometry, tall formats and unchanged template dimensions. Eight tests pass (312 assertions); frontend lint and build pass. No migration required.

@@ -22,6 +22,8 @@ const ids = ref<number[]>(
     props.report.filters.allEmployees ? props.employees.filter((e) => e.type === type.value).map((e) => e.id) : [...props.report.filters.employeeIds],
 );
 const perPage = ref(props.report.filters.perPage);
+const blankCards = ref(props.report.filters.blankCards);
+const blankCount = ref(props.report.filters.blankCount);
 const search = ref('');
 const visibleEmployees = computed(() =>
     employeesForType.value.filter((e) => `${e.code} ${e.name} ${e.profession}`.toLowerCase().includes(search.value.trim().toLowerCase())),
@@ -38,7 +40,7 @@ function toggleAll() {
 }
 function generate() {
     router.get(
-        `/attendance-cards?${cardQuery({ month: month.value, templateId: templateId.value ? Number(templateId.value) : null, employeeType: type.value, employeeIds: ids.value, allEmployees: allSelected.value, perPage: perPage.value })}`,
+        `/attendance-cards?${cardQuery({ month: month.value, templateId: templateId.value ? Number(templateId.value) : null, employeeType: type.value, employeeIds: ids.value, allEmployees: allSelected.value, perPage: perPage.value, blankCards: blankCards.value, blankCount: blankCount.value })}`,
     );
 }
 const printUrl = computed(() => `/attendance-cards/print?${cardQuery(props.report.filters)}`);
@@ -91,30 +93,54 @@ const printTooTall = computed(() => props.report.filters.perPage === 2 && props.
                         ><label class="inline-flex items-center gap-2 text-sm"
                             ><input v-model.number="perPage" type="radio" :value="2" />2 cards per page</label
                         >
+                        <label class="mt-2 flex items-center gap-2 text-sm"
+                            ><input v-model.number="perPage" type="radio" :value="4" />4 cards per page (2 × 2, landscape)</label
+                        >
+                        <p v-if="perPage === 4" class="mt-2 text-xs text-muted-foreground">
+                            Cards are scaled proportionally to fit A4 landscape. Text and writing spaces will be smaller.
+                        </p>
                     </fieldset>
                     <p v-if="tooTall" class="text-sm text-red-600">
                         This format is too tall for two cards. Select one per page or reduce its height in the designer.
                     </p>
-                    <Button type="submit" :disabled="tooTall">Generate Cards</Button>
+                    <Button type="submit" :disabled="tooTall">{{ blankCards ? 'Generate Blank Cards' : 'Generate Cards' }}</Button>
                 </div>
                 <div class="rounded-lg border">
-                    <div class="border-b p-3">
-                        <Input v-model="search" placeholder="Search employee code, name or profession" aria-label="Search employees" />
-                    </div>
-                    <label class="flex cursor-pointer items-center gap-3 border-b p-3 text-sm font-medium"
-                        ><input type="checkbox" :checked="allSelected" :indeterminate="ids.length > 0 && !allSelected" @change="toggleAll" />Select
-                        All ({{ employeesForType.length }}) · {{ ids.length }} selected</label
+                    <label class="flex cursor-pointer items-center gap-3 border-b bg-muted/40 p-3 text-sm font-medium"
+                        ><input v-model="blankCards" type="checkbox" />Blank Cards — no employee selection</label
                     >
-                    <div class="max-h-60 overflow-y-auto">
-                        <label
-                            v-for="employee in visibleEmployees"
-                            :key="employee.id"
-                            class="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted"
-                            ><input v-model="ids" type="checkbox" :value="employee.id" />{{ employee.code }} - {{ employee.name
-                            }}<span class="ml-auto text-xs text-muted-foreground">{{ employee.profession }}</span></label
-                        >
-                        <p v-if="!visibleEmployees.length" class="p-4 text-sm text-muted-foreground">No employees found.</p>
+                    <div v-if="blankCards" class="space-y-3 p-4">
+                        <label class="grid max-w-48 gap-1 text-sm"
+                            >Number of Blank Cards<Input v-model.number="blankCount" type="number" min="1" max="100" required
+                        /></label>
+                        <p class="text-sm text-muted-foreground">
+                            Name, code, profession, attendance and totals stay blank for handwritten entry. Selected month, weekly-off labels, logo
+                            and saved signature are printed.
+                        </p>
                     </div>
+                    <template v-else>
+                        <div class="border-b p-3">
+                            <Input v-model="search" placeholder="Search employee code, name or profession" aria-label="Search employees" />
+                        </div>
+                        <label class="flex cursor-pointer items-center gap-3 border-b p-3 text-sm font-medium"
+                            ><input
+                                type="checkbox"
+                                :checked="allSelected"
+                                :indeterminate="ids.length > 0 && !allSelected"
+                                @change="toggleAll"
+                            />Select All ({{ employeesForType.length }}) · {{ ids.length }} selected</label
+                        >
+                        <div class="max-h-60 overflow-y-auto">
+                            <label
+                                v-for="employee in visibleEmployees"
+                                :key="employee.id"
+                                class="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted"
+                                ><input v-model="ids" type="checkbox" :value="employee.id" />{{ employee.code }} - {{ employee.name
+                                }}<span class="ml-auto text-xs text-muted-foreground">{{ employee.profession }}</span></label
+                            >
+                            <p v-if="!visibleEmployees.length" class="p-4 text-sm text-muted-foreground">No employees found.</p>
+                        </div>
+                    </template>
                 </div>
                 <p v-for="(error, key) in errors" :key="key" class="text-sm text-red-600" role="alert">{{ error }}</p>
             </form>

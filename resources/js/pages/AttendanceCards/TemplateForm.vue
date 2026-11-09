@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import CardCanvas from './components/CardCanvas.vue';
 import { sampleCard, type CardLayout, type CardTemplate, type SectionKey } from './types';
 
@@ -15,18 +15,33 @@ const form = useForm({
 });
 const selected = ref<SectionKey>('grid');
 const zoom = ref(0.9);
-const asset = useForm<{ kind: string; image: File | null }>({ kind: 'logo', image: null });
+const asset = useForm<{ kind: string; image: File | null }>({ kind: 'signature', image: null });
+const imagePreview = ref('');
+watch(
+    () => asset.image,
+    (file) => {
+        if (imagePreview.value) URL.revokeObjectURL(imagePreview.value);
+        imagePreview.value = file ? URL.createObjectURL(file) : '';
+    },
+);
+watch(
+    () => asset.kind,
+    () => {
+        asset.reset('image');
+        asset.clearErrors();
+    },
+);
 const page = usePage<{ flash: { success?: string } }>();
 const preview = computed<CardTemplate>(() => ({
     id: props.template?.id ?? null,
     name: form.name,
     version: form.version,
     layout: form.layout,
-    logoUrl: props.template?.logoUrl ?? '/al-mohafiz-logo.png',
-    signatureUrl: props.template?.signatureUrl ?? null,
+    logoUrl: asset.kind === 'logo' && imagePreview.value ? imagePreview.value : (props.template?.logoUrl ?? '/al-mohafiz-logo.png'),
+    signatureUrl: asset.kind === 'signature' && imagePreview.value ? imagePreview.value : (props.template?.signatureUrl ?? null),
 }));
 const sample = computed(() => sampleCard(form.layout));
-const sections: SectionKey[] = ['title', 'logo', 'identity', 'grid', 'footer'];
+const sections: SectionKey[] = ['title', 'logo', 'identity', 'grid', 'footer', 'signature'];
 const section = computed(() => form.layout.sections[selected.value]);
 const labels: Record<SectionKey, string> = {
     title: 'Title',
@@ -34,18 +49,21 @@ const labels: Record<SectionKey, string> = {
     identity: 'Employee Details',
     grid: 'Attendance Grid',
     footer: 'Totals & Signatures',
+    signature: 'Admin Signature Image',
 };
 function move(key: SectionKey, x: number, y: number) {
     form.layout.sections[key].x = x;
     form.layout.sections[key].y = y;
 }
 function save() {
+    if (form.processing || asset.processing) return;
     const submitted = JSON.parse(JSON.stringify(form.data()));
     const options = {
         preserveScroll: true,
         onSuccess: () => {
             form.version = props.template?.version ?? form.version;
             form.defaults({ name: submitted.name, layout: submitted.layout, version: form.version });
+            if (asset.image) upload();
         },
     };
     if (props.template?.id) form.put(`/attendance-card-templates/${props.template.id}`, options);
@@ -64,13 +82,18 @@ function upload() {
 }
 function fileChanged(event: Event) {
     asset.image = (event.target as HTMLInputElement).files?.[0] ?? null;
+    if (asset.image && asset.kind === 'signature') {
+        selected.value = 'signature';
+        form.layout.show_signature = true;
+        form.layout.sections.signature.visible = true;
+    }
 }
 function resetLayout() {
     if (window.confirm('Reset the layout to the standard attendance card? Save to keep this change.'))
         form.layout = JSON.parse(JSON.stringify(props.defaultLayout));
 }
 function beforeUnload(event: BeforeUnloadEvent) {
-    if (form.isDirty) {
+    if (form.isDirty || asset.image) {
         event.preventDefault();
         event.returnValue = '';
     }
@@ -79,11 +102,16 @@ let removeNavigationGuard: (() => void) | undefined;
 onMounted(() => {
     window.addEventListener('beforeunload', beforeUnload);
     removeNavigationGuard = router.on('before', (event) => {
-        if (event.detail.visit.method === 'get' && form.isDirty && !window.confirm('Leave without saving this attendance card layout?'))
+        if (
+            event.detail.visit.method === 'get' &&
+            (form.isDirty || asset.image) &&
+            !window.confirm('Leave without saving this attendance card layout and image?')
+        )
             event.preventDefault();
     });
 });
 onBeforeUnmount(() => {
+    if (imagePreview.value) URL.revokeObjectURL(imagePreview.value);
     window.removeEventListener('beforeunload', beforeUnload);
     removeNavigationGuard?.();
 });
@@ -107,7 +135,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="flex gap-2">
                     <Button as-child variant="outline"><Link href="/attendance-cards">Attendance Cards</Link></Button
-                    ><Button type="button" :disabled="form.processing" @click="save">{{ form.processing ? 'Saving...' : 'Save Format' }}</Button>
+                    ><Button type="button" :disabled="form.processing || asset.processing" @click="save">{{ form.processing ? 'Saving...' : 'Save Format' }}</Button>
                 </div>
             </div>
             <p v-if="page.props.flash?.success" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -116,6 +144,34 @@ onBeforeUnmount(() => {
             <div v-if="Object.keys(form.errors).length" role="alert" class="rounded-lg border border-red-200 p-3 text-sm text-red-700">
                 <p v-for="(error, key) in form.errors" :key="key">{{ error }}</p>
             </div>
+            <section class="flex flex-wrap items-end gap-4 rounded-xl border bg-card p-4">
+                <div class="min-w-52 flex-1">
+                    <h2 class="font-semibold">Signature Image / Company Logo</h2>
+                    <p class="mt-1 text-xs text-muted-foreground">
+                        Choose your image to preview it. Save Format also uploads the selected image. PNG, JPG or WebP, up to 5 MB.
+                    </p>
+                </div>
+                <label class="grid gap-1 text-sm"
+                    >Image Type<select v-model="asset.kind" :disabled="form.processing || asset.processing" class="h-10 rounded-md border bg-background px-2">
+                        <option value="signature">Admin Signature</option>
+                        <option value="logo">Company Logo</option>
+                    </select></label
+                >
+                <label class="grid gap-1 text-sm"
+                    >Select Image<input
+                        :key="asset.kind"
+                        type="file"
+                        :disabled="form.processing || asset.processing"
+                        accept="image/png,image/jpeg,image/webp"
+                        class="max-w-72 text-sm"
+                        @change="fileChanged"
+                /></label>
+                <Button v-if="asset.image" type="button" :disabled="asset.processing || form.processing" @click="save">{{
+                    asset.processing ? 'Uploading...' : 'Save Format & Image'
+                }}</Button>
+                <Button v-if="preview.signatureUrl" type="button" variant="outline" @click="selected = 'signature'">Position Signature</Button>
+                <p v-for="(error, key) in asset.errors" :key="key" class="w-full text-sm text-red-600" role="alert">{{ error }}</p>
+            </section>
             <div class="grid items-start gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
                 <div class="space-y-4">
                     <section class="space-y-3 rounded-xl border bg-card p-4">
@@ -133,7 +189,7 @@ onBeforeUnmount(() => {
                             /></label>
                         </div>
                         <p class="text-xs text-muted-foreground">
-                            Two per A4 page needs a height of 136.5 mm or less. Taller cards use one per page.
+                            Two per A4 page needs a height of 136.5 mm or less. Taller cards can use one per page, or the scaled four-card layout.
                         </p>
                         <label class="grid gap-1 text-sm"
                             >Font<select v-model="form.layout.font" class="h-10 rounded-md border bg-background px-2">
@@ -214,25 +270,6 @@ onBeforeUnmount(() => {
                             /></label>
                         </div>
                         <Button type="button" variant="outline" class="w-full" @click="resetLayout">Reset Standard Layout</Button>
-                    </section>
-                    <section class="space-y-3 rounded-xl border bg-card p-4">
-                        <h2 class="font-semibold">Logo &amp; Admin Signature</h2>
-                        <p v-if="!template?.id" class="text-sm text-muted-foreground">Save the format first to upload images.</p>
-                        <template v-else
-                            ><p class="text-xs text-muted-foreground">
-                                Save layout changes before uploading. PNG, JPG or WebP, up to 5 MB. A transparent PNG works well for a signature.
-                            </p>
-                            <select v-model="asset.kind" aria-label="Image type" class="h-10 w-full rounded-md border bg-background px-2">
-                                <option value="logo">Company Logo</option>
-                                <option value="signature">Admin Signature</option></select
-                            ><input type="file" accept="image/png,image/jpeg,image/webp" class="w-full text-sm" @change="fileChanged" /><Button
-                                type="button"
-                                :disabled="!asset.image || asset.processing || form.isDirty"
-                                @click="upload"
-                                >Upload Image</Button
-                            >
-                            <p v-for="(error, key) in asset.errors" :key="key" class="text-sm text-red-600">{{ error }}</p></template
-                        >
                     </section>
                 </div>
                 <section class="min-w-0 rounded-xl border bg-card">

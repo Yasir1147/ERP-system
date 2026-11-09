@@ -3,7 +3,7 @@ import { Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import CardCanvas from './components/CardCanvas.vue';
 import type { CardReport } from './types';
-const props = defineProps<{ report: CardReport }>();
+const props = defineProps<{ report: CardReport; printLayout: { pageWidth: number; pageHeight: number; columns: number; scale: number } }>();
 const pages = computed(() => {
     const result = [];
     for (let i = 0; i < props.report.cards.length; i += props.report.filters.perPage)
@@ -37,14 +37,37 @@ async function printCards() {
                     {{ report.cards.length }} cards · {{ report.filters.perPage }} per A4 page. Print at 100% / Actual Size, with browser headers and
                     footers off.
                 </p>
+                <p v-if="report.filters.perPage === 4">
+                    A4 landscape · 2 × 2 cards · {{ Math.round(printLayout.scale * 100) }}% card size. Keep printer Pages per sheet at 1.
+                </p>
                 <p v-if="error" role="alert">{{ error }}</p>
             </div>
             <button type="button" :disabled="printing || !report.cards.length" @click="printCards">
                 {{ printing ? 'Preparing...' : 'Print / Save as PDF' }}
             </button>
         </div>
-        <div v-for="(page, index) in pages" :key="index" class="card-print-sheet">
-            <CardCanvas v-for="card in page" :key="card.employeeId" :template="report.template" :card="card" />
+        <div
+            v-for="(page, index) in pages"
+            :key="index"
+            class="card-print-sheet"
+            :class="{ 'card-print-four': report.filters.perPage === 4 }"
+            :style="{ width: `${printLayout.pageWidth}mm`, height: `${printLayout.pageHeight}mm` }"
+        >
+            <div
+                v-for="card in page"
+                :key="card.employeeId"
+                class="card-print-slot"
+                :style="{
+                    width: `${report.template.layout.width * printLayout.scale}mm`,
+                    height: `${report.template.layout.height * printLayout.scale}mm`,
+                }"
+            >
+                <CardCanvas
+                    :template="report.template"
+                    :card="card"
+                    :style="{ transform: `scale(${printLayout.scale})`, transformOrigin: 'top left' }"
+                />
+            </div>
         </div>
         <p v-if="!pages.length" class="card-print-controls">No employees selected. Return to Attendance Cards and generate cards.</p>
     </main>
@@ -98,10 +121,27 @@ async function printCards() {
     background: white;
     box-shadow: 0 2px 8px #0002;
 }
+.card-print-slot {
+    flex: none;
+}
+.card-print-sheet.card-print-four {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, 93mm);
+    justify-items: center;
+    align-items: start;
+}
 @media print {
     @page {
         size: A4 portrait;
         margin: 0;
+    }
+    @page attendance-cards-landscape {
+        size: A4 landscape;
+        margin: 0;
+    }
+    .card-print-four {
+        page: attendance-cards-landscape;
     }
     html,
     body,

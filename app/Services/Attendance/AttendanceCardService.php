@@ -21,6 +21,23 @@ class AttendanceCardService
             'id' => null, 'name' => 'Standard Attendance Card', 'version' => 1, 'layout' => AttendanceCardTemplate::defaultLayout(),
             'logoUrl' => '/al-mohafiz-logo.png', 'signatureUrl' => null,
         ];
+        if ($filters['blankCards'] ?? false) {
+            $days = collect(range(1, $month->daysInMonth))->map(function ($day) use ($month, $template) {
+                $date = $month->copy()->day($day);
+
+                return ['day' => $day, 'date' => $date->toDateString(), 'mark' => '', 'dayValue' => 0, 'leave' => 0,
+                    'site' => '', 'projectName' => null, 'otSite' => '', 'otProjectName' => null,
+                    'overtimeMinutes' => 0, 'overtime' => '', 'note' => null,
+                    'restLabel' => (int) $template['layout']['rest_day'] === $date->dayOfWeek ? $date->format('l') : null];
+            })->all();
+            $cards = collect(range(1, $filters['blankCount'] ?? 1))->map(fn ($i) => [
+                'employeeId' => -$i, 'name' => '', 'code' => '', 'profession' => '', 'blank' => true,
+                'month' => $month->format('M'), 'monthLabel' => $month->format('F Y'), 'year' => $month->year,
+                'days' => $days, 'presentDays' => 0, 'absentDays' => 0, 'leaveDays' => 0, 'overtimeMinutes' => 0, 'overtimeLabel' => '',
+            ]);
+
+            return ['filters' => $filters, 'template' => $template, 'cards' => $cards];
+        }
         $people = Employee::where('type', $filters['employeeType'])
             ->when($filters['allEmployees'], fn ($q) => $q->where('status', '!=', Employee::STATUS_LEFT), fn ($q) => $q->whereIn('id', $filters['employeeIds']))
             ->orderBy('code')->get();
