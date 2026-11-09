@@ -2,7 +2,8 @@
 import { computed, ref } from 'vue';
 import type { AttendanceCard, CardDay, CardSection, CardTemplate, SectionKey } from '../types';
 
-const props = defineProps<{ template: CardTemplate; card: AttendanceCard; editable?: boolean; selected?: SectionKey }>();
+const props = defineProps<{ template: CardTemplate; card: AttendanceCard; editable?: boolean; selected?: SectionKey; scale?: number }>();
+const renderScale = computed(() => props.scale ?? 1);
 const emit = defineEmits<{ select: [key: SectionKey]; move: [key: SectionKey, x: number, y: number] }>();
 const canvas = ref<HTMLElement | null>(null);
 const keys: SectionKey[] = ['title', 'logo', 'identity', 'grid', 'footer', 'signature'];
@@ -12,11 +13,11 @@ const bands = computed(() => [
 ]);
 const rowKeys = computed(() => (props.template.layout.show_ot_site ? ['mark', 'site', 'overtime', 'otSite'] : ['mark', 'site', 'overtime']));
 const style = (section: CardSection) => ({
-    left: `${section.x}mm`,
-    top: `${section.y}mm`,
-    width: `${section.width}mm`,
-    height: `${section.height}mm`,
-    fontSize: `${section.font_size}pt`,
+    left: `${section.x * renderScale.value}mm`,
+    top: `${section.y * renderScale.value}mm`,
+    width: `${section.width * renderScale.value}mm`,
+    height: `${section.height * renderScale.value}mm`,
+    fontSize: `${section.font_size * renderScale.value}pt`,
 });
 const time = (minutes: number) => (minutes ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}` : '0:00');
 function bandTotal(band: (CardDay | null)[], key: string) {
@@ -75,11 +76,12 @@ function stop() {
         ref="canvas"
         class="attendance-card-canvas"
         :style="{
-            width: `${template.layout.width}mm`,
-            height: `${template.layout.height}mm`,
+            width: `${template.layout.width * renderScale}mm`,
+            height: `${template.layout.height * renderScale}mm`,
             color: template.layout.text_color,
             fontFamily: template.layout.font,
-            fontSize: `${template.layout.font_size}pt`,
+            fontSize: `${template.layout.font_size * renderScale}pt`,
+            '--card-scale': renderScale,
             '--card-border': template.layout.border_color,
             '--card-header': template.layout.header_color,
             '--card-rest': template.layout.rest_color,
@@ -203,7 +205,7 @@ function stop() {
     position: relative;
     flex: none;
     box-sizing: border-box;
-    border: 0.3mm solid var(--card-border);
+    border: calc(0.3mm * var(--card-scale)) solid var(--card-border);
     background: #fff;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
@@ -230,7 +232,7 @@ function stop() {
     display: flex;
     align-items: center;
     font-weight: 700;
-    letter-spacing: 0.4mm;
+    letter-spacing: calc(0.4mm * var(--card-scale));
 }
 .attendance-card-canvas .card-logo {
     width: 100%;
@@ -247,8 +249,8 @@ function stop() {
 }
 .attendance-card-canvas th,
 .attendance-card-canvas td {
-    border: 0.25mm solid var(--card-border);
-    padding: 0.4mm;
+    border: calc(0.25mm * var(--card-scale)) solid var(--card-border);
+    padding: calc(0.4mm * var(--card-scale));
     vertical-align: middle;
     overflow-wrap: anywhere;
 }
@@ -269,7 +271,7 @@ function stop() {
     text-align: center;
 }
 .attendance-card-canvas .card-grid thead {
-    height: 6mm;
+    height: calc(6mm * var(--card-scale));
     background: var(--card-header);
 }
 .attendance-card-canvas .card-grid thead th {
@@ -295,17 +297,21 @@ function stop() {
     text-align: center;
 }
 .attendance-card-canvas .card-footer tr:last-child {
-    height: 5mm;
+    height: calc(5mm * var(--card-scale));
 }
 .attendance-card-canvas .card-signatures td {
     padding: 0;
 }
 .attendance-card-canvas .card-signatures img {
-    max-height: 7mm;
+    max-height: calc(7mm * var(--card-scale));
     max-width: 95%;
     object-fit: contain;
 }
 @media print {
+    .attendance-card-canvas {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
     .attendance-card-canvas .card-editable,
     .attendance-card-canvas .card-selected {
         outline: none;

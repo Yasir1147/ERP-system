@@ -12,6 +12,17 @@ const pages = computed(() => {
 });
 const printing = ref(false);
 const error = ref('');
+function slotStyle(index: number) {
+    const width = props.report.template.layout.width * props.printLayout.scale;
+    const height = props.report.template.layout.height * props.printLayout.scale;
+    const four = props.printLayout.columns === 2;
+    return {
+        width: `${width}mm`,
+        height: `${height}mm`,
+        left: `${four ? 10 + (index % 2) * 140.5 + (136.5 - width) / 2 : (props.printLayout.pageWidth - width) / 2}mm`,
+        top: `${four ? 10 + Math.floor(index / 2) * 97 : 10 + index * (height + 4)}mm`,
+    };
+}
 async function printCards() {
     printing.value = true;
     error.value = '';
@@ -51,22 +62,10 @@ async function printCards() {
             :key="index"
             class="card-print-sheet"
             :class="{ 'card-print-four': report.filters.perPage === 4 }"
-            :style="{ width: `${printLayout.pageWidth}mm`, height: `${printLayout.pageHeight}mm` }"
+            :style="{ width: `${printLayout.pageWidth}mm`, height: `${printLayout.pageHeight - 0.2}mm` }"
         >
-            <div
-                v-for="card in page"
-                :key="card.employeeId"
-                class="card-print-slot"
-                :style="{
-                    width: `${report.template.layout.width * printLayout.scale}mm`,
-                    height: `${report.template.layout.height * printLayout.scale}mm`,
-                }"
-            >
-                <CardCanvas
-                    :template="report.template"
-                    :card="card"
-                    :style="{ transform: `scale(${printLayout.scale})`, transformOrigin: 'top left' }"
-                />
+            <div v-for="(card, cardIndex) in page" :key="card.employeeId" class="card-print-slot" :style="slotStyle(cardIndex)">
+                <CardCanvas :template="report.template" :card="card" :scale="printLayout.scale" />
             </div>
         </div>
         <p v-if="!pages.length" class="card-print-controls">No employees selected. Return to Attendance Cards and generate cards.</p>
@@ -109,27 +108,20 @@ async function printCards() {
     opacity: 0.5;
 }
 .card-print-sheet {
+    position: relative;
     box-sizing: border-box;
     width: 210mm;
     height: 297mm;
     padding: 10mm;
     margin: 0 auto 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4mm;
+    overflow: hidden;
     background: white;
     box-shadow: 0 2px 8px #0002;
 }
 .card-print-slot {
-    flex: none;
-}
-.card-print-sheet.card-print-four {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(2, 93mm);
-    justify-items: center;
-    align-items: start;
+    position: absolute;
+    break-inside: avoid;
+    page-break-inside: avoid;
 }
 @media print {
     @page {
@@ -163,6 +155,7 @@ async function printCards() {
         box-shadow: none;
         break-after: page;
         break-inside: avoid;
+        page-break-inside: avoid;
     }
     .card-print-sheet:last-child {
         break-after: auto;

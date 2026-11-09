@@ -1224,3 +1224,10 @@ Database tables:
 - Four-card output scales each card proportionally into a 136.5 x 93 mm slot; saved template dimensions and section coordinates are unchanged. The print screen displays the scale. Existing one/two-card layouts remain A4 portrait at actual template size, including the two-card height check.
 - Print / Save PDF at 100% with browser headers/footers off and printer Pages per sheet = 1, because the app already arranges four cards. Card text/writing spaces are smaller in four-card output.
 - AttendanceCardTest covers 1/2/4 output, both card modes, scaling geometry, tall formats and unchanged template dimensions. Eight tests pass (312 assertions); frontend lint and build pass. No migration required.
+
+## Attendance Card PDF Pagination Fix (November 2026)
+
+- Four-card printing no longer uses CSS transform to shrink a full-size card. CardCanvas accepts a render scale and applies it to actual width/height, section coordinates, font sizes, borders and fixed spacing. The browser now paginates using the same physical dimensions it renders.
+- Print sheets use fixed positioned card slots and non-splitting card/page rules, with a 0.2 mm page-height allowance for Chromium rounding. Saved template coordinates and normal designer preview remain unchanged; print-only scaling never modifies saved formats.
+- tests/Browser/attendance-card-print.mjs renders the actual Vue print components with synthetic data in an isolated headless Chromium profile, generates a 13-card PDF and checks four landscape pages, correct workers on each page and every card footer on its expected page. Run with node tests/Browser/attendance-card-print.mjs; set CARD_PRINT_BROWSER if Chromium is installed elsewhere. QA output stays gitignored in storage/framework/testing/card-print-qa.
+- Verification: headless Chromium PDF pagination check passes; 8 AttendanceCardTest tests pass (312 assertions); frontend lint and production build pass. Live deployment must include the updated public/build assets. No migration is needed.
