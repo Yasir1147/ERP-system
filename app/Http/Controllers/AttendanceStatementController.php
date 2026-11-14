@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\Project;
-use App\Services\Attendance\AttendanceStatementService;
 use App\Services\Attendance\AttendanceStatementExporter;
+use App\Services\Attendance\AttendanceStatementService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -22,12 +22,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class AttendanceStatementController extends Controller
 {
-    public function __construct(private readonly AttendanceStatementService $statements)
-    {
-    }
+    public function __construct(private readonly AttendanceStatementService $statements) {}
 
     public function index(Request $request): Response
     {
+        if ($this->usesEmployeeSheet($request)) {
+            return app()->call([app(EmployeeProjectSheetController::class), 'index'], ['request' => $request]);
+        }
         $filters = $this->filters($request);
         $statement = $this->statement($filters);
 
@@ -63,6 +64,9 @@ class AttendanceStatementController extends Controller
 
     public function export(Request $request, AttendanceStatementExporter $exporter): StreamedResponse
     {
+        if ($this->usesEmployeeSheet($request)) {
+            return app()->call([app(EmployeeProjectSheetController::class), 'export'], ['request' => $request]);
+        }
         $statement = $this->statement($this->filters($request));
 
         abort_if($statement === null, 404);
@@ -72,6 +76,9 @@ class AttendanceStatementController extends Controller
 
     public function print(Request $request): View
     {
+        if ($this->usesEmployeeSheet($request)) {
+            return app()->call([app(EmployeeProjectSheetController::class), 'print'], ['request' => $request]);
+        }
         $statement = $this->statement($this->filters($request));
 
         abort_if($statement === null, 404);
@@ -85,6 +92,11 @@ class AttendanceStatementController extends Controller
     /**
      * @return array<string, mixed>
      */
+    private function usesEmployeeSheet(Request $request): bool
+    {
+        return $request->input('mode', 'employee') === 'employee' && (! $request->filled('employee_id') || $request->has('employee_ids'));
+    }
+
     private function filters(Request $request): array
     {
         $data = $request->validate([

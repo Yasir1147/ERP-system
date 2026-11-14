@@ -224,7 +224,11 @@ const statusClass = (status: string) => {
                         type="button"
                         class="rounded px-3 py-1.5 text-sm"
                         :class="mode === option.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
-                        @click="mode = option.value as 'employee' | 'project' | 'type'"
+                        @click="
+                            option.value === 'employee'
+                                ? router.get('/attendance/statement', { mode: 'employee', from, to })
+                                : (mode = option.value as 'employee' | 'project' | 'type')
+                        "
                     >
                         {{ option.label }}
                     </button>

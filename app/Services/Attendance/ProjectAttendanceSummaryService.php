@@ -16,6 +16,7 @@ class ProjectAttendanceSummaryService
             ->where('status', AttendanceRecord::STATUS_PRESENT)
             ->whereDate('attendance_date', '>=', $filters['from'])
             ->whereDate('attendance_date', '<=', $filters['to'])
+            ->when(isset($filters['employeeIds']), fn ($q) => $q->whereIn('employee_id', $filters['employeeIds']))
             ->where(fn ($q) => $q->whereIn('project_id', $projects->modelKeys())->orWhereIn('overtime_project_id', $projects->modelKeys()))
             ->get();
         $buckets = [];
