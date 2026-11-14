@@ -5,6 +5,7 @@ namespace App\Services\Excel;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 
 class EmployeeProjectSheetExporter
@@ -69,6 +70,15 @@ class EmployeeProjectSheetExporter
         $sheet->getStyle('A5:'.$last.'6')->getAlignment()->setHorizontal('center')->setVertical('center')->setWrapText(true);
         $this->drawGrid($sheet, 'A5:'.$last.$row);
         $this->styleTotalRow($sheet, 'A'.$row.':'.$last.$row);
+        foreach ($report['projects'] as $index => $project) {
+            $start = Coordinate::stringFromColumnIndex(7 + $index * 4);
+            $end = Coordinate::stringFromColumnIndex(10 + $index * 4);
+            foreach ([$start => 'left', $end => 'right'] as $column => $side) {
+                $sheet->getStyle($column.'5:'.$column.$row)->applyFromArray([
+                    'borders' => [$side => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF111111']]],
+                ]);
+            }
+        }
         $sheet->getColumnDimension('A')->setWidth(7);
         $sheet->getColumnDimension('B')->setWidth(40);
         for ($i = 3; $i <= $lastIndex; $i++) {

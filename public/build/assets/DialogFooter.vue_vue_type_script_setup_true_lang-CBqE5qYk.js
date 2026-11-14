@@ -1,0 +1,1 @@
+import{a}from"./createLucideIcon-B2XY3dYW.js";import{d as r,o as l,a as n,p as t,u as c,K as m}from"./app-BP648HJh.js";const u=r({__name:"DialogFooter",props:{class:{}},setup(s){const e=s;return(o,p)=>(l(),n("div",{class:t(c(a)("flex flex-col-reverse sm:flex-row sm:justify-end sm:gap-x-2",e.class))},[m(o.$slots,"default")],2))}});export{u as _};

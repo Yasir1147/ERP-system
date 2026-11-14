@@ -171,9 +171,9 @@ const breadcrumbs = [
             <p v-if="report.missingPayroll" class="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {{ report.missingPayroll }} employee(s) have missing payroll settings. Their salary/OT costs are incomplete.
             </p>
-            <div class="overflow-auto rounded-xl border bg-card">
-                <table class="w-full border-collapse whitespace-nowrap text-xs">
-                    <thead class="bg-muted">
+            <div class="max-h-[70vh] overflow-auto rounded-xl border bg-card" tabindex="0" role="region" aria-label="Employee project salary sheet">
+                <table class="w-full border-separate border-spacing-0 whitespace-nowrap text-xs">
+                    <thead class="sticky top-0 z-20 bg-muted">
                         <tr>
                             <th rowspan="2">S.No</th>
                             <th rowspan="2" class="sticky left-0 z-10 min-w-60 bg-muted text-left">Name / Code</th>
@@ -181,7 +181,13 @@ const breadcrumbs = [
                             <th rowspan="2">OT Cost (AED)</th>
                             <th rowspan="2">Per Day (AED)</th>
                             <th rowspan="2">Bonus (AED)</th>
-                            <th v-for="project in report.projects" :key="project.id" colspan="4" :title="project.name">
+                            <th
+                                v-for="project in report.projects"
+                                :key="project.id"
+                                colspan="4"
+                                :title="project.name"
+                                class="project-start project-end"
+                            >
                                 {{ project.code ? `${project.code} - ` : '' }}{{ project.name }}
                             </th>
                             <th rowspan="2">Total Days</th>
@@ -190,7 +196,13 @@ const breadcrumbs = [
                         </tr>
                         <tr>
                             <template v-for="project in report.projects" :key="project.id"
-                                ><th v-for="heading in headings" :key="heading">{{ heading }}</th></template
+                                ><th
+                                    v-for="(heading, index) in headings"
+                                    :key="heading"
+                                    :class="{ 'project-start': index === 0, 'project-end': index === headings.length - 1 }"
+                                >
+                                    {{ heading }}
+                                </th></template
                             >
                         </tr>
                     </thead>
@@ -206,7 +218,11 @@ const breadcrumbs = [
                             <td>{{ money(row.dailySalary) }}</td>
                             <td>{{ money(row.bonus) }}</td>
                             <template v-for="(cell, p) in row.projects" :key="p"
-                                ><td v-for="metric in metricKeys" :key="metric">
+                                ><td
+                                    v-for="metric in metricKeys"
+                                    :key="metric"
+                                    :class="{ 'project-start': metric === 'labourDays', 'project-end': metric === 'overtimeCost' }"
+                                >
                                     {{ metric === 'labourDays' ? cell[metric] : money(cell[metric]) }}
                                 </td></template
                             >
@@ -229,7 +245,11 @@ const breadcrumbs = [
                             <td>—</td>
                             <td>{{ money(report.totals.bonus) }}</td>
                             <template v-for="(cell, p) in report.totals.projects" :key="p"
-                                ><td v-for="metric in metricKeys" :key="metric">
+                                ><td
+                                    v-for="metric in metricKeys"
+                                    :key="metric"
+                                    :class="{ 'project-start': metric === 'labourDays', 'project-end': metric === 'overtimeCost' }"
+                                >
                                     {{ metric === 'labourDays' ? cell[metric] : money(cell[metric]) }}
                                 </td></template
                             >
@@ -258,5 +278,20 @@ td {
 }
 th {
     text-align: center;
+}
+thead th {
+    background: hsl(var(--muted));
+}
+.project-start {
+    border-left: 2px solid #111;
+}
+.project-end {
+    border-right: 2px solid #111;
+}
+:global(.dark) .project-start {
+    border-left-color: #a3a3a3;
+}
+:global(.dark) .project-end {
+    border-right-color: #a3a3a3;
 }
 </style>
